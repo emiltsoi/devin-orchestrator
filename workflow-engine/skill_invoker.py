@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
-from devin_cli_adapter import DevinCliAdapter, SessionInfo
+from devin_cli_adapter import DevinCliAdapter
 
 
 @dataclass
@@ -22,7 +22,7 @@ class SkillInvocationResult:
 class SkillInvoker:
     """
     Invokes skills using transport adapters
-    
+
     Loads skill definitions and uses transport adapters to spawn
     agent sessions for skill execution.
     """
@@ -38,7 +38,6 @@ class SkillInvoker:
         self.harness_root = harness_root
         self.skills_dir = harness_root / 'skills'
         self.devin_cli_path = devin_cli_path
-        self.active_sessions: Dict[str, SessionInfo] = {}
 
     def invoke_skill(
         self,
@@ -88,28 +87,20 @@ class SkillInvoker:
         # Build prompt for the skill
         prompt = self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
 
-        # Generate session ID
+        # Generate session ID for tracking
         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"
 
         try:
-            # Start devin-cli adapter
-            with DevinCliAdapter(self.devin_cli_path, workspace) as adapter:
-                # Create session
-                session_info = adapter.session_new(
-                    session_id=session_id,
-                    description=f"Skill invocation: {skill_name}"
-                )
-                self.active_sessions[session_id] = session_info
+            # Use simple adapter with --print mode
+            adapter = DevinCliAdapter(self.devin_cli_path, workspace)
+            result = adapter.invoke(prompt, timeout=300)  # 5 minute timeout for skills
 
-                # Send prompt
-                response = adapter.session_prompt(session_id, prompt)
-
-                return SkillInvocationResult(
-                    success=True,
-                    session_id=session_id,
-                    output=str(response),
-                    error=None
-                )
+            return SkillInvocationResult(
+                success=result.success,
+                session_id=session_id,
+                output=result.output,
+                error=result.error
+            )
 
         except Exception as e:
             return SkillInvocationResult(
@@ -179,32 +170,3 @@ Execute this skill according to its definition and narrative. Follow the iron la
 """
 
         return prompt
-
-    def cancel_session(self, session_id: str) -> bool:
-        """
-        Cancel an active session
-
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            True if cancelled successfully
-        """
-        if not self.devin_cli_path:
-            return False
-
-        if session_id not in self.active_sessions:
-            return False
-
-        try:
-            with DevinCliAdapter(self.devin_cli_path) as adapter:
-                success = adapter.session_cancel(session_id)
-                if success:
-                    del self.active_sessions[session_id]
-                return success
-        except Exception:
-            return False
-
-    def list_active_sessions(self) -> Dict[str, SessionInfo]:
-        """List all active sessions"""
-        return self.active_sessions.copy()

@@ -1,41 +1,32 @@
 # -*- coding: utf-8 -*-
 """
-Devin CLI ACP Transport Adapter
-Implements the Agent Client Protocol (ACP) for automated session management and prompt dispatch
+Devin CLI Simple Adapter
+Uses devin-cli's native --print flag for non-interactive execution
+Much simpler and more reliable than ACP for basic usage
 """
 
 import subprocess
-import json
-import uuid
 import os
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass
 
 
 @dataclass
-class ACPResponse:
-    """ACP JSON-RPC response"""
-    jsonrpc: str
-    id: str
-    result: Optional[Dict[str, Any]]
-    error: Optional[Dict[str, Any]]
-
-
-@dataclass
-class SessionInfo:
-    """Session information from ACP"""
-    session_id: str
-    status: str
-    workspace: str
+class InvocationResult:
+    """Result from devin-cli invocation"""
+    success: bool
+    output: str
+    error: str
+    exit_code: int
 
 
 class DevinCliAdapter:
     """
-    Devin CLI ACP transport adapter
-    
-    Communicates with devin-cli via ACP (JSON-RPC 2.0 over stdin/stdout)
-    for automated session management and prompt dispatch.
+    Devin CLI simple adapter using --print mode
+
+    Uses devin-cli's native non-interactive mode for automated execution.
+    Simpler and more reliable than ACP for basic skill invocation.
     """
 
     def __init__(self, devin_cli_path: str, workspace: Optional[str] = None):
@@ -48,213 +39,57 @@ class DevinCliAdapter:
         """
         self.devin_cli_path = devin_cli_path
         self.workspace = workspace or str(Path.cwd())
-        self.process: Optional[subprocess.Popen] = None
-        self.request_id = 0
 
-    def start(self) -> None:
-        """Start devin-cli in ACP mode"""
-        cmd = [self.devin_cli_path, 'acp']
-        self.process = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,  # Text mode
-            bufsize=1,  # Line buffered
-            cwd=self.workspace  # Set working directory instead of --workspace flag
-        )
-
-        # Check if process started successfully
-        if self.process.poll() is not None:
-            stderr_output = self.process.stderr.read()
-            raise RuntimeError(f"Devin-cli failed to start: {stderr_output}")
-
-        # Initialize ACP protocol
-        self._initialize()
-
-    def stop(self) -> None:
-        """Stop devin-cli process"""
-        if self.process:
-            self.process.terminate()
-            self.process.wait()
-            self.process = None
-
-    def _initialize(self) -> None:
-        """Initialize ACP protocol handshake"""
-        init_params = {
-            "processId": str(os.getpid()),
-            "rootUri": str(Path(self.workspace).as_uri()),
-            "capabilities": {}
-        }
-        self._send_request('initialize', init_params)
-
-    def _send_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> ACPResponse:
+    def invoke(self, prompt: str, timeout: int = 120) -> InvocationResult:
         """
-        Send JSON-RPC request to devin-cli
+        Invoke devin-cli with a prompt in non-interactive mode
 
         Args:
-            method: ACP method name (e.g., 'session/new')
-            params: Method parameters
+            prompt: The prompt to send to devin
+            timeout: Timeout in seconds (default: 120)
 
         Returns:
-            ACPResponse with result or error
+            InvocationResult with success status, output, and error
         """
-        if not self.process:
-            raise RuntimeError("Devin-cli process not started")
+        cmd = [self.devin_cli_path, '--print', prompt]
 
-        self.request_id += 1
-        request = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params or {},
-            "id": str(self.request_id)
-        }
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',  # Handle encoding errors gracefully
+                timeout=timeout,
+                cwd=self.workspace
+            )
 
-        # Send request with LSP-style Content-Length framing
-        request_json = json.dumps(request)
-        content_length = len(request_json.encode('utf-8'))
-        framed_request = f"Content-Length: {content_length}\r\n\r\n{request_json}"
-        self.process.stdin.write(framed_request)
-        self.process.stdin.flush()
+            return InvocationResult(
+                success=result.returncode == 0,
+                output=result.stdout,
+                error=result.stderr,
+                exit_code=result.returncode
+            )
 
-        # Read response with LSP-style framing
-        response = self._read_framed_response()
-        if not response:
-            raise RuntimeError("No response from devin-cli")
-
-        response_data = json.loads(response)
-        return ACPResponse(
-            jsonrpc=response_data.get('jsonrpc', '2.0'),
-            id=response_data.get('id', ''),
-            result=response_data.get('result'),
-            error=response_data.get('error')
-        )
-
-    def _read_framed_response(self) -> Optional[str]:
-        """
-        Read LSP-style framed response from devin-cli
-
-        Returns:
-            JSON response string or None
-        """
-        # Read Content-Length header
-        header_line = self.process.stdout.readline()
-        if not header_line:
-            return None
-
-        if not header_line.startswith('Content-Length:'):
-            raise RuntimeError(f"Invalid response header: {header_line}")
-
-        content_length = int(header_line.split(':')[1].strip())
-
-        # Read empty line after header
-        empty_line = self.process.stdout.readline()
-        if empty_line.strip() != '':
-            raise RuntimeError("Expected empty line after header")
-
-        # Read JSON body
-        body = self.process.stdout.read(content_length)
-        return body
-
-    def session_new(self, session_id: str, description: str) -> SessionInfo:
-        """
-        Create a new session
-
-        Args:
-            session_id: Session identifier
-            description: Session description
-
-        Returns:
-            SessionInfo with session details
-        """
-        params = {
-            "session_id": session_id,
-            "description": description
-        }
-
-        response = self._send_request('session/new', params)
-
-        if response.error:
-            raise RuntimeError(f"session/new failed: {response.error}")
-
-        result = response.result
-        return SessionInfo(
-            session_id=result['session_id'],
-            status=result['status'],
-            workspace=result.get('workspace', self.workspace)
-        )
-
-    def session_prompt(self, session_id: str, prompt: str) -> Dict[str, Any]:
-        """
-        Send a prompt to a session
-
-        Args:
-            session_id: Session identifier
-            prompt: Prompt text
-
-        Returns:
-            Response data from the session
-        """
-        params = {
-            "session_id": session_id,
-            "prompt": prompt
-        }
-
-        response = self._send_request('session/prompt', params)
-
-        if response.error:
-            raise RuntimeError(f"session/prompt failed: {response.error}")
-
-        return response.result
-
-    def session_cancel(self, session_id: str) -> bool:
-        """
-        Cancel a session
-
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            True if cancelled successfully
-        """
-        params = {
-            "session_id": session_id
-        }
-
-        response = self._send_request('session/cancel', params)
-
-        if response.error:
-            raise RuntimeError(f"session/cancel failed: {response.error}")
-
-        return response.result.get('cancelled', False)
-
-    def session_list(self) -> List[SessionInfo]:
-        """
-        List all active sessions
-
-        Returns:
-            List of SessionInfo objects
-        """
-        response = self._send_request('session/list', {})
-
-        if response.error:
-            raise RuntimeError(f"session/list failed: {response.error}")
-
-        sessions = []
-        for session_data in response.result.get('sessions', []):
-            sessions.append(SessionInfo(
-                session_id=session_data['session_id'],
-                status=session_data['status'],
-                workspace=session_data.get('workspace', self.workspace)
-            ))
-
-        return sessions
+        except subprocess.TimeoutExpired:
+            return InvocationResult(
+                success=False,
+                output='',
+                error=f'Command timed out after {timeout} seconds',
+                exit_code=-1
+            )
+        except Exception as e:
+            return InvocationResult(
+                success=False,
+                output='',
+                error=str(e),
+                exit_code=-1
+            )
 
     def __enter__(self):
-        """Context manager entry"""
-        self.start()
+        """Context manager entry (no-op for simple adapter)"""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
-        self.stop()
+        """Context manager exit (no-op for simple adapter)"""
+        pass
