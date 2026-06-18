@@ -2,27 +2,26 @@
 Step Executor - Executes workflow steps with manual skill invocation
 """
 
-from pathlib import Path
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+import os
 
 from manifest_loader import ManifestLoader, Manifest
 from session_manager import SessionManager, SessionState
 
 
-@dataclass
 class StepResult:
     """Result of step execution"""
-    step: str
-    success: bool
-    message: str
-    artifacts_created: List[str]
+
+    def __init__(self, step, success, message, artifacts_created):
+        self.step = step
+        self.success = success
+        self.message = message
+        self.artifacts_created = artifacts_created
 
 
 class StepExecutor:
     """Executes workflow steps with manual skill invocation"""
 
-    def __init__(self, harness_root: Path, work_dir: Path):
+    def __init__(self, harness_root, work_dir):
         """
         Initialize step executor
 
@@ -33,10 +32,10 @@ class StepExecutor:
         self.harness_root = harness_root
         self.work_dir = work_dir
         self.manifest_loader = ManifestLoader(harness_root)
-        self.session_manager: Optional[SessionManager] = None
-        self.manifest: Optional[Manifest] = None
+        self.session_manager = None
+        self.manifest = None
 
-    def execute_workflow(self, manifest_name: str, session_id: str) -> bool:
+    def execute_workflow(self, manifest_name, session_id):
         """
         Execute a complete workflow
 
@@ -78,7 +77,7 @@ class StepExecutor:
                 self.session_manager.fail_session(str(e))
             return False
 
-    def _get_step_order(self) -> List[str]:
+    def _get_step_order(self):
         """Get ordered list of steps from manifest"""
         # Extract step keys from required_artefacts
         steps = list(self.manifest.required_artefacts.keys())
@@ -89,7 +88,7 @@ class StepExecutor:
             steps.remove('step_0')
         return steps
 
-    def _execute_step_0(self) -> StepResult:
+    def _execute_step_0(self):
         """
         Execute step_0 (session init)
 
@@ -110,7 +109,7 @@ class StepExecutor:
             artifacts_created=['request.md', 'status.md', 'session-audit.md']
         )
 
-    def _execute_step(self, step: str) -> bool:
+    def _execute_step(self, step):
         """
         Execute a single step with manual skill invocation
 
@@ -176,7 +175,7 @@ class StepExecutor:
 
         return True
 
-    def _get_skills_for_step(self, step: str) -> List[Dict[str, Any]]:
+    def _get_skills_for_step(self, step):
         """Get skills assigned to a specific step"""
         skills = []
         for skill in self.manifest.skills:
@@ -185,7 +184,7 @@ class StepExecutor:
                 skills.append(skill)
         return skills
 
-    def _validate_artifacts(self, required_artifacts: List[str]) -> List[str]:
+    def _validate_artifacts(self, required_artifacts):
         """
         Validate that required artifacts exist
 
@@ -201,14 +200,14 @@ class StepExecutor:
                 missing.append(artifact)
         return missing
 
-    def _has_gate_after_step(self, step: str) -> bool:
+    def _has_gate_after_step(self, step):
         """Check if there's a gate after a specific step"""
         for gate in self.manifest.gates:
             if gate['after_step'] == step:
                 return True
         return False
 
-    def _handle_gate(self, step: str) -> bool:
+    def _handle_gate(self, step):
         """
         Handle gate after a step
 
@@ -250,7 +249,7 @@ class StepExecutor:
 
         return True
 
-    def _get_gate_after_step(self, step: str) -> Optional[Dict[str, Any]]:
+    def _get_gate_after_step(self, step):
         """Get gate configuration after a specific step"""
         for gate in self.manifest.gates:
             if gate['after_step'] == step:

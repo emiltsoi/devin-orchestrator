@@ -3,28 +3,27 @@ Session Manager - Manages session lifecycle and state
 """
 
 import yaml
-from pathlib import Path
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone
-from dataclasses import dataclass, field
+import os
+from datetime import datetime
 
 
-@dataclass
 class SessionState:
     """Current session state"""
-    session_id: str
-    current_step: str
-    current_phase: str
-    status: str
-    retries: int
-    start_time: str
-    end_time: Optional[str] = None
+
+    def __init__(self, session_id, current_step, current_phase, status, retries, start_time, end_time=None):
+        self.session_id = session_id
+        self.current_step = current_step
+        self.current_phase = current_phase
+        self.status = status
+        self.retries = retries
+        self.start_time = start_time
+        self.end_time = end_time
 
 
 class SessionManager:
     """Manages session lifecycle and state tracking"""
 
-    def __init__(self, harness_root: Path, work_dir: Path):
+    def __init__(self, harness_root, work_dir):
         """
         Initialize session manager
 
@@ -34,10 +33,10 @@ class SessionManager:
         """
         self.harness_root = harness_root
         self.work_dir = work_dir
-        self.session_dir: Optional[Path] = None
-        self.state: Optional[SessionState] = None
+        self.session_dir = None
+        self.state = None
 
-    def initialize_session(self, session_id: str, manifest) -> SessionState:
+    def initialize_session(self, session_id, manifest):
         """
         Initialize a new session
 
@@ -49,8 +48,9 @@ class SessionManager:
             Initial SessionState
         """
         # Create session directory
-        session_path = self.work_dir / session_id
-        session_path.mkdir(parents=True, exist_ok=True)
+        session_path = os.path.join(self.work_dir, session_id)
+        if not os.path.exists(session_path):
+            os.makedirs(session_path)
         self.session_dir = session_path
 
         # Initialize artifacts
@@ -63,7 +63,7 @@ class SessionManager:
             current_phase='context',
             status='in_progress',
             retries=0,
-            start_time=datetime.now(timezone.utc).isoformat(),
+            start_time=datetime.utcnow().isoformat(),
             end_time=None
         )
 
@@ -72,33 +72,36 @@ class SessionManager:
 
         return self.state
 
-    def _initialize_artifacts(self, session_id: str, manifest) -> None:
+    def _initialize_artifacts(self, session_id, manifest):
         """Initialize session artifacts"""
         # Create request.md (placeholder)
-        request_path = self.session_dir / 'request.md'
-        if not request_path.exists():
-            request_path.write_text(f"# Request for {session_id}\n\n<!-- Request content -->\n", encoding='utf-8')
+        request_path = os.path.join(self.session_dir, 'request.md')
+        if not os.path.exists(request_path):
+            with open(request_path, 'w') as f:
+                f.write("# Request for {}\n\n<!-- Request content -->\n".format(session_id))
 
         # Create status.md
-        status_path = self.session_dir / 'status.md'
-        if not status_path.exists():
-            status_path.write_text(f"phase=step-0  skill=context  retries=0/0\n", encoding='utf-8')
+        status_path = os.path.join(self.session_dir, 'status.md')
+        if not os.path.exists(status_path):
+            with open(status_path, 'w') as f:
+                f.write("phase=step-0  skill=context  retries=0/0\n")
 
         # Create session-audit.md
-        audit_path = self.session_dir / 'session-audit.md'
-        if not audit_path.exists():
-            audit_content = f"""# Session Audit: {session_id}
+        audit_path = os.path.join(self.session_dir, 'session-audit.md')
+        if not os.path.exists(audit_path):
+            audit_content = """# Session Audit: {}
 
 ## Session Start
-- Session ID: {session_id}
-- Start Time: {datetime.now(timezone.utc).isoformat()}
+- Session ID: {}
+- Start Time: {}
 - Status: in_progress
 
 ## Phase Transitions
-"""
-            audit_path.write_text(audit_content, encoding='utf-8')
+""".format(session_id, session_id, datetime.utcnow().isoformat())
+            with open(audit_path, 'w') as f:
+                f.write(audit_content)
 
-    def update_phase(self, step: str, phase: str, skill: str) -> None:
+    def update_phase(self, step, phase, skill):
         """
         Update session phase
 
@@ -118,7 +121,7 @@ class SessionManager:
         # Log phase transition in audit
         self._log_phase_transition(step, phase, skill)
 
-    def increment_retry(self) -> None:
+    def increment_retry(self):
         """Increment retry counter for current step"""
         if self.state is None:
             raise RuntimeError("Session not initialized")
@@ -126,19 +129,19 @@ class SessionManager:
         self.state.retries += 1
         self._update_status()
 
-    def complete_session(self) -> None:
+    def complete_session(self):
         """Mark session as completed"""
         if self.state is None:
             raise RuntimeError("Session not initialized")
 
         self.state.status = 'completed'
-        self.state.end_time = datetime.now(timezone.utc).isoformat()
+        self.state.end_time = datetime.utcnow().isoformat()
         self._update_status()
 
         # Log session completion in audit
         self._log_session_completion()
 
-    def fail_session(self, reason: str) -> None:
+    def fail_session(self, reason):
         """
         Mark session as failed
 
@@ -149,47 +152,50 @@ class SessionManager:
             raise RuntimeError("Session not initialized")
 
         self.state.status = 'failed'
-        self.state.end_time = datetime.now(timezone.utc).isoformat()
+        self.state.end_time = datetime.utcnow().isoformat()
         self._update_status()
 
         # Log session failure in audit
         self._log_session_failure(reason)
 
-    def _update_status(self, skill: Optional[str] = None) -> None:
+    def _update_status(self, skill=None):
         """Update status.md file"""
         if self.state is None:
             return
 
-        status_path = self.session_dir / 'status.md'
+        status_path = os.path.join(self.session_dir, 'status.md')
         skill_str = skill or self.state.current_phase
-        status_line = f"phase={self.state.current_step}  skill={skill_str}  retries={self.state.retries}/2\n"
-        status_path.write_text(status_line, encoding='utf-8')
+        status_line = "phase={}  skill={}  retries={}/2\n".format(
+            self.state.current_step, skill_str, self.state.retries
+        )
+        with open(status_path, 'w') as f:
+            f.write(status_line)
 
-    def _log_phase_transition(self, step: str, phase: str, skill: str) -> None:
+    def _log_phase_transition(self, step, phase, skill):
         """Log phase transition in session-audit.md"""
-        audit_path = self.session_dir / 'session-audit.md'
-        timestamp = datetime.now(timezone.utc).isoformat()
-        entry = f"\n- [{timestamp}] Phase transition: {step} → {phase} (skill: {skill})\n"
-        with open(audit_path, 'a', encoding='utf-8') as f:
+        audit_path = os.path.join(self.session_dir, 'session-audit.md')
+        timestamp = datetime.utcnow().isoformat()
+        entry = "\n- [{}] Phase transition: {} → {} (skill: {})\n".format(timestamp, step, phase, skill)
+        with open(audit_path, 'a') as f:
             f.write(entry)
 
-    def _log_session_completion(self) -> None:
+    def _log_session_completion(self):
         """Log session completion in session-audit.md"""
-        audit_path = self.session_dir / 'session-audit.md'
-        timestamp = datetime.now(timezone.utc).isoformat()
-        entry = f"\n## Session End\n- End Time: {timestamp}\n- Status: {self.state.status}\n"
-        with open(audit_path, 'a', encoding='utf-8') as f:
+        audit_path = os.path.join(self.session_dir, 'session-audit.md')
+        timestamp = datetime.utcnow().isoformat()
+        entry = "\n## Session End\n- End Time: {}\n- Status: {}\n".format(timestamp, self.state.status)
+        with open(audit_path, 'a') as f:
             f.write(entry)
 
-    def _log_session_failure(self, reason: str) -> None:
+    def _log_session_failure(self, reason):
         """Log session failure in session-audit.md"""
-        audit_path = self.session_dir / 'session-audit.md'
-        timestamp = datetime.now(timezone.utc).isoformat()
-        entry = f"\n## Session End\n- End Time: {timestamp}\n- Status: {self.state.status}\n- Reason: {reason}\n"
-        with open(audit_path, 'a', encoding='utf-8') as f:
+        audit_path = os.path.join(self.session_dir, 'session-audit.md')
+        timestamp = datetime.utcnow().isoformat()
+        entry = "\n## Session End\n- End Time: {}\n- Status: {}\n- Reason: {}\n".format(timestamp, self.state.status, reason)
+        with open(audit_path, 'a') as f:
             f.write(entry)
 
-    def artifact_exists(self, artifact_name: str) -> bool:
+    def artifact_exists(self, artifact_name):
         """
         Check if an artifact exists
 
@@ -202,10 +208,10 @@ class SessionManager:
         if self.session_dir is None:
             return False
 
-        artifact_path = self.session_dir / artifact_name
-        return artifact_path.exists()
+        artifact_path = os.path.join(self.session_dir, artifact_name)
+        return os.path.exists(artifact_path)
 
-    def get_session_dir(self) -> Path:
+    def get_session_dir(self):
         """Get session directory path"""
         if self.session_dir is None:
             raise RuntimeError("Session not initialized")
