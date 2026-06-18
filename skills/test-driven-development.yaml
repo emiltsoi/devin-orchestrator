@@ -1,0 +1,24 @@
+schema_version: 1
+name: test-driven-development
+description: Use when writing tests before implementation (red-green-refactor discipline)
+iron_law: "WRITE FAILING TEST FIRST, THEN IMPLEMENT TO MAKE IT PASS"
+triggers:
+  - baseline_phase
+  - test_specification
+checklist:
+  - id: identify_existing_tests
+    description: Identify existing relevant tests
+  - id: confirm_green_baseline
+    description: Run existing tests to confirm green baseline
+  - id: write_test_specification
+    description: Write test specification with expected behavior
+  - id: write_failing_tests
+    description: Write failing tests (TDD red)
+  - id: verify_tests_fail
+    description: Run tests to verify they fail
+terminal_state: writing-plans
+announcement: "Using the test-driven-development skill to produce red tests for <task>"
+red_flags:
+  - Writing implementation before tests
+  - Skipping test failure verification
+  - Writing tests that pass immediately (no red state)
