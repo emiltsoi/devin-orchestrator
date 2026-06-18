@@ -91,23 +91,51 @@ class DevinCliAdapter:
             "id": str(self.request_id)
         }
 
-        # Send request
-        request_json = json.dumps(request) + "\n"
-        self.process.stdin.write(request_json)
+        # Send request with LSP-style Content-Length framing
+        request_json = json.dumps(request)
+        content_length = len(request_json.encode('utf-8'))
+        framed_request = f"Content-Length: {content_length}\r\n\r\n{request_json}"
+        self.process.stdin.write(framed_request)
         self.process.stdin.flush()
 
-        # Read response
-        response_line = self.process.stdout.readline()
-        if not response_line:
+        # Read response with LSP-style framing
+        response = self._read_framed_response()
+        if not response:
             raise RuntimeError("No response from devin-cli")
 
-        response_data = json.loads(response_line.strip())
+        response_data = json.loads(response)
         return ACPResponse(
             jsonrpc=response_data.get('jsonrpc', '2.0'),
             id=response_data.get('id', ''),
             result=response_data.get('result'),
             error=response_data.get('error')
         )
+
+    def _read_framed_response(self) -> Optional[str]:
+        """
+        Read LSP-style framed response from devin-cli
+
+        Returns:
+            JSON response string or None
+        """
+        # Read Content-Length header
+        header_line = self.process.stdout.readline()
+        if not header_line:
+            return None
+
+        if not header_line.startswith('Content-Length:'):
+            raise RuntimeError(f"Invalid response header: {header_line}")
+
+        content_length = int(header_line.split(':')[1].strip())
+
+        # Read empty line after header
+        empty_line = self.process.stdout.readline()
+        if empty_line.strip() != '':
+            raise RuntimeError("Expected empty line after header")
+
+        # Read JSON body
+        body = self.process.stdout.read(content_length)
+        return body
 
     def session_new(self, session_id: str, description: str) -> SessionInfo:
         """
