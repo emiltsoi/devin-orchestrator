@@ -1,0 +1,21 @@
+schema_version: 1
+name: code-review
+description: Use when reviewing code for spec compliance and code quality
+iron_law: "REVIEW MUST BE OBJECTIVE AND EVIDENCE-BASED"
+triggers:
+  - review_phase
+  - spec_compliance_check
+  - code_quality_check
+checklist:
+  - id: spec_compliance_review
+    description: Verify code matches specification
+  - id: code_quality_review
+    description: Verify code is well-built
+  - id: human_verdict
+    description: Human calibrates severity and authorizes merge
+terminal_state: null
+announcement: "Using the code-review skill for spec-compliance and code-quality review"
+red_flags:
+  - Subjective reviews without evidence
+  - Skipping spec compliance check
+  - Skipping code quality check
