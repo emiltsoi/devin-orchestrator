@@ -1,0 +1,60 @@
+schema_version: 1
+role: coder
+description: Implementation agent for coding tasks per design specification
+model: swe-1.6
+inputs:
+  - name: design.md
+    type: file
+    required: true
+    description: Full design document
+  - name: FRAMEWORK_*.md
+    type: file
+    required: true
+    description: Framework files including anti-patterns section
+  - name: target_files
+    type: file_content
+    required: true
+    description: Current content of target files (paste-in, not just reference)
+  - name: acceptance_criteria
+    type: list
+    required: true
+    description: AC-1..AC-N from design, copied verbatim
+  - name: cited_idioms
+    type: list
+    required: true
+    description: Idioms from FRAMEWORK that Architect expects Coder to use
+outputs:
+  - name: code_diff
+    type: file
+    required: true
+    description: Code diff or full file content for each target file
+  - name: rationale
+    type: text
+    required: true
+    description: Rationale citing which FRAMEWORK idiom was used
+  - name: assumptions
+    type: list
+    required: false
+    description: Flagged assumptions that weren't explicit in design.md
+  - name: test_expectations
+    type: list
+    required: true
+    description: One sentence per AC describing what Test-Author should verify
+quality_bar:
+  - compiles_mechanically
+  - cites_at_least_one_idiom
+  - no_novel_mechanisms
+  - acs_addressed_1_to_1
+  - no_test_weakening
+failure_modes:
+  invents_novel_mechanism:
+    response: reject_with_anti_pattern_reference
+  fails_to_cite_idiom:
+    response: reject_ask_for_citation
+  contradicts_design:
+    response: update_design_or_redispatch
+  ac_miss:
+    response: reject_redispatch
+  silent_scope_creep:
+    response: reject_with_allowlist
+retry_budget: 1
