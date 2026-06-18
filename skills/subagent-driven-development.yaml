@@ -1,0 +1,40 @@
+schema_version: 1
+name: subagent-driven-development
+description: Use when executing a plan with multiple tasks by dispatching a fresh agent context per task, with two-stage review after each
+iron_law: "FRESH CONTEXT PER TASK. TWO-STAGE REVIEW. NO SKIPPING REVIEWS."
+triggers:
+  - approved_design
+  - multi_task_plan
+  - orchestrator_mode
+checklist:
+  - id: read_plan_once
+    description: Read design.md once and extract all tasks with full text
+  - id: create_todo_list
+    description: Create todo_list with one entry per task
+  - id: dispatch_coder
+    description: Dispatch Coder with fresh prompt built from template + task-specific context
+  - id: handle_coder_status
+    description: Handle Coder status (COMPLETED, NEEDS_CONTEXT, BLOCKED)
+  - id: dispatch_spec_reviewer
+    description: Dispatch Spec-Reviewer for spec compliance check
+  - id: dispatch_quality_reviewer
+    description: Dispatch Quality-Reviewer for code quality check
+  - id: handle_reviewer_issues
+    description: If reviewer finds issues, re-dispatch Coder with fix instructions
+  - id: mark_task_complete
+    description: Mark task complete in todo_list and design.md
+  - id: next_task
+    description: Move to next task or final full-scope review if all done
+  - id: final_review
+    description: Dispatch final full-scope Reviewer for entire change
+terminal_state: verification-before-completion
+announcement: "Using the subagent-driven-development skill to execute <session_id> task-by-task."
+red_flags:
+  - Reusing Coder context across tasks
+  - Skipping Spec-Reviewer or Quality-Reviewer
+  - Proceeding with unfixed issues
+  - Starting implementation on main/master without user consent
+  - Making Coder read design.md directly (provide full task text)
+  - Starting Quality-Review before Spec-Review passes
+  - Accepting "close enough" on spec compliance
+  - Skipping review loops when issues found
