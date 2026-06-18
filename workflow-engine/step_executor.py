@@ -24,7 +24,7 @@ class StepResult:
 class StepExecutor:
     """Executes workflow steps with manual skill invocation"""
 
-    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True, devin_cli_path: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous"):
         """
         Initialize step executor
 
@@ -34,6 +34,7 @@ class StepExecutor:
             interactive: If True, prompt for manual skill execution. If False, use automated dispatch.
             devin_cli_path: Optional path to devin.exe for automated dispatch
             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
+            permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
         """
         self.harness_root = harness_root
         self.work_dir = work_dir
@@ -43,10 +44,11 @@ class StepExecutor:
         self.interactive = interactive
         self.devin_cli_path = devin_cli_path
         self.model = model
+        self.permission_mode = permission_mode
         self.skill_invoker: Optional[SkillInvoker] = None
 
         if devin_cli_path:
-            self.skill_invoker = SkillInvoker(harness_root, devin_cli_path, model)
+            self.skill_invoker = SkillInvoker(harness_root, devin_cli_path, model, permission_mode)
 
     def execute_workflow(self, manifest_name: str, session_id: str) -> bool:
         """

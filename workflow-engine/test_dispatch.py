@@ -50,13 +50,18 @@ def test_automated_dispatch():
     if model:
         print(f"Using model: {model}")
 
+    # Permission mode (defaults to dangerous for automated dispatch)
+    permission_mode = os.environ.get('DEVIN_PERMISSION_MODE', 'dangerous')
+    print(f"Using permission mode: {permission_mode}")
+
     # Create executor with automated dispatch
     executor = StepExecutor(
         harness_root,
         work_dir,
         interactive=False,  # Use automated dispatch
         devin_cli_path=devin_cli_path,
-        model=model  # Optional model selection
+        model=model,  # Optional model selection
+        permission_mode=permission_mode  # Permission mode for artifact creation
     )
 
     # Execute workflow

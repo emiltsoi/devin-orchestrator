@@ -27,7 +27,7 @@ class SkillInvoker:
     agent sessions for skill execution.
     """
 
-    def __init__(self, harness_root: Path, devin_cli_path: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, harness_root: Path, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous"):
         """
         Initialize skill invoker
 
@@ -35,11 +35,13 @@ class SkillInvoker:
             harness_root: Root directory of the harness
             devin_cli_path: Optional path to devin.exe (for devin-cli adapter)
             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
+            permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
         """
         self.harness_root = harness_root
         self.skills_dir = harness_root / 'skills'
         self.devin_cli_path = devin_cli_path
         self.model = model
+        self.permission_mode = permission_mode
 
     def invoke_skill(
         self,
@@ -94,7 +96,7 @@ class SkillInvoker:
 
         try:
             # Use simple adapter with --print mode
-            adapter = DevinCliAdapter(self.devin_cli_path, workspace, self.model)
+            adapter = DevinCliAdapter(self.devin_cli_path, workspace, self.model, self.permission_mode)
             result = adapter.invoke(prompt, timeout=300)  # 5 minute timeout for skills
 
             return SkillInvocationResult(

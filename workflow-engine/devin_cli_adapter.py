@@ -29,7 +29,7 @@ class DevinCliAdapter:
     Simpler and more reliable than ACP for basic skill invocation.
     """
 
-    def __init__(self, devin_cli_path: str, workspace: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, devin_cli_path: str, workspace: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous"):
         """
         Initialize devin-cli adapter
 
@@ -37,10 +37,12 @@ class DevinCliAdapter:
             devin_cli_path: Path to devin.exe binary
             workspace: Optional workspace path (defaults to current directory)
             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
+            permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
         """
         self.devin_cli_path = devin_cli_path
         self.workspace = workspace or str(Path.cwd())
         self.model = model
+        self.permission_mode = permission_mode
 
     def invoke(self, prompt: str, timeout: int = 120) -> InvocationResult:
         """
@@ -53,11 +55,11 @@ class DevinCliAdapter:
         Returns:
             InvocationResult with success status, output, and error
         """
-        cmd = [self.devin_cli_path, '--print', prompt]
+        cmd = [self.devin_cli_path, '--permission-mode', self.permission_mode, '--print', prompt]
 
         # Add model if specified
         if self.model:
-            cmd = [self.devin_cli_path, '--model', self.model, '--print', prompt]
+            cmd = [self.devin_cli_path, '--permission-mode', self.permission_mode, '--model', self.model, '--print', prompt]
 
         try:
             result = subprocess.run(
