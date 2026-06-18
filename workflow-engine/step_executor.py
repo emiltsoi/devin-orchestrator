@@ -50,12 +50,12 @@ class StepExecutor:
         try:
             # Load manifest
             self.manifest = self.manifest_loader.load(manifest_name)
-            print(f"Loaded manifest: {self.manifest.description}")
+            print("Loaded manifest: {}".format(self.manifest.description))
 
             # Initialize session
             self.session_manager = SessionManager(self.harness_root, self.work_dir)
             self.session_manager.initialize_session(session_id, self.manifest)
-            print(f"Initialized session: {session_id}")
+            print("Initialized session: {}".format(session_id))
 
             # Execute step_0 (session init)
             self._execute_step_0()
@@ -64,16 +64,16 @@ class StepExecutor:
             steps = self._get_step_order()
             for step in steps:
                 if not self._execute_step(step):
-                    print(f"Step {step} failed")
+                    print("Step {} failed".format(step))
                     return False
 
             # Complete session
             self.session_manager.complete_session()
-            print(f"Session {session_id} completed successfully")
+            print("Session {} completed successfully".format(session_id))
             return True
 
         except Exception as e:
-            print(f"Workflow execution failed: {e}")
+            print("Workflow execution failed: {}".format(e))
             if self.session_manager:
                 self.session_manager.fail_session(str(e))
             return False
@@ -97,8 +97,8 @@ class StepExecutor:
             StepResult indicating success/failure
         """
         print("\n=== Step 0: Session Init ===")
-        print(f"Session directory: {self.session_manager.get_session_dir()}")
-        print(f"Initial artifacts created: request.md, status.md, session-audit.md")
+        print("Session directory: {}".format(self.session_manager.get_session_dir()))
+        print("Initial artifacts created: request.md, status.md, session-audit.md")
 
         # Update phase to context
         self.session_manager.update_phase('step_0', 'context', 'context')
@@ -120,34 +120,34 @@ class StepExecutor:
         Returns:
             True if step completed successfully, False otherwise
         """
-        print(f"\n=== {step.upper()} ===")
+        print("\n=== {} ===".format(step.upper()))
 
         # Get skills for this step
         skills = self._get_skills_for_step(step)
         if not skills:
-            print(f"No skills assigned to {step}")
+            print("No skills assigned to {}".format(step))
             return True
 
         # Execute each skill (usually one per step)
         for skill_config in skills:
             skill_name = skill_config['name']
-            announcement = skill_config.get('announcement', f'Using {skill_name} skill')
+            announcement = skill_config.get('announcement', 'Using {} skill'.format(skill_name))
 
             # Announce skill invocation
-            print(f"\n{announcement}")
+            print("\n{}".format(announcement))
 
             # Update phase
             self.session_manager.update_phase(step, skill_name, skill_name)
 
             # Wait for manual skill execution (Architect executes in Cascade)
-            print(f"\n[MANUAL EXECUTION REQUIRED]")
-            print(f"Please execute the {skill_name} skill manually in Cascade.")
-            print(f"Press Enter when complete, or 'skip' to skip this step...")
+            print("\n[MANUAL EXECUTION REQUIRED]")
+            print("Please execute the {} skill manually in Cascade.".format(skill_name))
+            print("Press Enter when complete, or 'skip' to skip this step...")
 
             user_input = input().strip()
 
             if user_input.lower() == 'skip':
-                print(f"Skipped {skill_name} skill")
+                print("Skipped {} skill".format(skill_name))
                 continue
 
             # Validate required artifacts
@@ -155,8 +155,8 @@ class StepExecutor:
             missing_artifacts = self._validate_artifacts(required_artifacts)
 
             if missing_artifacts:
-                print(f"Missing artifacts: {', '.join(missing_artifacts)}")
-                print(f"Please create the missing artifacts and press Enter to retry...")
+                print("Missing artifacts: {}".format(', '.join(missing_artifacts)))
+                print("Please create the missing artifacts and press Enter to retry...")
 
                 retry_input = input().strip()
                 if retry_input.lower() == 'abort':
@@ -165,10 +165,10 @@ class StepExecutor:
                 # Re-validate
                 missing_artifacts = self._validate_artifacts(required_artifacts)
                 if missing_artifacts:
-                    print(f"Still missing artifacts: {', '.join(missing_artifacts)}")
+                    print("Still missing artifacts: {}".format(', '.join(missing_artifacts)))
                     return False
 
-            print(f"{step} completed successfully")
+            print("{} completed successfully".format(step))
 
         # Check for gates after this step
         if self._has_gate_after_step(step):
@@ -225,27 +225,27 @@ class StepExecutor:
         gate_type = gate['type']
         gate_description = gate.get('description', '')
 
-        print(f"\n=== GATE: {gate['id']} ===")
-        print(f"Type: {gate_type}")
-        print(f"Description: {gate_description}")
+        print("\n=== GATE: {} ===".format(gate['id']))
+        print("Type: {}".format(gate_type))
+        print("Description: {}".format(gate_description))
 
         if gate_type == 'user_gate':
-            print(f"\n[USER APPROVAL REQUIRED]")
-            print(f"Please review and approve to continue.")
-            print(f"Press Enter to approve, or 'reject' to reject...")
+            print("\n[USER APPROVAL REQUIRED]")
+            print("Please review and approve to continue.")
+            print("Press Enter to approve, or 'reject' to reject...")
 
             user_input = input().strip()
 
             if user_input.lower() == 'reject':
-                print(f"Gate rejected by user")
+                print("Gate rejected by user")
                 return False
 
-            print(f"Gate approved by user")
+            print("Gate approved by user")
             return True
 
         elif gate_type == 'auto_gate':
             # Auto-gate - automatically pass for Phase 1
-            print(f"Auto-gate passed")
+            print("Auto-gate passed")
             return True
 
         return True

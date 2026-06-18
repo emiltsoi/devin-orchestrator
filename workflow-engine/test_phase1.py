@@ -22,8 +22,8 @@ def test_phase1():
     harness_root = Path(__file__).parent.parent
     work_dir = harness_root / 'work'
 
-    print(f"\nHarness root: {harness_root}")
-    print(f"Work directory: {work_dir}")
+    print("\nHarness root: {}".format(harness_root))
+    print("Work directory: {}".format(work_dir))
 
     # Create executor
     executor = StepExecutor(harness_root, work_dir)
