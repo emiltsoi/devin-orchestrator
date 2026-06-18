@@ -32,7 +32,7 @@ def test_automated_dispatch():
 
     # Default path for Windows (adjust as needed)
     if not devin_cli_path and os.name == 'nt':
-        devin_cli_path = r"C:\Users\etsoi\AppData\Local\Programs\Windsurf\resources\app\extensions\windsurf\devin\bin\devin.exe"
+        devin_cli_path = r"C:\Users\tsoi\AppData\Local\devin\cli\bin\devin.exe"
 
     if not devin_cli_path:
         print("Skipping automated dispatch test (no DEVIN_CLI_PATH set)")
