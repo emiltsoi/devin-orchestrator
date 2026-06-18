@@ -1,0 +1,35 @@
+schema_version: 1
+name: brainstorming
+description: Use before any non-trivial creative work — new features, new components, new workflows, behaviour changes
+iron_law: "NO IMPLEMENTATION — AND NO WRITTEN REQUIREMENT OR PLAN — UNTIL A DESIGN HAS BEEN PRESENTED AND YOUR HUMAN PARTNER HAS APPROVED IT"
+triggers:
+  - new_feature
+  - behavior_change
+  - refactor
+  - ambiguous_request
+checklist:
+  - id: explore_context
+    description: Explore project context — check files, recent commits, MAP_* for relevant subsystem
+  - id: ask_questions_one_at_a_time
+    description: Ask clarifying questions one at a time to refine the idea
+  - id: propose_2_3_approaches
+    description: Propose 2-3 different approaches with trade-offs
+  - id: present_design_sections
+    description: Present design in sections scaled to complexity; get approval section-by-section
+  - id: write_spec
+    description: Write requirement.md / spec with summary, acceptance criteria, affected layers, out of scope
+  - id: spec_self_review
+    description: Self-review spec for placeholders, contradictions, ambiguity, scope
+  - id: user_approval_gate
+    description: Get user approval on written spec before proceeding
+  - id: invoke_next_skill
+    description: Invoke writing-plans skill
+terminal_state: writing-plans
+announcement: "Using the brainstorming skill to refine <topic> before writing requirement.md."
+red_flags:
+  - Writing requirement.md before presenting and getting approval on the design
+  - Jumping from "here's what I think we want" directly into writing-plans without the approval gate
+  - Asking a batch of 5 questions at once instead of one at a time
+  - Assuming the user has already thought about the design
+  - Skipping the scope check and launching into details on an over-broad request
+  - Presenting only one approach
