@@ -1,0 +1,27 @@
+schema_version: 1
+name: windsurf-cascade
+platform: windsurf
+description: Windsurf Cascade transport adapter via fresh session copy-paste
+capabilities:
+  - fresh_session_spawn
+  - context_isolation
+  - file_operations
+  - terminal_commands
+dispatch_contract:
+  inputs:
+    - prompt_file
+    - workspace_path
+    - model_config
+  outputs:
+    - stdout_file
+    - stderr_file
+    - session_metadata
+  quality_bar:
+    - exit_code_zero
+    - no_timeout
+    - artifact_exists
+limitations:
+  - max_prompt_tokens: 200000
+  - max_session_duration: 3600
+  - requires_user_copy_paste: true
+  - manual_round_trip: true
