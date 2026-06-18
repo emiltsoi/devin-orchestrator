@@ -5,6 +5,7 @@ Tests the skill invoker with devin-cli transport adapter
 """
 
 import sys
+import os
 from pathlib import Path
 
 # Add workflow-engine to path
@@ -26,13 +27,23 @@ def test_automated_dispatch():
     print(f"\nHarness root: {harness_root}")
     print(f"Work directory: {work_dir}")
 
-    # Devin CLI path - adjust as needed
-    # Example: C:\Users\etsoi\AppData\Local\Programs\Windsurf\resources\app\extensions\windsurf\devin\bin\devin.exe
-    devin_cli_path = input("\nEnter devin.exe path (or press Enter to skip): ").strip()
+    # Devin CLI path - from environment variable or default
+    devin_cli_path = os.environ.get('DEVIN_CLI_PATH')
+
+    # Default path for Windows (adjust as needed)
+    if not devin_cli_path and os.name == 'nt':
+        devin_cli_path = r"C:\Users\etsoi\AppData\Local\Programs\Windsurf\resources\app\extensions\windsurf\devin\bin\devin.exe"
 
     if not devin_cli_path:
-        print("Skipping automated dispatch test (no devin-cli path provided)")
+        print("Skipping automated dispatch test (no DEVIN_CLI_PATH set)")
+        print("Set DEVIN_CLI_PATH environment variable to test automated dispatch")
         return 0
+
+    if not os.path.exists(devin_cli_path):
+        print(f"Skipping automated dispatch test (devin-cli not found: {devin_cli_path})")
+        return 0
+
+    print(f"Using devin-cli: {devin_cli_path}")
 
     # Create executor with automated dispatch
     executor = StepExecutor(
