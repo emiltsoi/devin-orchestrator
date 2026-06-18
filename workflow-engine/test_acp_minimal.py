@@ -103,8 +103,8 @@ def test_acp_minimal():
     print(f"Framed request: {repr(framed_request[:100])}...")
 
     try:
-        # Try writing using communicate() instead
-        output, error = process.communicate(input=framed_request, timeout=5)
+        # Try writing using communicate() instead with longer timeout
+        output, error = process.communicate(input=framed_request, timeout=30)
         print(f"Output: {output}")
         print(f"Error: {error}")
 
@@ -115,7 +115,7 @@ def test_acp_minimal():
             print("No output received")
 
     except subprocess.TimeoutExpired:
-        print("Process timed out")
+        print("Process timed out even with 30s timeout")
         process.kill()
     except Exception as e:
         print(f"Error: {e}")

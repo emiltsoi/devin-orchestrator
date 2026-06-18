@@ -53,14 +53,15 @@ class DevinCliAdapter:
 
     def start(self) -> None:
         """Start devin-cli in ACP mode"""
-        cmd = [self.devin_cli_path, 'acp', '--workspace', self.workspace]
+        cmd = [self.devin_cli_path, 'acp']
         self.process = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,  # Text mode
-            bufsize=1  # Line buffered
+            bufsize=1,  # Line buffered
+            cwd=self.workspace  # Set working directory instead of --workspace flag
         )
 
         # Check if process started successfully
