@@ -16,6 +16,8 @@ related:
 
 This design synthesizes patterns from [obra/superpowers](https://github.com/obra/superpowers) with the ci-docs orchestrator workflow to create a generic, harness-agnostic framework for AI-assisted software development. The architecture separates **skills** (process disciplines) from **harness mechanisms** (transport adapters), enabling the same methodology to work across Windsurf Cascade, Claude Code, Devin CLI, and future platforms.
 
+**Cross-Platform Design**: The harness is designed to be platform-agnostic. Skills, workflows, and contracts are YAML/markdown-based and work on any platform. Platform-specific concerns (PowerShell vs Bash, file paths, etc.) are isolated in transport adapters and execution scripts.
+
 ## Core Abstractions
 
 ### 1. Skills (Process Layer)
@@ -409,14 +411,37 @@ For a harness to support this architecture, it must provide:
 5. **Mechanism swap**: Change transport adapter without changing skills/workflows
 6. **Testing**: Test skills/workflows independently of harness implementation
 
+## Cross-Platform Strategy
+
+The harness is designed to work across Windows, Linux, and macOS:
+
+**Platform-Agnostic Layer**:
+- Skills: YAML + markdown (no platform-specific code)
+- Workflows: YAML manifests + markdown (no platform-specific code)
+- Contracts: YAML definitions (no platform-specific code)
+- Templates: Markdown prompt templates (no platform-specific code)
+
+**Platform-Specific Layer**:
+- Transport adapters: Platform-specific dispatch mechanisms
+- Execution scripts: PowerShell (Windows) / Bash (Linux/macOS)
+- File paths: OS-specific path handling in adapters
+- Session init: Platform-specific initialization scripts
+
+**Migration Path**:
+- Skills/workflows/contracts: No changes needed (already platform-agnostic)
+- Add Bash equivalents for PowerShell scripts in `actions/` directory
+- Transport adapters detect platform and use appropriate mechanism
+- File path normalization in adapters (forward slash vs backslash)
+
 ## Open Questions
 
 1. **Skill schema granularity**: How much structure in skill YAML vs. prose?
-2. **Workflow engine implementation**: PowerShell script vs. Windsurf tool?
+2. **Workflow engine implementation**: PowerShell script vs. Windsurf tool vs cross-platform script?
 3. **Transport adapter discovery**: How does the system know which adapter to use?
 4. **Cross-harness session state**: How to share session state across harnesses?
 5. **Knowledge base portability**: How to make KB files harness-agnostic?
 6. **Rule enforcement mechanism**: How to enforce architect rules across harnesses?
+7. **Cross-platform execution**: Should we provide both PowerShell and Bash scripts, or use a cross-platform language like Python?
 
 ## Next Steps
 
