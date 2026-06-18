@@ -59,9 +59,14 @@ class DevinCliAdapter:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=False,  # Binary mode for proper framing
-            bufsize=0  # Unbuffered
+            text=True,  # Text mode
+            bufsize=1  # Line buffered
         )
+
+        # Check if process started successfully
+        if self.process.poll() is not None:
+            stderr_output = self.process.stderr.read()
+            raise RuntimeError(f"Devin-cli failed to start: {stderr_output}")
 
         # Initialize ACP protocol
         self._initialize()
@@ -107,7 +112,7 @@ class DevinCliAdapter:
         # Send request with LSP-style Content-Length framing
         request_json = json.dumps(request)
         content_length = len(request_json.encode('utf-8'))
-        framed_request = f"Content-Length: {content_length}\r\n\r\n{request_json}".encode('utf-8')
+        framed_request = f"Content-Length: {content_length}\r\n\r\n{request_json}"
         self.process.stdin.write(framed_request)
         self.process.stdin.flush()
 
@@ -116,7 +121,7 @@ class DevinCliAdapter:
         if not response:
             raise RuntimeError("No response from devin-cli")
 
-        response_data = json.loads(response.decode('utf-8'))
+        response_data = json.loads(response)
         return ACPResponse(
             jsonrpc=response_data.get('jsonrpc', '2.0'),
             id=response_data.get('id', ''),
@@ -124,27 +129,26 @@ class DevinCliAdapter:
             error=response_data.get('error')
         )
 
-    def _read_framed_response(self) -> Optional[bytes]:
+    def _read_framed_response(self) -> Optional[str]:
         """
         Read LSP-style framed response from devin-cli
 
         Returns:
-            JSON response bytes or None
+            JSON response string or None
         """
         # Read Content-Length header
         header_line = self.process.stdout.readline()
         if not header_line:
             return None
 
-        header_str = header_line.decode('utf-8').strip()
-        if not header_str.startswith('Content-Length:'):
-            raise RuntimeError(f"Invalid response header: {header_str}")
+        if not header_line.startswith('Content-Length:'):
+            raise RuntimeError(f"Invalid response header: {header_line}")
 
-        content_length = int(header_str.split(':')[1].strip())
+        content_length = int(header_line.split(':')[1].strip())
 
         # Read empty line after header
         empty_line = self.process.stdout.readline()
-        if empty_line.decode('utf-8').strip() != '':
+        if empty_line.strip() != '':
             raise RuntimeError("Expected empty line after header")
 
         # Read JSON body
