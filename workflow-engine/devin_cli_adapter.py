@@ -7,6 +7,7 @@ Implements the Agent Client Protocol (ACP) for automated session management and 
 import subprocess
 import json
 import uuid
+import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from dataclasses import dataclass
@@ -62,12 +63,24 @@ class DevinCliAdapter:
             bufsize=0  # Unbuffered
         )
 
+        # Initialize ACP protocol
+        self._initialize()
+
     def stop(self) -> None:
         """Stop devin-cli process"""
         if self.process:
             self.process.terminate()
             self.process.wait()
             self.process = None
+
+    def _initialize(self) -> None:
+        """Initialize ACP protocol handshake"""
+        init_params = {
+            "processId": str(os.getpid()),
+            "rootUri": str(Path(self.workspace).as_uri()),
+            "capabilities": {}
+        }
+        self._send_request('initialize', init_params)
 
     def _send_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> ACPResponse:
         """
