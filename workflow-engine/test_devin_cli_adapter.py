@@ -141,8 +141,8 @@ class TestDevinCliAdapter(unittest.TestCase):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[],
                 returncode=1,
-                stdout=b'',
-                stderr=b'Error occurred'
+                stdout='',
+                stderr='Error occurred'
             )
             
             result = self.adapter.invoke('test prompt')
@@ -162,13 +162,22 @@ class TestDevinCliAdapter(unittest.TestCase):
             # The current implementation doesn't catch UnicodeDecodeError specifically
             # but it should be handled by the general exception handler
             self.assertFalse(result.success)
+            self.assertIsNotNone(result.error)
 
     def test_context_manager(self):
         """Should support context manager interface"""
-        with DevinCliAdapter(self.devin_cli_path, str(self.workspace)) as adapter:
-            self.assertIsInstance(adapter, DevinCliAdapter)
-            result = adapter.invoke('test prompt')
-            self.assertTrue(result.success)
+        with patch('subprocess.run') as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[self.devin_cli_path],
+                returncode=0,
+                stdout='Success',
+                stderr=''
+            )
+            
+            with DevinCliAdapter(self.devin_cli_path, str(self.workspace)) as adapter:
+                self.assertIsInstance(adapter, DevinCliAdapter)
+                result = adapter.invoke('test prompt')
+                self.assertTrue(result.success)
 
     def test_workspace_parameter(self):
         """Should use workspace directory for execution"""
@@ -176,8 +185,8 @@ class TestDevinCliAdapter(unittest.TestCase):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
-                stdout=b'Success',
-                stderr=b''
+                stdout='Success',
+                stderr=''
             )
             
             result = self.adapter.invoke('test prompt')
@@ -195,8 +204,8 @@ class TestDevinCliAdapter(unittest.TestCase):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
-                stdout=b'Success',
-                stderr=b''
+                stdout='Success',
+                stderr=''
             )
             
             result = adapter_no_model.invoke('test prompt')
@@ -211,8 +220,8 @@ class TestDevinCliAdapter(unittest.TestCase):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
-                stdout=b'Success',
-                stderr=b''
+                stdout='Success',
+                stderr=''
             )
             
             result = self.adapter.invoke('test prompt', timeout=300)
@@ -227,8 +236,8 @@ class TestDevinCliAdapter(unittest.TestCase):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
-                stdout=b'Success',
-                stderr=b''
+                stdout='Success',
+                stderr=''
             )
             
             result = self.adapter.invoke('test prompt')
@@ -254,8 +263,8 @@ class TestDevinCliAdapter(unittest.TestCase):
             mock_run.return_value = subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
-                stdout=b'Stdout content',
-                stderr=b'Stderr content'
+                stdout='Stdout content',
+                stderr='Stderr content'
             )
             
             result = self.adapter.invoke('test prompt')
