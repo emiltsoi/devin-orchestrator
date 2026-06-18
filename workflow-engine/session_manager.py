@@ -83,7 +83,7 @@ class SessionManager:
         # Create status.md
         status_path = self.session_dir / 'status.md'
         if not status_path.exists():
-            status_path.write_text(f"phase=step_0  skill=context  retries=0/0\n", encoding='utf-8')
+            status_path.write_text(f"phase=step_0  skill=context  retries=0/0  status=in_progress\n", encoding='utf-8')
 
         # Create session-audit.md
         audit_path = self.session_dir / 'session-audit.md'
@@ -163,7 +163,7 @@ class SessionManager:
 
         status_path = self.session_dir / 'status.md'
         skill_str = skill or self.state.current_phase
-        status_line = f"phase={self.state.current_step}  skill={skill_str}  retries={self.state.retries}/2\n"
+        status_line = f"phase={self.state.current_step}  skill={skill_str}  retries={self.state.retries}/2  status={self.state.status}\n"
         status_path.write_text(status_line, encoding='utf-8')
 
     def _log_phase_transition(self, step: str, phase: str, skill: str) -> None:

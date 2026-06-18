@@ -97,6 +97,7 @@ class TestSessionManager(unittest.TestCase):
         status_content = status_path.read_text(encoding='utf-8')
         self.assertIn('step_0', status_content)
         self.assertIn('context', status_content)
+        self.assertIn('in_progress', status_content)
         
         # Check session-audit.md
         audit_path = session_dir / 'session-audit.md'
