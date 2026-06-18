@@ -1,0 +1,35 @@
+schema_version: 1
+name: devin-cli
+platform: devin
+description: Devin CLI transport adapter via Agent Client Protocol (ACP)
+capabilities:
+  - fresh_session_spawn
+  - context_isolation
+  - file_operations
+  - terminal_commands
+  - native_subagent_dispatch
+  - structured_output
+dispatch_contract:
+  inputs:
+    - prompt_file
+    - workspace_path
+    - model_config
+  outputs:
+    - stdout_file
+    - stderr_file
+    - session_metadata
+  quality_bar:
+    - exit_code_zero
+    - no_timeout
+    - artifact_exists
+    - acp_response_valid
+limitations:
+  - max_prompt_tokens: 1000000
+  - max_session_duration: 3600
+  - requires_devin_cli: true
+  - acp_protocol_required: true
+acp_methods:
+  - session_new
+  - session_prompt
+  - session_cancel
+  - session_list
