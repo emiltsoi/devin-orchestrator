@@ -83,7 +83,7 @@ class SessionManager:
         # Create status.md
         status_path = self.session_dir / 'status.md'
         if not status_path.exists():
-            status_path.write_text(f"phase=step-0  skill=context  retries=0/0\n", encoding='utf-8')
+            status_path.write_text(f"phase=step_0  skill=context  retries=0/0\n", encoding='utf-8')
 
         # Create session-audit.md
         audit_path = self.session_dir / 'session-audit.md'
