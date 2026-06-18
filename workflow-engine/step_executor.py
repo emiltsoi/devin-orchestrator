@@ -292,11 +292,11 @@ class StepExecutor:
             if self.interactive:
                 print("\n[USER APPROVAL REQUIRED]")
                 print("Please review and approve to continue.")
-                print("Press Enter to approve, or 'reject' to reject...")
+                print("Press Enter to approve, or 'reject'/'no' to reject...")
 
                 user_input = input().strip()
 
-                if user_input.lower() == 'reject':
+                if user_input.lower() in ['reject', 'no']:
                     print("Gate rejected by user")
                     return False
 
