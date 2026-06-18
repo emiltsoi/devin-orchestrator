@@ -29,16 +29,18 @@ class DevinCliAdapter:
     Simpler and more reliable than ACP for basic skill invocation.
     """
 
-    def __init__(self, devin_cli_path: str, workspace: Optional[str] = None):
+    def __init__(self, devin_cli_path: str, workspace: Optional[str] = None, model: Optional[str] = None):
         """
         Initialize devin-cli adapter
 
         Args:
             devin_cli_path: Path to devin.exe binary
             workspace: Optional workspace path (defaults to current directory)
+            model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
         """
         self.devin_cli_path = devin_cli_path
         self.workspace = workspace or str(Path.cwd())
+        self.model = model
 
     def invoke(self, prompt: str, timeout: int = 120) -> InvocationResult:
         """
@@ -52,6 +54,10 @@ class DevinCliAdapter:
             InvocationResult with success status, output, and error
         """
         cmd = [self.devin_cli_path, '--print', prompt]
+
+        # Add model if specified
+        if self.model:
+            cmd = [self.devin_cli_path, '--model', self.model, '--print', prompt]
 
         try:
             result = subprocess.run(

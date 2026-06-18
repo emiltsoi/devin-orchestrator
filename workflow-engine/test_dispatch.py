@@ -45,12 +45,18 @@ def test_automated_dispatch():
 
     print(f"Using devin-cli: {devin_cli_path}")
 
+    # Model selection (optional)
+    model = os.environ.get('DEVIN_MODEL')
+    if model:
+        print(f"Using model: {model}")
+
     # Create executor with automated dispatch
     executor = StepExecutor(
         harness_root,
         work_dir,
         interactive=False,  # Use automated dispatch
-        devin_cli_path=devin_cli_path
+        devin_cli_path=devin_cli_path,
+        model=model  # Optional model selection
     )
 
     # Execute workflow
