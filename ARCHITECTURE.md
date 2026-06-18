@@ -18,6 +18,8 @@ This design synthesizes patterns from [obra/superpowers](https://github.com/obra
 
 **Cross-Platform Design**: The harness is designed to be platform-agnostic. Skills, workflows, and contracts are YAML/markdown-based and work on any platform. Platform-specific concerns (PowerShell vs Bash, file paths, etc.) are isolated in transport adapters and execution scripts.
 
+**Deployment Model**: Per-workspace deployment with canonical harness. Each project workspace has its own orchestrator instance that pulls from the canonical devin-orchestrator library (via git submodule, npm package, or similar). This fits the Cascade/Devin environment where each workspace is self-contained.
+
 ## Core Abstractions
 
 ### 1. Skills (Process Layer)
@@ -432,6 +434,13 @@ The harness is designed to work across Windows, Linux, and macOS:
 - Add Bash equivalents for PowerShell scripts in `actions/` directory
 - Transport adapters detect platform and use appropriate mechanism
 - File path normalization in adapters (forward slash vs backslash)
+
+**Deployment Strategy**:
+- Canonical harness published as reusable library (git, npm, etc.)
+- Each workspace installs harness as dependency/submodule
+- Project-specific config in `.orchestrator-config.yaml`
+- Project-specific logs and work directories in workspace
+- Harness updates pulled from canonical source
 
 ## Open Questions
 
