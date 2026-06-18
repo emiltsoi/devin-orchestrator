@@ -3,26 +3,27 @@
 Step Executor - Executes workflow steps with manual skill invocation
 """
 
-import os
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
 
 from manifest_loader import ManifestLoader, Manifest
 from session_manager import SessionManager, SessionState
 
 
+@dataclass
 class StepResult:
     """Result of step execution"""
-
-    def __init__(self, step, success, message, artifacts_created):
-        self.step = step
-        self.success = success
-        self.message = message
-        self.artifacts_created = artifacts_created
+    step: str
+    success: bool
+    message: str
+    artifacts_created: List[str]
 
 
 class StepExecutor:
     """Executes workflow steps with manual skill invocation"""
 
-    def __init__(self, harness_root, work_dir, interactive=True):
+    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True):
         """
         Initialize step executor
 
@@ -34,11 +35,11 @@ class StepExecutor:
         self.harness_root = harness_root
         self.work_dir = work_dir
         self.manifest_loader = ManifestLoader(harness_root)
-        self.session_manager = None
-        self.manifest = None
+        self.session_manager: Optional[SessionManager] = None
+        self.manifest: Optional[Manifest] = None
         self.interactive = interactive
 
-    def execute_workflow(self, manifest_name, session_id):
+    def execute_workflow(self, manifest_name: str, session_id: str) -> bool:
         """
         Execute a complete workflow
 
@@ -52,12 +53,12 @@ class StepExecutor:
         try:
             # Load manifest
             self.manifest = self.manifest_loader.load(manifest_name)
-            print("Loaded manifest: {}".format(self.manifest.description))
+            print(f"Loaded manifest: {self.manifest.description}")
 
             # Initialize session
             self.session_manager = SessionManager(self.harness_root, self.work_dir)
             self.session_manager.initialize_session(session_id, self.manifest)
-            print("Initialized session: {}".format(session_id))
+            print(f"Initialized session: {session_id}")
 
             # Execute step_0 (session init)
             self._execute_step_0()
@@ -66,21 +67,21 @@ class StepExecutor:
             steps = self._get_step_order()
             for step in steps:
                 if not self._execute_step(step):
-                    print("Step {} failed".format(step))
+                    print(f"Step {step} failed")
                     return False
 
             # Complete session
             self.session_manager.complete_session()
-            print("Session {} completed successfully".format(session_id))
+            print(f"Session {session_id} completed successfully")
             return True
 
         except Exception as e:
-            print("Workflow execution failed: {}".format(e))
+            print(f"Workflow execution failed: {e}")
             if self.session_manager:
                 self.session_manager.fail_session(str(e))
             return False
 
-    def _get_step_order(self):
+    def _get_step_order(self) -> List[str]:
         """Get ordered list of steps from manifest"""
         # Extract step keys from required_artefacts
         steps = list(self.manifest.required_artefacts.keys())
@@ -91,7 +92,7 @@ class StepExecutor:
             steps.remove('step_0')
         return steps
 
-    def _execute_step_0(self):
+    def _execute_step_0(self) -> StepResult:
         """
         Execute step_0 (session init)
 
@@ -99,7 +100,7 @@ class StepExecutor:
             StepResult indicating success/failure
         """
         print("\n=== Step 0: Session Init ===")
-        print("Session directory: {}".format(self.session_manager.get_session_dir()))
+        print(f"Session directory: {self.session_manager.get_session_dir()}")
         print("Initial artifacts created: request.md, status.md, session-audit.md")
 
         # Update phase to context
@@ -112,7 +113,7 @@ class StepExecutor:
             artifacts_created=['request.md', 'status.md', 'session-audit.md']
         )
 
-    def _execute_step(self, step):
+    def _execute_step(self, step: str) -> bool:
         """
         Execute a single step with manual skill invocation
 
@@ -122,21 +123,21 @@ class StepExecutor:
         Returns:
             True if step completed successfully, False otherwise
         """
-        print("\n=== {} ===".format(step.upper()))
+        print(f"\n=== {step.upper()} ===")
 
         # Get skills for this step
         skills = self._get_skills_for_step(step)
         if not skills:
-            print("No skills assigned to {}".format(step))
+            print(f"No skills assigned to {step}")
             return True
 
         # Execute each skill (usually one per step)
         for skill_config in skills:
             skill_name = skill_config['name']
-            announcement = skill_config.get('announcement', 'Using {} skill'.format(skill_name))
+            announcement = skill_config.get('announcement', f'Using {skill_name} skill')
 
             # Announce skill invocation
-            print("\n{}".format(announcement))
+            print(f"\n{announcement}")
 
             # Update phase
             self.session_manager.update_phase(step, skill_name, skill_name)
@@ -144,13 +145,13 @@ class StepExecutor:
             # Wait for manual skill execution (Architect executes in Cascade)
             if self.interactive:
                 print("\n[MANUAL EXECUTION REQUIRED]")
-                print("Please execute the {} skill manually in Cascade.".format(skill_name))
+                print(f"Please execute the {skill_name} skill manually in Cascade.")
                 print("Press Enter when complete, or 'skip' to skip this step...")
 
                 user_input = input().strip()
 
                 if user_input.lower() == 'skip':
-                    print("Skipped {} skill".format(skill_name))
+                    print(f"Skipped {skill_name} skill")
                     continue
             else:
                 print("\n[NON-INTERACTIVE MODE - Skipping manual execution]")
@@ -159,11 +160,10 @@ class StepExecutor:
                 # Create placeholder artifacts for testing
                 required_artifacts = self.manifest.required_artefacts.get(step, [])
                 for artifact in required_artifacts:
-                    artifact_path = os.path.join(self.session_manager.get_session_dir(), artifact)
-                    if not os.path.exists(artifact_path):
-                        with open(artifact_path, 'w') as f:
-                            f.write("# Placeholder for {}\n\n# Created in non-interactive test mode\n".format(artifact))
-                print("Created placeholder artifacts: {}".format(', '.join(required_artifacts)))
+                    artifact_path = self.session_manager.get_session_dir() / artifact
+                    if not artifact_path.exists():
+                        artifact_path.write_text(f"# Placeholder for {artifact}\n\n# Created in non-interactive test mode\n", encoding='utf-8')
+                print(f"Created placeholder artifacts: {', '.join(required_artifacts)}")
                 continue
 
             # Validate required artifacts
@@ -171,7 +171,7 @@ class StepExecutor:
             missing_artifacts = self._validate_artifacts(required_artifacts)
 
             if missing_artifacts:
-                print("Missing artifacts: {}".format(', '.join(missing_artifacts)))
+                print(f"Missing artifacts: {', '.join(missing_artifacts)}")
                 print("Please create the missing artifacts and press Enter to retry...")
 
                 retry_input = input().strip()
@@ -181,10 +181,10 @@ class StepExecutor:
                 # Re-validate
                 missing_artifacts = self._validate_artifacts(required_artifacts)
                 if missing_artifacts:
-                    print("Still missing artifacts: {}".format(', '.join(missing_artifacts)))
+                    print(f"Still missing artifacts: {', '.join(missing_artifacts)}")
                     return False
 
-            print("{} completed successfully".format(step))
+            print(f"{step} completed successfully")
 
         # Check for gates after this step
         if self._has_gate_after_step(step):
@@ -192,7 +192,7 @@ class StepExecutor:
 
         return True
 
-    def _get_skills_for_step(self, step):
+    def _get_skills_for_step(self, step: str) -> List[Dict[str, Any]]:
         """Get skills assigned to a specific step"""
         skills = []
         for skill in self.manifest.skills:
@@ -201,7 +201,7 @@ class StepExecutor:
                 skills.append(skill)
         return skills
 
-    def _validate_artifacts(self, required_artifacts):
+    def _validate_artifacts(self, required_artifacts: List[str]) -> List[str]:
         """
         Validate that required artifacts exist
 
@@ -217,14 +217,14 @@ class StepExecutor:
                 missing.append(artifact)
         return missing
 
-    def _has_gate_after_step(self, step):
+    def _has_gate_after_step(self, step: str) -> bool:
         """Check if there's a gate after a specific step"""
         for gate in self.manifest.gates:
             if gate['after_step'] == step:
                 return True
         return False
 
-    def _handle_gate(self, step):
+    def _handle_gate(self, step: str) -> bool:
         """
         Handle gate after a step
 
@@ -241,9 +241,9 @@ class StepExecutor:
         gate_type = gate['type']
         gate_description = gate.get('description', '')
 
-        print("\n=== GATE: {} ===".format(gate['id']))
-        print("Type: {}".format(gate_type))
-        print("Description: {}".format(gate_description))
+        print(f"\n=== GATE: {gate['id']} ===")
+        print(f"Type: {gate_type}")
+        print(f"Description: {gate_description}")
 
         if gate_type == 'user_gate':
             if self.interactive:
@@ -261,7 +261,7 @@ class StepExecutor:
                 return True
             else:
                 print("\n[NON-INTERACTIVE MODE - Auto-approving gate]")
-                print("Gate {} auto-approved".format(gate['id']))
+                print(f"Gate {gate['id']} auto-approved")
                 return True
 
         elif gate_type == 'auto_gate':
@@ -271,7 +271,7 @@ class StepExecutor:
 
         return True
 
-    def _get_gate_after_step(self, step):
+    def _get_gate_after_step(self, step: str) -> Optional[Dict[str, Any]]:
         """Get gate configuration after a specific step"""
         for gate in self.manifest.gates:
             if gate['after_step'] == step:

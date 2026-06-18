@@ -1,13 +1,14 @@
+# -*- coding: utf-8 -*-
 """
 Phase 1 End-to-End Test
 Tests the basic workflow engine with the feature workflow
 """
 
 import sys
-import os
+from pathlib import Path
 
 # Add workflow-engine to path
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from step_executor import StepExecutor
 
@@ -19,11 +20,11 @@ def test_phase1():
     print("=" * 60)
 
     # Setup paths
-    harness_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    work_dir = os.path.join(harness_root, 'work')
+    harness_root = Path(__file__).parent.parent
+    work_dir = harness_root / 'work'
 
-    print("\nHarness root: {}".format(harness_root))
-    print("Work directory: {}".format(work_dir))
+    print(f"\nHarness root: {harness_root}")
+    print(f"Work directory: {work_dir}")
 
     # Create executor (non-interactive mode for testing)
     executor = StepExecutor(harness_root, work_dir, interactive=False)
