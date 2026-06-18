@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Step Executor - Executes workflow steps with manual skill invocation
 """
@@ -21,19 +22,21 @@ class StepResult:
 class StepExecutor:
     """Executes workflow steps with manual skill invocation"""
 
-    def __init__(self, harness_root, work_dir):
+    def __init__(self, harness_root, work_dir, interactive=True):
         """
         Initialize step executor
 
         Args:
             harness_root: Root directory of the harness
             work_dir: Work directory for session files
+            interactive: If True, prompt for manual skill execution. If False, skip prompts.
         """
         self.harness_root = harness_root
         self.work_dir = work_dir
         self.manifest_loader = ManifestLoader(harness_root)
         self.session_manager = None
         self.manifest = None
+        self.interactive = interactive
 
     def execute_workflow(self, manifest_name, session_id):
         """
@@ -139,14 +142,28 @@ class StepExecutor:
             self.session_manager.update_phase(step, skill_name, skill_name)
 
             # Wait for manual skill execution (Architect executes in Cascade)
-            print("\n[MANUAL EXECUTION REQUIRED]")
-            print("Please execute the {} skill manually in Cascade.".format(skill_name))
-            print("Press Enter when complete, or 'skip' to skip this step...")
+            if self.interactive:
+                print("\n[MANUAL EXECUTION REQUIRED]")
+                print("Please execute the {} skill manually in Cascade.".format(skill_name))
+                print("Press Enter when complete, or 'skip' to skip this step...")
 
-            user_input = input().strip()
+                user_input = input().strip()
 
-            if user_input.lower() == 'skip':
-                print("Skipped {} skill".format(skill_name))
+                if user_input.lower() == 'skip':
+                    print("Skipped {} skill".format(skill_name))
+                    continue
+            else:
+                print("\n[NON-INTERACTIVE MODE - Skipping manual execution]")
+                print("Creating placeholder artifacts for testing...")
+
+                # Create placeholder artifacts for testing
+                required_artifacts = self.manifest.required_artefacts.get(step, [])
+                for artifact in required_artifacts:
+                    artifact_path = os.path.join(self.session_manager.get_session_dir(), artifact)
+                    if not os.path.exists(artifact_path):
+                        with open(artifact_path, 'w') as f:
+                            f.write("# Placeholder for {}\n\n# Created in non-interactive test mode\n".format(artifact))
+                print("Created placeholder artifacts: {}".format(', '.join(required_artifacts)))
                 continue
 
             # Validate required artifacts
@@ -229,18 +246,23 @@ class StepExecutor:
         print("Description: {}".format(gate_description))
 
         if gate_type == 'user_gate':
-            print("\n[USER APPROVAL REQUIRED]")
-            print("Please review and approve to continue.")
-            print("Press Enter to approve, or 'reject' to reject...")
+            if self.interactive:
+                print("\n[USER APPROVAL REQUIRED]")
+                print("Please review and approve to continue.")
+                print("Press Enter to approve, or 'reject' to reject...")
 
-            user_input = input().strip()
+                user_input = input().strip()
 
-            if user_input.lower() == 'reject':
-                print("Gate rejected by user")
-                return False
+                if user_input.lower() == 'reject':
+                    print("Gate rejected by user")
+                    return False
 
-            print("Gate approved by user")
-            return True
+                print("Gate approved by user")
+                return True
+            else:
+                print("\n[NON-INTERACTIVE MODE - Auto-approving gate]")
+                print("Gate {} auto-approved".format(gate['id']))
+                return True
 
         elif gate_type == 'auto_gate':
             # Auto-gate - automatically pass for Phase 1

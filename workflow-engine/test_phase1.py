@@ -25,11 +25,11 @@ def test_phase1():
     print("\nHarness root: {}".format(harness_root))
     print("Work directory: {}".format(work_dir))
 
-    # Create executor
-    executor = StepExecutor(harness_root, work_dir)
+    # Create executor (non-interactive mode for testing)
+    executor = StepExecutor(harness_root, work_dir, interactive=False)
 
     # Execute workflow
-    print("\nStarting workflow execution...")
+    print("\nStarting workflow execution (non-interactive mode)...")
     success = executor.execute_workflow('feature.manifest.yaml', 'FEATURE-TEST-001')
 
     if success:
