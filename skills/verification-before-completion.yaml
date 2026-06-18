@@ -1,0 +1,21 @@
+schema_version: 1
+name: verification-before-completion
+description: Use when verifying build and tests before claiming completion
+iron_law: "NO COMPLETION CLAIM WITHOUT FRESH VERIFICATION EVIDENCE"
+triggers:
+  - verification_phase
+  - build_check
+  - test_check
+checklist:
+  - id: verify_build
+    description: Verify build succeeds
+  - id: verify_tests
+    description: Verify tests pass (no regression)
+  - id: check_artifacts
+    description: Check expected artifacts exist
+terminal_state: code-review
+announcement: "Using the verification-before-completion skill to confirm build+tests on HEAD"
+red_flags:
+  - Claiming completion without verification
+  - Skipping test execution
+  - Ignoring build failures
