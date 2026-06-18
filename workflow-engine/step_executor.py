@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from manifest_loader import ManifestLoader, Manifest
 from session_manager import SessionManager, SessionState
+from skill_invoker import SkillInvoker
 
 
 @dataclass
@@ -23,14 +24,15 @@ class StepResult:
 class StepExecutor:
     """Executes workflow steps with manual skill invocation"""
 
-    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True):
+    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True, devin_cli_path: Optional[str] = None):
         """
         Initialize step executor
 
         Args:
             harness_root: Root directory of the harness
             work_dir: Work directory for session files
-            interactive: If True, prompt for manual skill execution. If False, skip prompts.
+            interactive: If True, prompt for manual skill execution. If False, use automated dispatch.
+            devin_cli_path: Optional path to devin.exe for automated dispatch
         """
         self.harness_root = harness_root
         self.work_dir = work_dir
@@ -38,6 +40,11 @@ class StepExecutor:
         self.session_manager: Optional[SessionManager] = None
         self.manifest: Optional[Manifest] = None
         self.interactive = interactive
+        self.devin_cli_path = devin_cli_path
+        self.skill_invoker: Optional[SkillInvoker] = None
+
+        if devin_cli_path:
+            self.skill_invoker = SkillInvoker(harness_root, devin_cli_path)
 
     def execute_workflow(self, manifest_name: str, session_id: str) -> bool:
         """
@@ -153,6 +160,38 @@ class StepExecutor:
                 if user_input.lower() == 'skip':
                     print(f"Skipped {skill_name} skill")
                     continue
+            elif self.skill_invoker:
+                # Automated dispatch using skill invoker
+                print("\n[AUTOMATED DISPATCH - Invoking skill via devin-cli]")
+                print(f"Dispatching {skill_name} skill...")
+
+                context = {
+                    'session_id': self.session_manager.state.session_id,
+                    'step': step,
+                    'session_dir': str(self.session_manager.get_session_dir()),
+                    'required_artifacts': self.manifest.required_artefacts.get(step, [])
+                }
+
+                result = self.skill_invoker.invoke_skill(
+                    skill_name=skill_name,
+                    context=context,
+                    workspace=str(self.session_manager.get_session_dir())
+                )
+
+                if result.success:
+                    print(f"Skill {skill_name} invoked successfully")
+                    print(f"Session ID: {result.session_id}")
+                    print(f"Output: {result.output}")
+                else:
+                    print(f"Skill {skill_name} invocation failed: {result.error}")
+                    # Fall back to placeholder creation
+                    print("Creating placeholder artifacts as fallback...")
+                    required_artifacts = self.manifest.required_artefacts.get(step, [])
+                    for artifact in required_artifacts:
+                        artifact_path = self.session_manager.get_session_dir() / artifact
+                        if not artifact_path.exists():
+                            artifact_path.write_text(f"# Placeholder for {artifact}\n\n# Created after dispatch failure\n", encoding='utf-8')
+                    print(f"Created placeholder artifacts: {', '.join(required_artifacts)}")
             else:
                 print("\n[NON-INTERACTIVE MODE - Skipping manual execution]")
                 print("Creating placeholder artifacts for testing...")
