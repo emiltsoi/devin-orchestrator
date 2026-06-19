@@ -7,8 +7,9 @@ Implements hybrid automated + human evaluation system
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
-import re
 import yaml
+import re
+from floor_validator import validate_structural, validate_iron_law, validate_format
 
 
 @dataclass
@@ -94,22 +95,22 @@ class SkillEvaluator:
 
         # Check 1: Structural (file exists, non-empty)
         structural_result = self._check_structural(artifact_path)
-        if not structural_result['passed']:
-            issues.extend(structural_result['issues'])
+        if structural_result['result'] == 'FAIL':
+            issues.extend(structural_result['failures'])
             confidence -= 0.3
         details['structural'] = structural_result
 
         # Check 2: Iron Law compliance
         iron_law_result = self._check_iron_law(artifact_path, iron_law)
-        if not iron_law_result['passed']:
-            issues.extend(iron_law_result['issues'])
+        if iron_law_result['result'] == 'FAIL':
+            issues.extend(iron_law_result['failures'])
             confidence -= 0.4
         details['iron_law'] = iron_law_result
 
         # Check 3: Format validation (YAML/JSON if applicable)
         format_result = self._check_format(artifact_path)
-        if not format_result['passed']:
-            issues.extend(format_result['issues'])
+        if format_result['result'] == 'FAIL':
+            issues.extend(format_result['failures'])
             confidence -= 0.2
         details['format'] = format_result
 
@@ -148,109 +149,15 @@ class SkillEvaluator:
 
     def _check_structural(self, artifact_path: Path) -> Dict[str, Any]:
         """Check if artifact exists and is non-empty"""
-        if not artifact_path.exists():
-            return {
-                'passed': False,
-                'issues': [f"Artifact does not exist: {artifact_path}"]
-            }
-
-        content = artifact_path.read_text(encoding='utf-8')
-        if not content.strip():
-            return {
-                'passed': False,
-                'issues': [f"Artifact is empty: {artifact_path}"]
-            }
-
-        # Check for placeholder patterns
-        placeholder_patterns = [
-            r'PLACEHOLDER',
-            r'TODO',
-            r'TBD',
-            r'Created after dispatch failure',
-            r'<!-- .* -->',  # HTML comment placeholders
-        ]
-
-        for pattern in placeholder_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                return {
-                    'passed': False,
-                    'issues': [f"Artifact contains placeholder pattern: {pattern}"]
-                }
-
-        return {
-            'passed': True,
-            'issues': []
-        }
+        return validate_structural([artifact_path])
 
     def _check_iron_law(self, artifact_path: Path, iron_law: str) -> Dict[str, Any]:
         """Check if Iron Law is followed"""
-        if not iron_law:
-            return {
-                'passed': True,
-                'issues': []
-            }
-
-        content = artifact_path.read_text(encoding='utf-8')
-
-        # Extract key requirements from Iron Law
-        # This is a simplified check - real implementation would parse Iron Law text
-        if 'test' in iron_law.lower() and 'test' not in content.lower():
-            return {
-                'passed': False,
-                'issues': ["Iron Law requires tests but none found in artifact"]
-            }
-
-        if 'no placeholder' in iron_law.lower():
-            if 'placeholder' in content.lower() or 'todo' in content.lower():
-                return {
-                    'passed': False,
-                    'issues': ["Iron Law prohibits placeholders but found in artifact"]
-                }
-
-        return {
-            'passed': True,
-            'issues': []
-        }
+        return validate_iron_law(artifact_path, iron_law)
 
     def _check_format(self, artifact_path: Path) -> Dict[str, Any]:
         """Check YAML/JSON format if applicable"""
-        suffix = artifact_path.suffix.lower()
-
-        if suffix in ['.yaml', '.yml']:
-            try:
-                with open(artifact_path, 'r', encoding='utf-8') as f:
-                    yaml.safe_load(f)
-                return {
-                    'passed': True,
-                    'issues': []
-                }
-            except yaml.YAMLError as e:
-                return {
-                    'passed': False,
-                    'issues': [f"YAML parsing error: {e}"]
-                }
-
-        if suffix == '.json':
-            import json
-            try:
-                with open(artifact_path, 'r', encoding='utf-8') as f:
-                    json.load(f)
-                return {
-                    'passed': True,
-                    'issues': []
-                }
-            except json.JSONDecodeError as e:
-                return {
-                    'passed': False,
-                    'issues': [f"JSON parsing error: {e}"]
-                }
-
-        # Markdown or other formats - no format check
-        return {
-            'passed': True,
-            'issues': [],
-            'checked': False
-        }
+        return validate_format(artifact_path)
 
     def _check_test_results(self, artifact_path: Path, skill_name: str) -> Dict[str, Any]:
         """Check test results if artifact contains test output"""

@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from skill_evaluator import SkillEvaluator, EvaluationResult
+from floor_validator import validate_structural
 
 
 def test_multi_artifact_evaluation():
@@ -84,7 +85,7 @@ def test_multi_artifact_evaluation():
     assert step_evaluation.requires_user_input, "Expected requires user input"
     assert len(step_evaluation.issues) == 1, f"Expected 1 issue, got {len(step_evaluation.issues)}"
 
-    print("\n✓ All assertions passed")
+    print("\n[OK] All assertions passed")
 
     # Cleanup
     try:
@@ -98,6 +99,49 @@ def test_multi_artifact_evaluation():
 
     print("\n" + "=" * 60)
     print("Multi-Artifact Evaluation Test: PASSED")
+    print("=" * 60)
+
+    # Additional test: Direct floor_validator usage for structural checks
+    print("\n[Additional Test] Direct floor_validator structural checks")
+    print("-" * 60)
+
+    # Create a fresh test directory for structural checks
+    struct_test_dir = Path(__file__).parent / 'test_structural_checks'
+    struct_test_dir.mkdir(exist_ok=True)
+
+    # Test valid artifact structure
+    valid_struct_path = struct_test_dir / 'valid_struct.md'
+    valid_struct_path.write_text('# Valid Structure\n\nComplete content without issues.', encoding='utf-8')
+    struct_result = validate_structural(valid_struct_path)
+    print(f"Valid structural check: {struct_result}")
+    assert struct_result['result'] == 'PASS', f"Expected PASS for valid structure, got {struct_result['result']}"
+    valid_struct_path.unlink()
+
+    # Test invalid artifact structure (placeholder)
+    invalid_struct_path = struct_test_dir / 'invalid_struct.md'
+    invalid_struct_path.write_text('# PLACEHOLDER\n\nTODO: implement', encoding='utf-8')
+    struct_result = validate_structural(invalid_struct_path)
+    print(f"Invalid structural check: {struct_result}")
+    assert struct_result['result'] == 'FAIL', f"Expected FAIL for placeholder, got {struct_result['result']}"
+    assert len(struct_result['failures']) > 0, "Expected failures for placeholder"
+    invalid_struct_path.unlink()
+
+    print("[OK] Direct floor_validator structural checks passed")
+
+    # Cleanup structural test directory
+    try:
+        struct_test_dir.rmdir()
+    except PermissionError:
+        # Windows file handle issue - directory will be cleaned up later
+        pass
+
+    # Cleanup test directory
+    try:
+        test_dir.rmdir()
+    except PermissionError:
+        # Windows file handle issue - directory will be cleaned up later
+        pass
+
     print("=" * 60)
     return 0
 

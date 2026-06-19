@@ -48,7 +48,9 @@ class SkillInvoker:
         skill_name: str,
         context: Dict[str, Any],
         workspace: Optional[str] = None,
-        custom_prompt: Optional[str] = None
+        custom_prompt: Optional[str] = None,
+        focused_context: Optional[list] = None,
+        correction_artifact: Optional[str] = None
     ) -> SkillInvocationResult:
         """
         Invoke a skill using the devin-cli transport adapter
@@ -58,6 +60,8 @@ class SkillInvoker:
             context: Context data for the skill (e.g., session_id, step, artifacts)
             workspace: Optional workspace path
             custom_prompt: Optional custom prompt (for retry with feedback)
+            focused_context: Optional list of artifact paths to inject into worker dispatch
+            correction_artifact: Optional path to correction artifact for retry loops
 
         Returns:
             SkillInvocationResult with success status and output
@@ -94,7 +98,7 @@ class SkillInvoker:
         if custom_prompt:
             prompt = custom_prompt
         else:
-            prompt = self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
+            prompt = self.build_skill_prompt(skill_name, skill_def, skill_narrative, context, focused_context, correction_artifact)
 
         # Generate session ID for tracking
         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"
@@ -102,7 +106,7 @@ class SkillInvoker:
         try:
             # Use simple adapter with --print mode
             adapter = DevinCliAdapter(self.devin_cli_path, workspace, self.model, self.permission_mode)
-            result = adapter.invoke(prompt, timeout=300)  # 5 minute timeout for skills
+            result = adapter.invoke(prompt, timeout=300, focused_context=focused_context, correction_artifact=correction_artifact)  # 5 minute timeout for skills
 
             return SkillInvocationResult(
                 success=result.success,
@@ -144,7 +148,9 @@ class SkillInvoker:
         skill_name: str,
         skill_def: Dict[str, Any],
         skill_narrative: str,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
+        focused_context: Optional[list] = None,
+        correction_artifact: Optional[str] = None
     ) -> str:
         """
         Build prompt for skill invocation
@@ -154,6 +160,8 @@ class SkillInvoker:
             skill_def: Skill YAML definition
             skill_narrative: Skill markdown narrative
             context: Context data
+            focused_context: Optional list of artifact paths to inject into worker dispatch
+            correction_artifact: Optional path to correction artifact for retry loops
 
         Returns:
             Prompt string
@@ -165,6 +173,16 @@ class SkillInvoker:
         # Add context information
         for key, value in context.items():
             prompt += f"- {key}: {value}\n"
+
+        # Add focused context artifacts if provided
+        if focused_context:
+            prompt += "\n## Focused Context Artifacts\n"
+            for artifact_path in focused_context:
+                prompt += f"- {artifact_path}\n"
+
+        # Add correction artifact if provided
+        if correction_artifact:
+            prompt += f"\n## Correction Artifact\n- {correction_artifact}\n"
 
         prompt += f"""
 ## Skill Definition

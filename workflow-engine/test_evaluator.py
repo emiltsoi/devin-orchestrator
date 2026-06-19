@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from skill_evaluator import SkillEvaluator, EvaluationResult
+from floor_validator import validate_structural, validate_iron_law, validate_format
 
 
 def test_evaluator():
@@ -192,6 +193,77 @@ TODO: fix the failing tests
     assert result.confidence < 0.7, f"Expected confidence < 0.7, got {result.confidence}"
     assert result.requires_user_input, "Should require user input for low confidence"
     low_conf_path.unlink()
+
+    # Test 10: Direct floor_validator - validate_structural
+    print("\n[Test 10] Direct floor_validator - validate_structural")
+    test_path = Path(__file__).parent / 'test_structural.md'
+    test_path.write_text('# Valid content\n\nThis is complete content.', encoding='utf-8')
+    structural_result = validate_structural(test_path)
+    print(f"Structural result: {structural_result}")
+    assert structural_result['result'] == 'PASS', f"Expected PASS, got {structural_result['result']}"
+    assert len(structural_result['failures']) == 0, f"Expected no failures, got {structural_result['failures']}"
+    test_path.unlink()
+
+    # Test 11: Direct floor_validator - validate_structural with placeholder
+    print("\n[Test 11] Direct floor_validator - validate_structural with placeholder")
+    placeholder_path = Path(__file__).parent / 'test_placeholder_struct.md'
+    placeholder_path.write_text('# PLACEHOLDER\n\nTODO: implement this', encoding='utf-8')
+    structural_result = validate_structural(placeholder_path)
+    print(f"Structural result: {structural_result}")
+    assert structural_result['result'] == 'FAIL', f"Expected FAIL, got {structural_result['result']}"
+    assert len(structural_result['failures']) > 0, "Expected failures for placeholder"
+    placeholder_path.unlink()
+
+    # Test 12: Direct floor_validator - validate_iron_law
+    print("\n[Test 12] Direct floor_validator - validate_iron_law")
+    iron_law_path = Path(__file__).parent / 'test_iron_law.md'
+    iron_law_path.write_text('# Test Results\n\nAll tests passed: 70/70', encoding='utf-8')
+    iron_law_text = "Must include tests and no placeholders"
+    iron_law_result = validate_iron_law(iron_law_path, iron_law_text)
+    print(f"Iron Law result: {iron_law_result}")
+    assert iron_law_result['result'] == 'PASS', f"Expected PASS, got {iron_law_result['result']}"
+    iron_law_path.unlink()
+
+    # Test 13: Direct floor_validator - validate_iron_law with violation
+    print("\n[Test 13] Direct floor_validator - validate_iron_law with violation")
+    violation_path = Path(__file__).parent / 'test_iron_law_violation.md'
+    violation_path.write_text('# Some content\n\nTODO: add tests later', encoding='utf-8')
+    iron_law_text = "Must include tests and no placeholders"
+    iron_law_result = validate_iron_law(violation_path, iron_law_text)
+    print(f"Iron Law result: {iron_law_result}")
+    assert iron_law_result['result'] == 'FAIL', f"Expected FAIL, got {iron_law_result['result']}"
+    assert len(iron_law_result['failures']) > 0, "Expected failures for Iron Law violation"
+    violation_path.unlink()
+
+    # Test 14: Direct floor_validator - validate_format (YAML)
+    print("\n[Test 14] Direct floor_validator - validate_format (YAML)")
+    yaml_path = Path(__file__).parent / 'test_format.yaml'
+    yaml_path.write_text('name: test\nversion: 1.0\n', encoding='utf-8')
+    format_result = validate_format(yaml_path)
+    print(f"Format result: {format_result}")
+    assert format_result['result'] == 'PASS', f"Expected PASS, got {format_result['result']}"
+    assert format_result['checked'] == True, "Expected YAML to be checked"
+    yaml_path.unlink()
+
+    # Test 15: Direct floor_validator - validate_format (invalid YAML)
+    print("\n[Test 15] Direct floor_validator - validate_format (invalid YAML)")
+    invalid_yaml_path = Path(__file__).parent / 'test_invalid_format.yaml'
+    invalid_yaml_path.write_text('name: test\nversion: [unclosed', encoding='utf-8')
+    format_result = validate_format(invalid_yaml_path)
+    print(f"Format result: {format_result}")
+    assert format_result['result'] == 'FAIL', f"Expected FAIL, got {format_result['result']}"
+    assert format_result['checked'] == True, "Expected YAML to be checked"
+    invalid_yaml_path.unlink()
+
+    # Test 16: Direct floor_validator - validate_format (Markdown - not checked)
+    print("\n[Test 16] Direct floor_validator - validate_format (Markdown - not checked)")
+    md_path = Path(__file__).parent / 'test_format.md'
+    md_path.write_text('# Markdown content\n\nNo format validation needed.', encoding='utf-8')
+    format_result = validate_format(md_path)
+    print(f"Format result: {format_result}")
+    assert format_result['result'] == 'PASS', f"Expected PASS, got {format_result['result']}"
+    assert format_result['checked'] == False, "Expected Markdown to not be checked"
+    md_path.unlink()
 
     print("\n" + "=" * 60)
     print("Skill Evaluator Test: COMPLETED")

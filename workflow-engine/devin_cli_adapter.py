@@ -44,13 +44,15 @@ class DevinCliAdapter:
         self.model = model
         self.permission_mode = permission_mode
 
-    def invoke(self, prompt: str, timeout: int = 120) -> InvocationResult:
+    def invoke(self, prompt: str, timeout: int = 120, focused_context: Optional[list] = None, correction_artifact: Optional[str] = None) -> InvocationResult:
         """
         Invoke devin-cli with a prompt in non-interactive mode
 
         Args:
             prompt: The prompt to send to devin
             timeout: Timeout in seconds (default: 120)
+            focused_context: Optional list of artifact paths to inject into worker dispatch
+            correction_artifact: Optional path to correction artifact for retry loops
 
         Returns:
             InvocationResult with success status, output, and error
@@ -60,6 +62,15 @@ class DevinCliAdapter:
         # Add model if specified
         if self.model:
             cmd.extend(['--model', self.model])
+
+        # Add focused context artifacts if provided
+        if focused_context:
+            for artifact_path in focused_context:
+                cmd.extend(['--context', artifact_path])
+
+        # Add correction artifact if provided
+        if correction_artifact:
+            cmd.extend(['--correction', correction_artifact])
 
         # Add print and prompt
         cmd.extend(['--print', prompt])
