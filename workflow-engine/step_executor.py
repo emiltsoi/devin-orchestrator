@@ -257,9 +257,9 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                 }
 
                 # Build the original prompt for potential retry
-                skill_def = self.skill_invoker._load_skill_definition(skill_name)
-                skill_narrative = self.skill_invoker._load_skill_narrative(skill_name)
-                original_prompt = self.skill_invoker._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
+                skill_def = self.skill_invoker.load_skill_definition(skill_name)
+                skill_narrative = self.skill_invoker.load_skill_narrative(skill_name)
+                original_prompt = self.skill_invoker.build_skill_prompt(skill_name, skill_def, skill_narrative, context)
 
                 # Retry loop with feedback
                 attempt = 0
@@ -275,7 +275,7 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                         skill_name=skill_name,
                         context=context,
                         workspace=str(self.session_manager.get_session_dir()),
-                        custom_prompt=None if attempt == 1 else self._build_feedback_prompt(original_prompt, step_evaluation.issues)
+                        custom_prompt=None if attempt == 1 else self._build_feedback_prompt(original_prompt, step_evaluation.issues if step_evaluation else [])
                     )
 
                     if result.success:

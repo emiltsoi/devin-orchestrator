@@ -54,6 +54,9 @@ class SkillEvaluator:
             'code-review': 'requirement.md'
         }
 
+        # Simple cache for semantic evaluation results
+        self.semantic_cache = {}
+
     def evaluate_skill_output(
         self,
         skill_name: str,
@@ -334,6 +337,22 @@ class SkillEvaluator:
 
         # Load context artifact
         session_dir = Path(context.get('session_dir', '.'))
+        # Validate session_dir is within expected bounds
+        try:
+            session_dir = session_dir.resolve()
+            if not session_dir.exists() or not session_dir.is_dir():
+                return {
+                    'checked': False,
+                    'passed': True,
+                    'issues': []
+                }
+        except (OSError, ValueError):
+            return {
+                'checked': False,
+                'passed': True,
+                'issues': []
+            }
+
         context_path = session_dir / context_artifact_name
 
         if not context_path.exists():
@@ -346,6 +365,14 @@ class SkillEvaluator:
         # Read both artifacts
         context_content = context_path.read_text(encoding='utf-8')
         artifact_content = artifact_path.read_text(encoding='utf-8')
+
+        # Build cache key from artifact hash
+        import hashlib
+        cache_key = hashlib.md5((context_content + artifact_content).encode()).hexdigest()
+
+        # Check cache
+        if cache_key in self.semantic_cache:
+            return self.semantic_cache[cache_key]
 
         # Build semantic evaluation prompt
         eval_prompt = f"""You are evaluating whether an artifact satisfies its requirement.
@@ -392,7 +419,7 @@ Respond with JSON only, no other text.
             eval_output = result.stdout.strip()
 
             # Try to extract JSON from output
-            json_match = re.search(r'\{[^}]+\}', eval_output, re.DOTALL)
+            json_match = re.search(r'\{.*\}', eval_output, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
                 eval_data = json.loads(json_str)
@@ -408,7 +435,7 @@ Respond with JSON only, no other text.
                     for item in missing:
                         issues.append(f"Missing requirement: {item}")
 
-                return {
+                result = {
                     'checked': True,
                     'passed': score >= 0.6 and len(missing) == 0,
                     'issues': issues,
@@ -418,6 +445,11 @@ Respond with JSON only, no other text.
                         'notes': notes
                     }
                 }
+
+                # Cache the result
+                self.semantic_cache[cache_key] = result
+
+                return result
             else:
                 # Could not parse JSON, treat as requires user input
                 return {

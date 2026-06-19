@@ -119,7 +119,7 @@ class SkillInvoker:
                 error=str(e)
             )
 
-    def _load_skill_definition(self, skill_name: str) -> Optional[Dict[str, Any]]:
+    def load_skill_definition(self, skill_name: str) -> Optional[Dict[str, Any]]:
         """Load skill YAML definition"""
         import yaml
 
@@ -130,7 +130,7 @@ class SkillInvoker:
         with open(skill_yaml, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
 
-    def _load_skill_narrative(self, skill_name: str) -> Optional[str]:
+    def load_skill_narrative(self, skill_name: str) -> Optional[str]:
         """Load skill markdown narrative"""
         skill_md = self.skills_dir / f"{skill_name}.md"
         if not skill_md.exists():
@@ -139,7 +139,7 @@ class SkillInvoker:
         with open(skill_md, 'r', encoding='utf-8') as f:
             return f.read()
 
-    def _build_skill_prompt(
+    def build_skill_prompt(
         self,
         skill_name: str,
         skill_def: Dict[str, Any],
