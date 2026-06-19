@@ -64,9 +64,11 @@ def test_automated_dispatch():
         permission_mode=permission_mode  # Permission mode for artifact creation
     )
 
-    # Execute workflow
+    # Execute workflow with unique session ID to avoid artifact contamination
+    import time
+    session_id = f"FEATURE-DISPATCH-{int(time.time())}"
     print("\nStarting workflow execution (automated dispatch mode)...")
-    success = executor.execute_workflow('feature.manifest.yaml', 'FEATURE-DISPATCH-001')
+    success = executor.execute_workflow('feature.manifest.yaml', session_id)
 
     if success:
         print("\n" + "=" * 60)

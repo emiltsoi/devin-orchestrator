@@ -89,7 +89,17 @@ class SkillInvoker:
             )
 
         # Build prompt for the skill
-        prompt = self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
+        # Include skill narrative as system context in the prompt
+        prompt = f"""You are executing the {skill_name} skill. Follow these instructions:
+
+{skill_narrative}
+
+---
+
+Task:
+"""
+
+        prompt += self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
 
         # Generate session ID for tracking
         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"

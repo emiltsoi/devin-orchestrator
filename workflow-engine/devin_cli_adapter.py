@@ -55,11 +55,14 @@ class DevinCliAdapter:
         Returns:
             InvocationResult with success status, output, and error
         """
-        cmd = [self.devin_cli_path, '--permission-mode', self.permission_mode, '--print', prompt]
+        cmd = [self.devin_cli_path, '--permission-mode', self.permission_mode]
 
         # Add model if specified
         if self.model:
-            cmd = [self.devin_cli_path, '--permission-mode', self.permission_mode, '--model', self.model, '--print', prompt]
+            cmd.extend(['--model', self.model])
+
+        # Add print and prompt
+        cmd.extend(['--print', prompt])
 
         try:
             result = subprocess.run(
