@@ -25,7 +25,7 @@ class StepResult:
 class StepExecutor:
     """Executes workflow steps with manual skill invocation"""
 
-    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous"):
+    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous", max_retries: int = 2):
         """
         Initialize step executor
 
@@ -36,6 +36,7 @@ class StepExecutor:
             devin_cli_path: Optional path to devin.exe for automated dispatch
             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
             permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
+            max_retries: Maximum number of retry attempts on evaluation failure (default: 2)
         """
         self.harness_root = harness_root
         self.work_dir = work_dir
@@ -46,11 +47,36 @@ class StepExecutor:
         self.devin_cli_path = devin_cli_path
         self.model = model
         self.permission_mode = permission_mode
+        self.max_retries = max_retries
         self.skill_invoker: Optional[SkillInvoker] = None
-        self.skill_evaluator = SkillEvaluator(harness_root)
+        self.skill_evaluator = SkillEvaluator(harness_root, enable_semantic=False, devin_cli_path=devin_cli_path)
 
         if devin_cli_path:
             self.skill_invoker = SkillInvoker(harness_root, devin_cli_path, model, permission_mode)
+
+    def _build_feedback_prompt(self, original_prompt: str, issues: List[str]) -> str:
+        """
+        Build a feedback prompt for retrying a skill with evaluation feedback
+
+        Args:
+            original_prompt: The original skill invocation prompt
+            issues: List of evaluation issues to address
+
+        Returns:
+            Feedback prompt with issue context
+        """
+        feedback = f"""Your previous output failed validation for the following reasons:
+
+{chr(10).join(f"- {issue}" for issue in issues)}
+
+Please regenerate the artifact(s) fixing ONLY these problems. Do not introduce placeholders (PLACEHOLDER/TODO/TBD). Follow the skill instructions strictly.
+
+---
+
+Original task:
+{original_prompt}
+"""
+        return feedback
 
     def execute_workflow(self, manifest_name: str, session_id: str) -> bool:
         """
@@ -230,80 +256,140 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                     'required_artifacts': self.manifest.required_artefacts.get(step, [])
                 }
 
-                result = self.skill_invoker.invoke_skill(
-                    skill_name=skill_name,
-                    context=context,
-                    workspace=str(self.session_manager.get_session_dir())
-                )
+                # Build the original prompt for potential retry
+                skill_def = self.skill_invoker._load_skill_definition(skill_name)
+                skill_narrative = self.skill_invoker._load_skill_narrative(skill_name)
+                original_prompt = self.skill_invoker._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
 
-                if result.success:
-                    print(f"Skill {skill_name} invoked successfully")
-                    print(f"Session ID: {result.session_id}")
-                    print(f"Output: {result.output[:200]}...")  # Truncate output
+                # Retry loop with feedback
+                attempt = 0
+                max_attempts = self.max_retries + 1  # initial attempt + retries
+                step_evaluation = None
 
-                    # Evaluate skill output with confidence scoring
-                    required_artifacts = self.manifest.required_artefacts.get(step, [])
-                    if required_artifacts:
-                        # Evaluate the first required artifact (usually the main output)
-                        artifact_path = self.session_manager.get_session_dir() / required_artifacts[0]
-                        if artifact_path.exists():
-                            evaluation = self.skill_evaluator.evaluate_skill_output(
-                                skill_name=skill_name,
-                                artifact_path=artifact_path,
-                                context={'session_id': self.session_manager.state.session_id, 'step': step}
+                while attempt < max_attempts:
+                    attempt += 1
+                    if attempt > 1:
+                        print(f"\n[RETRY ATTEMPT {attempt}/{max_attempts}]")
+
+                    result = self.skill_invoker.invoke_skill(
+                        skill_name=skill_name,
+                        context=context,
+                        workspace=str(self.session_manager.get_session_dir()),
+                        custom_prompt=None if attempt == 1 else self._build_feedback_prompt(original_prompt, step_evaluation.issues)
+                    )
+
+                    if result.success:
+                        print(f"Skill {skill_name} invoked successfully")
+                        print(f"Session ID: {result.session_id}")
+                        print(f"Output: {result.output[:200]}...")  # Truncate output
+
+                        # Evaluate skill output with confidence scoring
+                        required_artifacts = self.manifest.required_artefacts.get(step, [])
+                        if required_artifacts:
+                            # Evaluate ALL required artifacts (not just the first)
+                            evaluations = []
+                            all_issues = []
+                            min_confidence = 1.0
+                            all_auto_approvable = True
+
+                            for artifact_name in required_artifacts:
+                                artifact_path = self.session_manager.get_session_dir() / artifact_name
+                                if artifact_path.exists():
+                                    evaluation = self.skill_evaluator.evaluate_skill_output(
+                                        skill_name=skill_name,
+                                        artifact_path=artifact_path,
+                                        context={'session_id': self.session_manager.state.session_id, 'step': step}
+                                    )
+                                    evaluations.append((artifact_name, evaluation))
+                                    min_confidence = min(min_confidence, evaluation.confidence)
+                                    all_auto_approvable = all_auto_approvable and evaluation.auto_approvable
+
+                                    if evaluation.issues:
+                                        for issue in evaluation.issues:
+                                            all_issues.append(f"{artifact_name}: {issue}")
+                                else:
+                                    all_issues.append(f"{artifact_name}: Artifact does not exist")
+                                    all_auto_approvable = False
+                                    min_confidence = 0.0
+
+                            # Aggregate step evaluation
+                            step_evaluation = EvaluationResult(
+                                confidence=min_confidence,
+                                passed=len(all_issues) == 0,
+                                issues=all_issues,
+                                auto_approvable=all_auto_approvable,
+                                requires_user_input=min_confidence < 0.7 or len(all_issues) > 0,
+                                details={'per_artifact': evaluations, 'attempt': attempt}
                             )
 
-                            print(f"\n[EVALUATION - Confidence: {evaluation.confidence:.2f}]")
-                            if evaluation.issues:
-                                print(f"Issues: {', '.join(evaluation.issues)}")
+                            print(f"\n[EVALUATION - Confidence: {step_evaluation.confidence:.2f}]")
+                            if step_evaluation.issues:
+                                print(f"Issues: {', '.join(step_evaluation.issues)}")
 
                             # Confidence-based decision logic
-                            if evaluation.auto_approvable:
+                            if step_evaluation.auto_approvable:
                                 print("✓ Auto-approved (high confidence, no issues)")
-                            elif evaluation.requires_user_input:
-                                print(f"\n⚠ Requires user review (confidence: {evaluation.confidence:.2f})")
-                                print(f"Issues: {evaluation.issues}")
-                                print("\nOptions:")
-                                print("  1. Proceed anyway")
-                                print("  2. Retry skill")
-                                print("  3. Abort workflow")
+                                break  # Success, exit retry loop
+                            elif step_evaluation.requires_user_input:
+                                print(f"\n⚠ Requires user review (confidence: {step_evaluation.confidence:.2f})")
+                                print(f"Issues: {step_evaluation.issues}")
 
-                                if self.interactive:
-                                    choice = input("Your choice (1/2/3): ").strip()
-                                    if choice == '2':
-                                        print("Retrying skill...")
-                                        # Would retry here (for now, proceed)
-                                    elif choice == '3':
-                                        print("Workflow aborted by user")
-                                        return False
-                                    else:
-                                        print("Proceeding with user approval")
+                                # If we have retries left, try automatic retry
+                                if attempt < max_attempts:
+                                    print(f"Retrying with feedback ({attempt}/{self.max_retries})...")
+                                    continue
                                 else:
-                                    # Non-interactive mode: abort on evaluation failure
-                                    print("Non-interactive mode: aborting workflow due to evaluation failure")
-                                    return False
+                                    # No more retries, escalate to user or abort
+                                    print(f"\nMax retries ({self.max_retries}) exhausted.")
+                                    print("\nOptions:")
+                                    print("  1. Proceed anyway")
+                                    print("  2. Abort workflow")
+
+                                    if self.interactive:
+                                        choice = input("Your choice (1/2): ").strip()
+                                        if choice == '2':
+                                            print("Workflow aborted by user")
+                                            # Record escalation to session audit
+                                            self.session_manager.append_audit_entry(
+                                                f"ESCALATE: {step} failed after {max_attempts} attempts with issues: {step_evaluation.issues}"
+                                            )
+                                            return False
+                                        else:
+                                            print("Proceeding with user approval")
+                                            break
+                                    else:
+                                        # Non-interactive mode: abort after retries
+                                        print("Non-interactive mode: aborting workflow after max retries")
+                                        # Record escalation to session audit
+                                        self.session_manager.append_audit_entry(
+                                            f"ESCALATE: {step} failed after {max_attempts} attempts with issues: {step_evaluation.issues}"
+                                        )
+                                        return False
                             else:
                                 # Medium confidence - quick confirmation
-                                print(f"⚠ Medium confidence ({evaluation.confidence:.2f})")
+                                print(f"⚠ Medium confidence ({step_evaluation.confidence:.2f})")
                                 if self.interactive:
                                     proceed = input("Proceed? (y/n): ").strip().lower()
                                     if proceed != 'y':
                                         print("Workflow aborted by user")
                                         return False
+                                    else:
+                                        break
                                 else:
                                     # Non-interactive mode: abort on medium confidence
                                     print("Non-interactive mode: aborting workflow due to medium confidence")
                                     return False
-                else:
-                    print(f"Skill {skill_name} invocation failed: {result.error}")
-                    # Fall back to placeholder creation
-                    print("Creating placeholder artifacts as fallback...")
-                    required_artifacts = self.manifest.required_artefacts.get(step, [])
-                    for artifact in required_artifacts:
-                        artifact_path = self.session_manager.get_session_dir() / artifact
-                        if not artifact_path.exists():
-                            artifact_path.write_text(f"# Placeholder for {artifact}\n\n# Created after dispatch failure\n", encoding='utf-8')
-                    print(f"Created placeholder artifacts: {', '.join(required_artifacts)}")
+                    else:
+                        print(f"Skill {skill_name} invocation failed: {result.error}")
+                        # Fall back to placeholder creation
+                        print("Creating placeholder artifacts as fallback...")
+                        required_artifacts = self.manifest.required_artefacts.get(step, [])
+                        for artifact in required_artifacts:
+                            artifact_path = self.session_manager.get_session_dir() / artifact
+                            if not artifact_path.exists():
+                                artifact_path.write_text(f"# Placeholder for {artifact}\n\n# Created after dispatch failure\n", encoding='utf-8')
+                        print(f"Created placeholder artifacts: {', '.join(required_artifacts)}")
+                        break  # Invocation failed, no point retrying
             else:
                 print("\n[NON-INTERACTIVE MODE - Skipping manual execution]")
                 print("Creating placeholder artifacts for testing...")

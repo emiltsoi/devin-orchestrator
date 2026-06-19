@@ -54,6 +54,14 @@ def test_automated_dispatch():
     permission_mode = os.environ.get('DEVIN_PERMISSION_MODE', 'dangerous')
     print(f"Using permission mode: {permission_mode}")
 
+    # Max retries (default 2)
+    max_retries = int(os.environ.get('DEVIN_MAX_RETRIES', '2'))
+    print(f"Max retries: {max_retries}")
+
+    # Enable semantic evaluation (default False)
+    enable_semantic = os.environ.get('DEVIN_ENABLE_SEMANTIC', 'false').lower() == 'true'
+    print(f"Semantic evaluation: {enable_semantic}")
+
     # Create executor with automated dispatch
     executor = StepExecutor(
         harness_root,
@@ -61,8 +69,13 @@ def test_automated_dispatch():
         interactive=False,  # Use automated dispatch
         devin_cli_path=devin_cli_path,
         model=model,  # Optional model selection
-        permission_mode=permission_mode  # Permission mode for artifact creation
+        permission_mode=permission_mode,  # Permission mode for artifact creation
+        max_retries=max_retries  # Max retry attempts
     )
+
+    # Enable semantic evaluation if requested
+    if enable_semantic:
+        executor.skill_evaluator.enable_semantic = True
 
     # Execute workflow with unique session ID to avoid artifact contamination
     import time

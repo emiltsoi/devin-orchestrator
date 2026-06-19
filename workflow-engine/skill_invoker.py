@@ -47,7 +47,8 @@ class SkillInvoker:
         self,
         skill_name: str,
         context: Dict[str, Any],
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
+        custom_prompt: Optional[str] = None
     ) -> SkillInvocationResult:
         """
         Invoke a skill using the devin-cli transport adapter
@@ -56,6 +57,7 @@ class SkillInvoker:
             skill_name: Name of the skill to invoke
             context: Context data for the skill (e.g., session_id, step, artifacts)
             workspace: Optional workspace path
+            custom_prompt: Optional custom prompt (for retry with feedback)
 
         Returns:
             SkillInvocationResult with success status and output
@@ -88,18 +90,11 @@ class SkillInvoker:
                 error=f"Skill narrative not found: {skill_name}"
             )
 
-        # Build prompt for the skill
-        # Include skill narrative as system context in the prompt
-        prompt = f"""You are executing the {skill_name} skill. Follow these instructions:
-
-{skill_narrative}
-
----
-
-Task:
-"""
-
-        prompt += self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
+        # Use custom prompt if provided (for retry), otherwise build standard prompt
+        if custom_prompt:
+            prompt = custom_prompt
+        else:
+            prompt = self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
 
         # Generate session ID for tracking
         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"

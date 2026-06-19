@@ -32,15 +32,27 @@ class SkillEvaluator:
     - Confidence-based decision logic
     """
 
-    def __init__(self, harness_root: Path):
+    def __init__(self, harness_root: Path, enable_semantic: bool = False, devin_cli_path: Optional[str] = None):
         """
         Initialize skill evaluator
 
         Args:
             harness_root: Root directory of the harness
+            enable_semantic: Enable semantic evaluation layer (default: False)
+            devin_cli_path: Optional path to devin.exe for semantic evaluation
         """
         self.harness_root = harness_root
         self.skills_dir = harness_root / 'skills'
+        self.enable_semantic = enable_semantic
+        self.devin_cli_path = devin_cli_path
+
+        # Map skills to their context artifacts for semantic evaluation
+        self.skill_context_map = {
+            'writing-plans': 'requirement.md',
+            'subagent-driven-development': 'design.md',
+            'verification-before-completion': 'design.md',
+            'code-review': 'requirement.md'
+        }
 
     def evaluate_skill_output(
         self,
@@ -105,6 +117,15 @@ class SkillEvaluator:
                 issues.extend(test_result['issues'])
                 confidence -= 0.3
             details['test_results'] = test_result
+
+        # Check 5: Semantic evaluation (if enabled)
+        if self.enable_semantic and self.devin_cli_path:
+            semantic_result = self._check_semantic(artifact_path, skill_name, context)
+            if semantic_result['checked']:
+                if not semantic_result['passed']:
+                    issues.extend(semantic_result['issues'])
+                    confidence -= 0.3  # Advisory weight
+                details['semantic'] = semantic_result
 
         # Clamp confidence to [0, 1]
         confidence = max(0.0, min(1.0, confidence))
@@ -289,6 +310,137 @@ class SkillEvaluator:
             'passed': test_passed,
             'issues': issues
         }
+
+    def _check_semantic(self, artifact_path: Path, skill_name: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Check if artifact semantically satisfies the requirement/context
+
+        Args:
+            artifact_path: Path to the artifact to evaluate
+            skill_name: Name of the skill that produced the artifact
+            context: Context data including session_id and step
+
+        Returns:
+            Dict with 'checked', 'passed', 'issues', and 'details'
+        """
+        # Check if this skill has a context artifact mapping
+        context_artifact_name = self.skill_context_map.get(skill_name)
+        if not context_artifact_name:
+            return {
+                'checked': False,
+                'passed': True,
+                'issues': []
+            }
+
+        # Load context artifact
+        session_dir = Path(context.get('session_dir', '.'))
+        context_path = session_dir / context_artifact_name
+
+        if not context_path.exists():
+            return {
+                'checked': False,
+                'passed': True,
+                'issues': []
+            }
+
+        # Read both artifacts
+        context_content = context_path.read_text(encoding='utf-8')
+        artifact_content = artifact_path.read_text(encoding='utf-8')
+
+        # Build semantic evaluation prompt
+        eval_prompt = f"""You are evaluating whether an artifact satisfies its requirement.
+
+## Requirement/Context:
+{context_content[:2000]}...
+
+## Artifact to Evaluate:
+{artifact_content[:2000]}...
+
+## Task:
+Evaluate whether the artifact addresses the requirement. Respond with ONLY a JSON object in this exact format:
+{{"score": 0.0-1.0, "missing": ["list of missing items"], "notes": "brief explanation"}}
+
+- score: 0.0-1.0 confidence that artifact satisfies requirement
+- missing: list of specific items from requirement not addressed
+- notes: brief explanation of the evaluation
+
+Respond with JSON only, no other text.
+"""
+
+        try:
+            import subprocess
+            result = subprocess.run(
+                [self.devin_cli_path, '--permission-mode', 'dangerous', '--print', eval_prompt],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=60,
+                cwd=str(session_dir)
+            )
+
+            if result.returncode != 0:
+                return {
+                    'checked': False,
+                    'passed': True,
+                    'issues': [],
+                    'error': f"Semantic evaluation failed: {result.stderr}"
+                }
+
+            # Parse JSON response
+            import json
+            eval_output = result.stdout.strip()
+
+            # Try to extract JSON from output
+            json_match = re.search(r'\{[^}]+\}', eval_output, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                eval_data = json.loads(json_str)
+
+                score = eval_data.get('score', 0.0)
+                missing = eval_data.get('missing', [])
+                notes = eval_data.get('notes', '')
+
+                issues = []
+                if score < 0.6:
+                    issues.append(f"Semantic score {score:.2f} below threshold 0.6")
+                if missing:
+                    for item in missing:
+                        issues.append(f"Missing requirement: {item}")
+
+                return {
+                    'checked': True,
+                    'passed': score >= 0.6 and len(missing) == 0,
+                    'issues': issues,
+                    'details': {
+                        'score': score,
+                        'missing': missing,
+                        'notes': notes
+                    }
+                }
+            else:
+                # Could not parse JSON, treat as requires user input
+                return {
+                    'checked': True,
+                    'passed': False,
+                    'issues': ["Could not parse semantic evaluation response"],
+                    'error': "JSON parse failed"
+                }
+
+        except subprocess.TimeoutExpired:
+            return {
+                'checked': False,
+                'passed': True,
+                'issues': [],
+                'error': "Semantic evaluation timed out"
+            }
+        except Exception as e:
+            return {
+                'checked': False,
+                'passed': True,
+                'issues': [],
+                'error': f"Semantic evaluation error: {str(e)}"
+            }
 
     def _load_skill_definition(self, skill_name: str) -> Optional[Dict[str, Any]]:
         """Load skill YAML definition"""
