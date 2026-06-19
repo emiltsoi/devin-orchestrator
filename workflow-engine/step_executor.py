@@ -1,6 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Step Executor - Executes workflow steps with manual skill invocation
+Step Executor - DEPRECATED
+
+This module is DEPRECATED and superseded by the orchestrator–worker pattern.
+
+The mechanical driver loop (execute_workflow, _execute_step) is retired.
+The dispatch mechanics (skill_invoker, devin_cli_adapter) are retained and extended.
+
+New approach:
+- Cascade follows ORCHESTRATION-RUNBOOK.md directly as the orchestrator
+- Devin workers execute skills as stateless neutral actors
+- Deterministic tools (floor_validator, audit_helpers) provide audit rails
+- See: ORCHESTRATION-RUNBOOK.md, CASCADE-PIPELINE-DESIGN.md
+
+This file is kept for reference but should not be used in new workflows.
 """
 
 from pathlib import Path

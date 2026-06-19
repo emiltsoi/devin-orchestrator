@@ -199,8 +199,18 @@ coder_dispatch:
 └─────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────┐
+│              Orchestrator–Worker Layer (NEW)                │
+│  (Cascade orchestrates, Devin workers execute, tools audit) │
+│  - ORCHESTRATION-RUNBOOK.md (agent-facing protocol)         │
+│  - Cascade: reasoning executive, triage, decision           │
+│  - Devin workers: stateless skill execution (neutral)        │
+│  - Deterministic tools: floor_validator, audit_helpers      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
 │                   Workflow Orchestration Layer              │
 │  (Session management, step execution, gate enforcement)     │
+│  [DEPRECATED: step_executor.py mechanical driver]           │
 └─────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────┐
@@ -441,6 +451,68 @@ The harness is designed to work across Windows, Linux, and macOS:
 - Project-specific config in `.orchestrator-config.yaml`
 - Project-specific logs and work directories in workspace
 - Harness updates pulled from canonical source
+
+## Orchestrator–Worker Model (NEW)
+
+### Overview
+
+The orchestrator–worker pattern replaces the mechanical driver loop with an intelligent reasoning executive. Cascade acts as the orchestrator, while stateless Devin workers execute skills as neutral actors.
+
+### Key Components
+
+**Cascade (Orchestrator):**
+- Follows ORCHESTRATION-RUNBOOK.md literally as the protocol
+- Performs triage decisions after each stage (HIGH/MEDIUM/LOW confidence)
+- Dispatches to Devin workers with focused context (per-skill context manifest)
+- Dispatches to neutral reviewer for every artifact evaluation (swe-1-6 free)
+- Handles correction loop with bounded retries
+- Escalates to human or tiered model (claude-code) when needed
+
+**Devin Workers (Stateless Neutral Actors):**
+- Execute skills with focused context only (not Cascade's full context)
+- Produce required artifacts per skill definition
+- No stake in outcome → more neutral, often better results
+- On failure, re-dispatch with (previous output + Cascade correction)
+
+**Deterministic Tools (Audit Rails):**
+- `floor_validator.validate_structural()` - checks existence, non-emptiness, no placeholders
+- `floor_validator.validate_iron_law()` - checks Iron Law compliance
+- `floor_validator.validate_format()` - checks YAML/JSON format
+- `audit_helpers.append_audit()` - records to session-audit.md (markdown)
+- `audit_helpers.record_gate()` - records gate verdicts
+- `audit_helpers.write_run_jsonl()` - records to run.jsonl (machine-readable)
+
+### Protocol
+
+For each stage in the workflow:
+1. Dispatch to Devin worker with focused context
+2. Validate structural floor (deterministic tool)
+3. Dispatch neutral reviewer (always, separate worker)
+4. Cascade synthesizes verdict + assigns confidence
+5. If LOW confidence → correction loop (bounded retries)
+6. If gate defined → HARD STOP, await human approval
+7. Record to audit ledger + run.jsonl
+
+### Resumability
+
+State is reconstructed from:
+- `run.jsonl` - machine-readable run transcript (timestamp, stage, skill, confidence, etc.)
+- Artifacts - all produced artifacts (requirement.md, design.md, etc.)
+- Correction artifacts - `correction-{stage}-{attempt}.md`
+- Review artifacts - `review-{stage}-{attempt}.md`
+- Gate artifacts - `gate-{gate_id}.md`
+
+No reliance on volatile context.
+
+### Deployment
+
+Canonical source: `devin-orchestrator` repository
+- `workflows/*.manifest.yaml` - structured workflow manifests
+- `workflows/*.runbook.md` - agent-facing orchestration runbooks
+- `skills/*` - skill definitions
+- `workflow-engine/*` - deterministic tools and dispatch mechanics
+
+Deployed to workspace per DEPLOYMENT.md protocol.
 
 ## Open Questions
 
