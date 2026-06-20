@@ -11,6 +11,9 @@ You are the orchestrator. Your job is to load the superpower manifest and execut
 
 ### 2. Execute Stages
 For each stage in the manifest:
+- Check if stage is optional and should be skipped
+- If `skip_brainstorming` is true and stage is brainstorming: skip stage
+- If stage is skipped: create placeholder artifacts and continue
 - Load skill definition and narrative
 - **Dispatch skill using dispatch_skill.py to call Devin**
 - Read output artifacts
@@ -18,6 +21,22 @@ For each stage in the manifest:
 - Reason about results
 - Make triage decision (proceed/retry/escalate)
 - Handle gate if present
+
+### 2.1. Skipping Brainstorming
+When the spec is already clear, you can skip brainstorming:
+- Set `skip_brainstorming: true` in the manifest
+- Or set it via environment/session context
+- When skipped: create a minimal design.md placeholder
+- Continue to next stage (using-git-worktrees)
+
+Skip logic:
+```python
+if manifest.get('skip_brainstorming', False) and stage['name'] == 'brainstorming':
+    # Create minimal design.md placeholder
+    design_placeholder = f"# Design\n\nSkipping brainstorming - spec is clear.\n\nRequest: {request_content}\n"
+    (session_dir / 'design.md').write_text(design_placeholder)
+    continue to next stage
+```
 
 ### 3. Skill Invocation (IMPORTANT)
 You MUST use the dispatch_skill.py script to dispatch Devin. Do NOT execute the skill yourself - dispatch it to Devin.
