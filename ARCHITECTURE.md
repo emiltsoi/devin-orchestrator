@@ -5,16 +5,16 @@ status: design-draft
 author: Cascade
 related:
   - https://github.com/obra/superpowers
-  - orchestrator/workflows/gated-change.md
-  - orchestrator/skills/README.md
-  - orchestrator/multi-agent-orchestration.md
+  - workflows/superpower.manifest.yaml
+  - workflows/superpower.runbook.md
+  - skills/README.md
 ---
 
 # Generic Windsurf-Based Harness Architecture
 
 ## Executive Summary
 
-This design synthesizes patterns from [obra/superpowers](https://github.com/obra/superpowers) with the ci-docs orchestrator workflow to create a generic, harness-agnostic framework for AI-assisted software development. The architecture separates **skills** (process disciplines) from **harness mechanisms** (transport adapters), enabling the same methodology to work across Windsurf Cascade, Claude Code, Devin CLI, and future platforms.
+This design implements the [obra/superpowers](https://github.com/obra/superpowers) methodology as the canonical workflow for AI-assisted software development. The architecture separates **skills** (process disciplines) from **harness mechanisms** (transport adapters), enabling the same methodology to work across Windsurf Cascade, Claude Code, Devin CLI, and future platforms.
 
 **Cross-Platform Design**: The harness is designed to be platform-agnostic. Skills, workflows, and contracts are YAML/markdown-based and work on any platform. Platform-specific concerns (PowerShell vs Bash, file paths, etc.) are isolated in transport adapters and execution scripts.
 
@@ -57,45 +57,51 @@ skill:
 **Contract** (manifest.yaml):
 ```yaml
 workflow:
-  session_shape: gated-change
-  session_id_format: CHANGE-NNN
+  session_shape: superpower
+  session_id_format: SUPERPOWER-NNN
   session_init:
-    command: Invoke-SessionInit.ps1
-    creates_workdir: orchestrator/work/<session_id>/
+    command: session_init
+    creates_workdir: work/<session_id>/
   auto_load:
-    - path: orchestrator/agents/rules/architect-rules.md
-      always: true
-    - path: orchestrator/lessons/lessons.yaml
+    - path: skills/README.md
       always: true
   required_artefacts:
     step_0: [request.md, status.md, session-audit.md]
-    step_1: [requirement.md]
-    step_2: [baseline.md]
-    step_3: [design.md]
-    step_4: [implementation/]
-    step_5: [verification.md]
-    step_6: [review/]
-    step_7: [summary.md, retro.md]
+    step_1: [design.md]
+    step_2: [worktree-info.md, baseline-test-results.md]
+    step_3: [plan.md]
+    step_4: [implementation.md, task-results.md]
+    step_5: [test-results.md, implementation-final.md]
+    step_6: [review-findings.md]
+    step_7: [completion-summary.md, merge-decision.md]
   gates:
     - id: g1_design_approval
       after_step: 1
       type: user_gate
-    - id: g3_design_approval
+    - id: g2_plan_approval
       after_step: 3
+      type: user_gate
+    - id: g3_review_approval
+      after_step: 5
+      type: user_gate
+    - id: g4_completion_approval
+      after_step: 7
       type: user_gate
   skills:
     - name: brainstorming
+      phases: [step_0]
+    - name: using-git-worktrees
       phases: [step_1]
     - name: writing-plans
-      phases: [step_3]
+      phases: [step_2]
     - name: subagent-driven-development
-      phases: [step_4]
+      phases: [step_3]
     - name: test-driven-development
-      phases: [step_2, step_4]
-    - name: code-review
-      phases: [step_6]
-    - name: verification-before-completion
+      phases: [step_4]
+    - name: requesting-code-review
       phases: [step_5]
+    - name: finishing-a-development-branch
+      phases: [step_6]
 ```
 
 **Key properties**:

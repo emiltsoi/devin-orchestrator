@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Demonstration of the orchestrator-worker pattern for all 8 stages of the feature workflow.
+Demonstration of the orchestrator-worker pattern for all 7 stages of the superpower workflow.
 
-This script demonstrates the full protocol from feature.runbook.md:
-- Stage 0: session_init (scaffolding)
-- Stage 1: brainstorming (requirement.md)
-- Stage 2: test-driven-development (baseline.md)
-- Stage 3: writing-plans (design.md, g2 gate)
-- Stage 4: subagent-driven-development (implementation.md)
-- Stage 5: verification-before-completion (verification.md)
-- Stage 6: code-review (review-spec.md, review-quality.md, human-verdict.md)
-- Stage 7: final summary (summary.md, metrics.json, retro.md, g3 gate)
+This script demonstrates the full protocol from superpower.runbook.md:
+- Stage 0: brainstorming (design.md)
+- Stage 1: using-git-worktrees (worktree-info.md, baseline-test-results.md, g1 gate)
+- Stage 2: writing-plans (plan.md)
+- Stage 3: subagent-driven-development (implementation.md, task-results.md, g2 gate)
+- Stage 4: test-driven-development (test-results.md, implementation-final.md)
+- Stage 5: requesting-code-review (review-findings.md, g3 gate)
+- Stage 6: finishing-a-development-branch (completion-summary.md, merge-decision.md, g4 gate)
 
 Each stage demonstrates:
 - Dispatch to stateless Devin worker with focused context
@@ -19,7 +18,7 @@ Each stage demonstrates:
 - Dispatch neutral reviewer
 - Cascade triage decision
 - Record to audit ledger and run.jsonl
-- Gate protocol for gated stages (g1, g2, g3)
+- Gate protocol for gated stages (g1, g2, g3, g4)
 
 This is a demonstration of the contracts, not a full production orchestrator.
 """
@@ -36,13 +35,13 @@ from skill_invoker import SkillInvoker
 from devin_cli_adapter import DevinCliAdapter
 
 
-def demo_stage_0_session_init(harness_root, session_id, request_content):
+def demo_stage_0_brainstorming(harness_root, session_id, request_content):
     """
-    Demonstrate Stage 0 (session_init) following the orchestrator–worker pattern.
+    Demonstrate Stage 0 (brainstorming) following the orchestrator–worker pattern.
 
     Args:
         harness_root: Root directory of the harness
-        session_id: Session identifier (e.g., "FEATURE-001")
+        session_id: Session identifier (e.g., "SUPERPOWER-001")
         request_content: Content for request.md
 
     Returns:
@@ -51,16 +50,16 @@ def demo_stage_0_session_init(harness_root, session_id, request_content):
     summary = {
         "session_id": session_id,
         "stage": "step_0",
-        "skill": "none",
+        "skill": "brainstorming",
         "steps_executed": [],
         "final_state": "unknown"
     }
 
-    # Stage 0 configuration from feature.runbook.md
-    skill_name = "none"
-    required_artifacts = ["request.md", "status.md", "session-audit.md"]
+    # Stage 0 configuration from superpower.runbook.md
+    skill_name = "brainstorming"
+    required_artifacts = ["design.md"]
     gate_id = "none"
-    injected_context = []
+    injected_context = ["request.md"]
 
     # Session directory
     session_dir = harness_root / "work" / session_id
@@ -85,37 +84,86 @@ def demo_stage_0_session_init(harness_root, session_id, request_content):
     audit_path.write_text(audit_content, encoding="utf-8")
     summary["steps_executed"].append("session-audit.md_created")
 
-    # Step 4: No worker dispatch for stage 0 (scaffolding only)
-    summary["steps_executed"].append("no_worker_dispatch")
+    # Step 4: Dispatch to stateless Devin worker (real dispatch with skill loading)
+    # Uses skill_invoker with is_reviewer=False to trigger ponytail skill
+    devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
+    skill_invoker = SkillInvoker(harness_root, devin_cli_path=devin_cli_path, model="swe-1.6")
 
-    # Step 5: Record to audit ledger (deterministic tool)
+    context = {
+        "session_id": session_id,
+        "stage": "step_0",
+        "skill": skill_name
+    }
+
+    # For demo, we'll simulate the dispatch since we don't have real skill definitions
+    # In production, this would be:
+    # result = skill_invoker.invoke_skill(skill_name, context, workspace=str(session_dir), focused_context=injected_context, is_reviewer=False)
+    # For now, create placeholder design.md
+    design_path = session_dir / "design.md"
+    design_content = "# Design for " + session_id + "\n\n## Overview\nThis is a demonstration design.md produced by the brainstorming skill.\n\n## Design Sections\n- Section 1: Requirements\n- Section 2: Architecture\n- Section 3: Implementation Plan\n\n## Notes\nThis is a sample for demonstration purposes.\n"
+    design_path.write_text(design_content, encoding="utf-8")
+    summary["steps_executed"].append("worker_dispatch_completed")
+    summary["dispatch_note"] = "Real dispatch would use skill_invoker.invoke_skill with is_reviewer=False (triggers ponytail)"
+
+    # Step 5: Validate structural floor (deterministic tool)
+    structural_result = validate_structural([design_path])
+    summary["steps_executed"].append("structural_validation")
+    summary["structural_result"] = structural_result
+
+    if structural_result["result"] == "FAIL":
+        summary["final_state"] = "CORRECTION_LOOP"
+        return summary
+
+    # Step 6: Dispatch neutral reviewer (real dispatch with skill loading)
+    # Uses skill_invoker with is_reviewer=True to trigger swe-compliance skill
+    # In production, this would be:
+    # result = skill_invoker.invoke_skill(skill_name, context, workspace=str(session_dir), focused_context=injected_context, is_reviewer=True)
+    # For demo, create placeholder review artifact
+    review_path = session_dir / "review-step_0-1.md"
+    review_content = "# Review of design.md\n\n## Verdict: PASS\n\n## Assessment\nThe design.md artifact is complete and addresses the user's request.\n\n## Confidence: HIGH\n"
+    review_path.write_text(review_content, encoding="utf-8")
+    summary["steps_executed"].append("neutral_reviewer_dispatch")
+    summary["reviewer_verdict"] = "PASS"
+    summary["reviewer_dispatch_note"] = "Real dispatch would use skill_invoker.invoke_skill with is_reviewer=True (triggers swe-compliance)"
+
+    # Step 7: Cascade triage decision (simulated)
+    # In production, Cascade would reason about the reviewer verdict + floor result
+    confidence = "HIGH"
+    rationale = "Design.md is complete, structural floor passes, reviewer passes."
+    triage_decision = "proceed"
+    summary["steps_executed"].append("cascade_triage")
+    summary["confidence"] = confidence
+    summary["rationale"] = rationale
+    summary["triage_decision"] = triage_decision
+
+    # Step 8: Record to audit ledger (deterministic tool)
     append_audit(
         session_dir=session_dir,
         stage="step_0",
         skill=skill_name,
         injected_context=injected_context,
-        structural_result="N/A",
-        reviewer_verdict="N/A",
-        confidence="N/A",
-        rationale="Session initialization - scaffolding only",
-        triage_decision="proceed",
+        structural_result=structural_result["result"],
+        reviewer_verdict="PASS",
+        confidence=confidence,
+        rationale=rationale,
+        triage_decision=triage_decision,
         retry_count=0,
         gate_verdict="none"
     )
     summary["steps_executed"].append("audit_recorded")
 
-    # Step 6: Write run.jsonl entry (deterministic tool)
+    # Step 9: Write run.jsonl entry (deterministic tool)
     run_jsonl_entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "session_id": session_id,
         "stage": "step_0",
         "skill": skill_name,
         "injected_context": injected_context,
-        "structural_result": "N/A",
-        "reviewer_verdict": "N/A",
-        "confidence": "N/A",
-        "rationale": "Session initialization - scaffolding only",
-        "triage_decision": "proceed",
+        "structural_result": structural_result["result"],
+        "reviewer_verdict": "PASS",
+        "confidence": confidence,
+        "rationale": rationale,
+        "triage_decision": triage_decision,
         "retry_count": 0,
         "gate_verdict": "none"
     }
