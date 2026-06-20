@@ -1,0 +1,102 @@
+# -*- coding: utf-8 -*-
+"""
+Simple Devin CLI wrapper using non-interactive mode
+Much simpler and more reliable than ACP for basic usage
+"""
+
+import subprocess
+import json
+import os
+
+
+def run_devin_non_interactive(prompt, workspace=None, timeout=120):
+    """
+    Run devin-cli in non-interactive mode
+    
+    Args:
+        prompt: The prompt to send to devin
+        workspace: Working directory (defaults to current dir)
+        timeout: Timeout in seconds (default: 120)
+    
+    Returns:
+        dict: {
+            'success': bool,
+            'output': str,
+            'error': str,
+            'exit_code': int
+        }
+    """
+    devin_cli_path = r"C:\Users\<username>\AppData\Local\devin\cli\bin\devin.exe"
+    
+    if workspace is None:
+        workspace = os.getcwd()
+    
+    cmd = [devin_cli_path, '--print', prompt]
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=workspace
+        )
+        
+        return {
+            'success': result.returncode == 0,
+            'output': result.stdout,
+            'error': result.stderr,
+            'exit_code': result.returncode
+        }
+        
+    except Exception as e:
+        # Handle both timeout and other exceptions
+        error_msg = str(e)
+        if 'timed out' in error_msg.lower():
+            return {
+                'success': False,
+                'output': '',
+                'error': 'Command timed out after {} seconds'.format(timeout),
+                'exit_code': -1
+            }
+        else:
+            return {
+                'success': False,
+                'output': '',
+                'error': error_msg,
+                'exit_code': -1
+            }
+
+
+def test_simple():
+    """Test the simple non-interactive wrapper"""
+    print("=" * 60)
+    print("Devin CLI Non-Interactive Test")
+    print("=" * 60)
+    
+    workspace = r"C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine"
+    prompt = "list the files in the current directory"
+    
+    print("\nWorkspace: {}".format(workspace))
+    print("Prompt: {}".format(prompt))
+    
+    result = run_devin_non_interactive(prompt, workspace)
+    
+    print("\nSuccess: {}".format(result['success']))
+    print("Exit code: {}".format(result['exit_code']))
+    
+    if result['output']:
+        print("\nOutput:\n{}".format(result['output']))
+    
+    if result['error']:
+        print("\nError:\n{}".format(result['error']))
+    
+    print("\n" + "=" * 60)
+    print("Test complete")
+    print("=" * 60)
+    
+    return result['success']
+
+
+if __name__ == '__main__':
+    test_simple()

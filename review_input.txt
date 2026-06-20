@@ -1,0 +1,19 @@
+Design doc (source of truth):
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\work\CASCADE-PIPELINE-DESIGN.md -Raw)
+
+Manifest (to check parity):
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflows\feature.manifest.yaml -Raw)
+
+Runbook to review:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\ORCHESTRATION-RUNBOOK.md -Raw)
+
+Validate:
+1. Does the runbook correctly encode all 6 v2 decisions from the design doc?
+2. Does the runbook agree with the manifest (stages, skills, artifacts, gates)?
+3. Are all contracts defined (per-skill context manifest, correction-loop, deterministic tools, triage record, run.jsonl, escalation)?
+4. Is the orchestrator–worker pattern correctly represented?
+5. Is the neutral reviewer dispatch (always) correctly represented?
+6. Is the tiered model escalation correctly represented?
+7. Are there any gaps, inconsistencies, or missing elements?
+
+Provide specific feedback with file names and line numbers. If RED, list issues to fix. If GREEN, confirm all contracts are correct.

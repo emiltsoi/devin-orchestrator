@@ -1,0 +1,16 @@
+Fix skill_evaluator.py to use the new validate_structural signature (accepts List[Path] instead of single Path).
+
+Current skill_evaluator.py:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine\skill_evaluator.py -Raw)
+
+Updated floor_validator.py:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine\floor_validator.py -Raw)
+
+Required change:
+In skill_evaluator.py, update the call to validate_structural to pass a list of Paths instead of a single Path.
+
+Find where validate_structural is called and change:
+- From: validate_structural(artifact_path)
+- To: validate_structural([artifact_path])
+
+Apply this fix to make skill_evaluator.py compatible with the updated floor_validator.

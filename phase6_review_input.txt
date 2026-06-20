@@ -1,0 +1,28 @@
+Review the Phase 6 changes for correctness and completeness.
+
+Phase 6 changes:
+1. step_executor.py deprecation notice
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine\step_executor.py -Raw | Select-Object -First 20)
+
+2. DEPLOYMENT.md (canonical source + workspace deployment)
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\DEPLOYMENT.md -Raw)
+
+3. ARCHITECTURE.md updates (orchestrator–worker layer)
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\ARCHITECTURE.md -Raw | Select-Object -Skip 190 -First 30)
+
+4. ENHANCEMENT-PLAN.md status update
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\work\ENHANCEMENT-PLAN.md -Raw | Select-Object -First 20)
+
+Reference documents:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\work\CASCADE-PIPELINE-DESIGN.md -Raw)
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\ORCHESTRATION-RUNBOOK.md -Raw)
+
+Validate:
+1. Is step_executor.py correctly deprecated with clear notice?
+2. Does DEPLOYMENT.md correctly document canonical source + workspace deployment?
+3. Does ARCHITECTURE.md correctly document the orchestrator–worker layer?
+4. Does ENHANCEMENT-PLAN.md correctly indicate superseded status?
+5. Are all changes consistent with CASCADE-PIPELINE-DESIGN.md?
+6. Are all changes consistent with ORCHESTRATION-RUNBOOK.md?
+
+Provide specific feedback. If RED, list issues. If GREEN, confirm Phase 6 changes are correct.

@@ -1,0 +1,14 @@
+name: orchestrate-superpower
+iron_law: "You are the orchestrator. Load the manifest, dispatch each stage using skill_invoker, reason through results, handle gates, and make triage decisions. Do NOT use mechanical scripts - orchestrate directly."
+announcement: Orchestrating superpower workflow using skill_invoker
+checklist:
+  - Load superpower manifest from workflows/superpower.manifest.yaml
+  - For each stage in manifest: dispatch skill via skill_invoker.invoke_skill()
+  - Read and validate output artifacts (structural floor)
+  - Reason about results and make triage decision (proceed/retry/escalate)
+  - Handle gate if present (wait for human decision in production, simulate for demo)
+  - Continue to next stage if triage decision is proceed
+  - Stop workflow if triage decision is escalate or gate blocks
+terminal_state: Superpower workflow orchestrated and executed, all stages completed or blocked
+configuration:
+  demo_mode: true  # Set to false for production with real Devin dispatches

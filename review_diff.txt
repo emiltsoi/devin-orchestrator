@@ -1,0 +1,1183 @@
+diff --git a/skills/code-review.md b/skills/code-review.md
+index d47c506..e4e98b1 100644
+--- a/skills/code-review.md
++++ b/skills/code-review.md
+@@ -2,7 +2,7 @@
+ 
+ ## Overview
+ 
+-Review code for spec compliance and code quality with objective, evidence-based findings.
++Review code for spec compliance and code quality with objective, evidence-based findings. This skill performs a three-stage review: spec compliance, code quality, and human verdict.
+ 
+ **Announce at start:** `Using the code-review skill for spec-compliance and code-quality review.`
+ 
+@@ -12,17 +12,126 @@ Review code for spec compliance and code quality with objective, evidence-based
+ REVIEW MUST BE OBJECTIVE AND EVIDENCE-BASED
+ ```
+ 
+-Never make subjective claims without evidence. Always cite specific code locations.
++Never make subjective claims without evidence. Always cite specific code locations. Every finding must be backed by specific code references or test results.
+ 
+ ## When to Use
+ 
+ Use `code-review` when:
+ - Before merging code
+-- After implementation
++- After implementation is complete
+ - During code review phase
++- When verification-before-completion has passed
+ 
+-## Relation to Workflows
++## Process Flow
+ 
+-- Used in workflow Step 6 (REVIEW)
+-- Three-stage review: spec compliance, code quality, human verdict
+-- Architect is requester, Reviewer agents return findings
++```
++Review spec compliance
++    │
++    ▼
++Document spec compliance findings in review-spec.md
++    │
++    ▼
++Review code quality
++    │
++    ▼
++Document code quality findings in review-quality.md
++    │
++    ▼
++Provide human verdict in human-verdict.md
++    │
++    ▼
++Terminal state: workflow complete
++```
++
++## The Process
++
++**1. Review spec compliance**
++
++- Read the requirement.md or spec document
++- Read the design.md for architecture decisions
++- Review the implementation code
++- Check that all acceptance criteria are met
++- Verify the implementation matches the design
++- Identify any deviations from the spec
++- Note any missing features or incomplete implementations
++- Check that out-of-scope items were not implemented
++
++**2. Document spec compliance findings in review-spec.md**
++
++Create `review-spec.md` with:
++- Summary of spec compliance (PASS/FAIL/PARTIAL)
++- List of acceptance criteria and their status
++- Evidence for each criterion (code locations, test results)
++- Deviations from the spec with justification
++- Missing features or incomplete implementations
++- Out-of-scope items that were accidentally included
++- Overall spec compliance assessment
++
++**3. Review code quality**
++
++- Check code readability and maintainability
++- Verify proper error handling
++- Check for security vulnerabilities
++- Review performance considerations
++- Check for code duplication
++- Verify proper documentation
++- Review test coverage
++- Check for adherence to coding standards
++- Identify technical debt
++
++**4. Document code quality findings in review-quality.md**
++
++Create `review-quality.md` with:
++- Summary of code quality (EXCELLENT/GOOD/ACCEPTABLE/POOR)
++- Code readability assessment
++- Error handling review
++- Security review findings
++- Performance considerations
++- Code duplication issues
++- Documentation completeness
++- Test coverage assessment
++- Coding standards compliance
++- Technical debt identified
++- Specific code locations for each finding
++
++**5. Provide human verdict in human-verdict.md**
++
++Create `human-verdict.md` with:
++- Overall verdict (APPROVE/REQUEST CHANGES/REJECT)
++- Reasoning for the verdict
++- Required changes before approval (if any)
++- Optional improvements (not blocking)
++- Confidence level in the verdict
++- Any concerns or risks
++- Recommendation for next steps
++
++**6. Terminal state**
++
++- The review is complete
++- All three artifacts are created
++- The workflow can proceed to completion or return for changes
++
++## Required Artifacts
++
++- **review-spec.md**: Spec compliance review with evidence-based findings
++- **review-quality.md**: Code quality review with specific code locations
++- **human-verdict.md**: Human verdict with approval decision
++
++## Red Flags
++
++- Making subjective claims without evidence
++- Not citing specific code locations
++- Not checking all acceptance criteria
++- Skipping the code quality review
++- Not providing a clear verdict
++- Missing required artifacts
++- Approving code that doesn't meet the spec
++
++## Done Means
++
++You are done when:
++- review-spec.md is created with complete spec compliance assessment
++- review-quality.md is created with code quality findings
++- human-verdict.md is created with a clear verdict
++- All findings are evidence-based with code locations
++- The workflow can proceed based on the verdict
+diff --git a/skills/test-driven-development.md b/skills/test-driven-development.md
+index 13ae2bf..a440992 100644
+--- a/skills/test-driven-development.md
++++ b/skills/test-driven-development.md
+@@ -2,7 +2,7 @@
+ 
+ ## Overview
+ 
+-Write tests before implementation following the red-green-refactor discipline.
++Write tests before implementation following the red-green-refactor discipline. This skill establishes a baseline of failing tests (RED state) that will drive implementation in subsequent steps.
+ 
+ **Announce at start:** `Using the test-driven-development skill to produce red tests for <task>.`
+ 
+@@ -12,7 +12,7 @@ Write tests before implementation following the red-green-refactor discipline.
+ WRITE FAILING TEST FIRST, THEN IMPLEMENT TO MAKE IT PASS
+ ```
+ 
+-Never write implementation before tests. Always verify tests fail before implementing.
++Never write implementation before tests. Always verify tests fail before implementing. This is the foundation of TDD discipline.
+ 
+ ## When to Use
+ 
+@@ -20,9 +20,106 @@ Use `test-driven-development` when:
+ - You need to write new functionality
+ - You need to modify existing functionality
+ - You need to ensure regression coverage
++- A baseline.md artifact is required by the workflow
+ 
+-## Relation to Workflows
++## Process Flow
+ 
+-- Used in workflow Step 2 (BASELINE)
+-- Produces test specification and failing tests
+-- Test-Author agent writes code following TDD
++```
++Identify existing relevant tests
++    │
++    ▼
++Run existing tests to confirm green baseline
++    │
++    ▼
++Write test specification with expected behavior
++    │
++    ▼
++Write failing tests (TDD red)
++    │
++    ▼
++Run tests to verify they fail
++    │
++    ▼
++Document baseline in baseline.md
++    │
++    ▼
++Invoke writing-plans skill
++```
++
++## The Process
++
++**1. Identify existing relevant tests**
++
++- Search the codebase for existing tests related to the feature/area
++- Check test directories (e.g., `tests/`, `spec/`, `__tests__/`)
++- Identify test frameworks in use (pytest, unittest, jest, etc.)
++- Note any existing test fixtures or test data
++- If no tests exist, document this in baseline.md
++
++**2. Confirm green baseline**
++
++- Run the existing test suite
++- Verify all existing tests pass
++- Record the current test count and execution time
++- This establishes the baseline before new tests are added
++- If existing tests fail, this must be addressed first (not part of this skill)
++
++**3. Write test specification**
++
++- Define the expected behavior of the new functionality
++- Specify edge cases and error conditions
++- List the test cases to be written
++- Include test data and expected outputs
++- This specification guides test implementation
++
++**4. Write failing tests (TDD red)**
++
++- Implement the test cases from the specification
++- Write tests that will fail because the implementation doesn't exist yet
++- Follow the test framework conventions
++- Ensure tests are clear, focused, and independent
++- **Do not write any implementation code**
++
++**5. Verify tests fail**
++
++- Run the new tests
++- Confirm they fail with the expected error messages
++- This validates the tests are correctly detecting the missing implementation
++- If tests pass unexpectedly, the test is incorrect (not the implementation)
++
++**6. Document baseline in baseline.md**
++
++Create `baseline.md` with:
++- Test count before new tests (baseline)
++- Test count after new tests (baseline + new)
++- Execution time
++- Test framework used
++- List of new test files added
++- Expected failure reasons for new tests
++- Any test fixtures or test data created
++
++**7. Invoke writing-plans skill**
++
++- The terminal state is invoking `writing-plans`
++- Do not proceed to implementation
++- The design phase comes before implementation
++
++## Required Artifacts
++
++- **baseline.md**: Document of test baseline including test counts, execution time, and new test specifications
++
++## Red Flags
++
++- Writing implementation code before tests
++- Skipping the test failure verification
++- Writing tests that pass immediately (no red state)
++- Not documenting the baseline
++- Proceeding to implementation without design approval
++
++## Done Means
++
++You are done when:
++- All new tests are written and verified to fail
++- baseline.md is created with complete baseline documentation
++- The test specification is clear and comprehensive
++- You have invoked the `writing-plans` skill
+diff --git a/skills/verification-before-completion.md b/skills/verification-before-completion.md
+index 3a0bcad..fb2d57c 100644
+--- a/skills/verification-before-completion.md
++++ b/skills/verification-before-completion.md
+@@ -2,7 +2,7 @@
+ 
+ ## Overview
+ 
+-Verify build and tests before claiming completion with fresh evidence.
++Verify build and tests before claiming completion with fresh evidence. This skill ensures that the implementation actually works before declaring the task complete.
+ 
+ **Announce at start:** `Using the verification-before-completion skill to confirm build+tests on HEAD.`
+ 
+@@ -12,7 +12,7 @@ Verify build and tests before claiming completion with fresh evidence.
+ NO COMPLETION CLAIM WITHOUT FRESH VERIFICATION EVIDENCE
+ ```
+ 
+-Never claim completion without running fresh build and tests.
++Never claim completion without running fresh build and tests. Verification must be current, not cached from earlier in the session.
+ 
+ ## When to Use
+ 
+@@ -20,9 +20,92 @@ Use `verification-before-completion` when:
+ - Before claiming implementation is complete
+ - After code changes
+ - Before merge
++- When the workflow Step 5 (VERIFY) is reached
+ 
+-## Relation to Workflows
++## Process Flow
+ 
+-- Used in workflow Step 5 (VERIFY)
+-- Verifies build succeeds and tests pass
+-- Applies to both build (5a) and tests (5b)
++```
++Verify build succeeds
++    │
++    ▼
++Verify tests pass (no regression)
++    │
++    ▼
++Check expected artifacts exist
++    │
++    ▼
++Document verification results in verification.md
++    │
++    ▼
++Invoke code-review skill
++```
++
++## The Process
++
++**1. Verify build succeeds**
++
++- Run the build command for the project
++- Check that the build completes without errors
++- Verify build artifacts are generated
++- Record build time and resource usage
++- If the build fails, identify the specific error
++- Build failures must be resolved before proceeding
++
++**2. Verify tests pass (no regression)**
++
++- Run the full test suite
++- Verify all tests pass
++- Check for test failures or errors
++- Record test count and execution time
++- Compare with baseline test count (if available)
++- Ensure no new tests were introduced without implementation
++- Test failures must be resolved before proceeding
++
++**3. Check expected artifacts exist**
++
++- Verify all required artifacts from the design are present
++- Check that implementation files exist
++- Verify configuration files are correct
++- Check that documentation files are present
++- Any missing artifacts must be addressed
++
++**4. Document verification results in verification.md**
++
++Create `verification.md` with:
++- Build status (PASS/FAIL)
++- Build time and resource usage
++- Test status (PASS/FAIL)
++- Test count and execution time
++- List of any build or test failures
++- Verification timestamp
++- Git commit SHA or HEAD reference
++- Evidence of verification (logs, screenshots if applicable)
++- Any warnings or concerns
++
++**5. Invoke code-review skill**
++
++- The terminal state is invoking `code-review`
++- Do not claim completion before review
++- Verification is a prerequisite for review
++
++## Required Artifacts
++
++- **verification.md**: Document of verification results including build status, test results, and evidence
++
++## Red Flags
++
++- Claiming completion without verification
++- Skipping test execution
++- Using cached verification results
++- Not documenting verification evidence
++- Proceeding to review with failed verification
++- Missing required artifacts
++
++## Done Means
++
++You are done when:
++- Build succeeds without errors
++- All tests pass with no failures
++- All expected artifacts are present
++- verification.md is created with complete verification evidence
++- You have invoked the `code-review` skill
+diff --git a/work/ENHANCEMENT-PLAN.md b/work/ENHANCEMENT-PLAN.md
+new file mode 100644
+index 0000000..339ea4a
+--- /dev/null
++++ b/work/ENHANCEMENT-PLAN.md
+@@ -0,0 +1,141 @@
++# Orchestrator Evaluation — Enhancement Plan
++
++**Status:** Draft for review
++**Branch:** `feature/evaluator-confidence-tests`
++**Scope:** Improve the orchestrator's reason-between-steps capability so the automated workflow produces trustworthy, valid artifacts end-to-end.
++
++This plan addresses **one gap at a time**. Each gap is independently shippable (its own commit) and ordered by dependency: correctness first, then resilience, then output quality, then depth.
++
++---
++
++## Gap 1 — Duplicate skill narrative + single-artifact evaluation (correctness)
++
++### Problem
++1. The skill narrative is injected **twice** into the dispatch prompt:
++   - First in `invoke_skill` — `skill_invoker.py:93-100`
++   - Again inside `_build_skill_prompt` — `skill_invoker.py:179-180`
++   Wastes tokens and can confuse the model with repeated instructions.
++2. Only the **first** required artifact is evaluated — `step_executor.py:248` uses `required_artifacts[0]`. Steps that emit multiple artifacts (e.g. `code-review` → `review-spec.md`, `review-quality.md`, `human-verdict.md`) leave 2 of 3 unchecked.
++
++### Fix
++- **Single source of narrative.** Remove the narrative block from `invoke_skill` and keep it only in `_build_skill_prompt` (which already structures Context + Iron Law + Narrative + Instructions). Revert `_build_skill_prompt`'s signature back to its 4-arg form used consistently.
++- **Evaluate all artifacts.** Replace the `required_artifacts[0]` logic with a loop over every required artifact. Aggregate into a single step verdict:
++  - Step confidence = **min** of per-artifact confidences (weakest link).
++  - Step issues = union of all per-artifact issues (tagged with artifact name).
++  - Step is auto-approvable only if **every** artifact is auto-approvable.
++
++### Acceptance Criteria
++- Dispatch prompt contains the narrative exactly once (assert in a unit test).
++- A step with 3 required artifacts runs 3 evaluations; a placeholder in any one fails the step.
++- Existing `test_evaluator.py` scenarios still pass.
++
++### Risk / Effort
++Low risk, ~1 hour. Pure refactor + loop.
++
++---
++
++## Gap 2 — Retry with feedback instead of hard abort (resilience)
++
++### Problem
++The "Retry skill" path is advertised in the gate prompt but never implemented — the code comment literally says *"Would retry here (for now, proceed)"* (`step_executor.py:274-275`). Non-interactive mode simply aborts on the first failure, so a single recoverable issue (e.g. a stray `TODO`) kills the whole run.
++
++### Fix
++Introduce a **bounded retry loop** around skill dispatch:
++1. On evaluation failure, build a **feedback prompt** that appends the specific issues to the original skill prompt, e.g.:
++   > Your previous output failed validation for these reasons: [issues]. Regenerate the artifact(s) fixing ONLY these problems. Do not introduce placeholders (PLACEHOLDER/TODO/TBD).
++2. Re-dispatch the same skill with the feedback prompt.
++3. Re-evaluate. Repeat up to `MAX_RETRIES` (default **2**).
++4. If still failing after retries:
++   - **Interactive:** surface the 1/2/3 gate (proceed / retry again / abort).
++   - **Non-interactive:** abort with a clear `ESCALATE` reason recorded to the session audit.
++
++### Design Notes
++- Add `max_retries: int = 2` to `StepExecutor.__init__` (overridable via env `DEVIN_MAX_RETRIES`).
++- Track attempts per step in the session audit for empirical analysis.
++- Keep retries idempotent: each retry overwrites the artifact, not appends.
++
++### Acceptance Criteria
++- A skill that emits a placeholder on attempt 1 but clean output on attempt 2 results in a **passing** step.
++- A skill that never recovers aborts after exactly `MAX_RETRIES+1` attempts with an `ESCALATE` audit entry.
++- Retry count and final verdict are written to `session-audit.md`.
++
++### Risk / Effort
++Medium risk (loop control, infinite-loop guard), ~2-3 hours.
++
++---
++
++## Gap 3 — Enrich thin skill narratives (output quality / root cause)
++
++### Problem
++The low-confidence outputs trace back to **stub skill narratives**. Rich skills (`brainstorming.md` 7.5KB, `writing-plans.md` 7.3KB, `subagent-driven-development.md` 8.7KB) produce reasonable output; the stubs do not:
++- `test-driven-development.md` — 723 B
++- `code-review.md` — 672 B
++- `verification-before-completion.md` — 656 B
++
++A thin narrative gives devin too little procedure, so it emits summaries/placeholders instead of real artifacts.
++
++### Fix
++Bring the three stub skills up to the standard set by the rich skills. For each, the `.md` should contain:
++- **Iron Law** restated and explained.
++- **Numbered, line-by-line checklist** the dispatched agent must follow (mirroring the `.yaml` checklist but with concrete actions).
++- **Required artifact contract** — exact filename(s), required sections/headers, and a "DONE means" definition.
++- **Red flags** section listing failure patterns (placeholders, skipped verification, etc.).
++- A worked **example** of a compliant artifact.
++
++Source material: adapt from `obra/superpowers` equivalents and the existing `.yaml` definitions so `.md` and `.yaml` stay consistent.
++
++### Acceptance Criteria
++- Each of the 3 stub `.md` files reaches parity (structure + ≥ ~3 KB of real procedure).
++- A dispatch of `verification-before-completion` produces a `verification.md` with real test evidence sections and **passes** evaluation without placeholder hits.
++- `.md` checklist items map 1:1 to `.yaml` checklist ids.
++
++### Risk / Effort
++Low technical risk, content-heavy. ~2-3 hours (1 hour per skill).
++
++---
++
++## Gap 4 — Semantic evaluation layer (depth)
++
++### Problem
++Current checks are **heuristic** (placeholder regex, YAML/JSON parse, test-count parse). They cannot tell whether an artifact actually *satisfies the requirement*. A `design.md` with no placeholders and valid markdown scores 1.0 even if it ignores the acceptance criteria in `requirement.md`.
++
++### Fix
++Add a **semantic check** as a 5th evaluation dimension, gated behind a flag (`enable_semantic: bool`, default off until proven):
++1. Load the relevant context artifact (e.g. `requirement.md` for `writing-plans`, `design.md` for `subagent-driven-development`).
++2. Dispatch a **focused evaluation prompt** to devin (`--print`, cheap/fast model) asking a structured question:
++   > Given REQUIREMENT and ARTIFACT, does the artifact address every acceptance criterion? Respond with JSON: `{score: 0-1, missing: [...], notes: "..."}`.
++3. Parse the JSON; fold `score` into the confidence calculation (weighted, e.g. -0.3 if score < 0.6) and add `missing` items to issues.
++4. Cache the result per artifact hash to avoid repeat cost.
++
++### Design Notes
++- Semantic check is **advisory-weighted**, not absolute — keep objective checks authoritative so a model hiccup can't pass a placeholder.
++- Map each skill → which context artifact it should be evaluated against (config table).
++- Robust JSON parsing with fallback: if the eval model returns malformed output, treat as "requires_user_input" rather than crashing.
++
++### Acceptance Criteria
++- A `design.md` that omits an acceptance criterion is flagged with the specific `missing` item.
++- A compliant `design.md` passes with semantic score ≥ 0.8.
++- Semantic failures degrade confidence but never *raise* it above objective-check ceilings.
++- Disabling the flag fully reverts to current behavior (regression-safe).
++
++### Risk / Effort
++Higher risk (LLM nondeterminism, cost, parsing). ~4-5 hours + empirical tuning.
++
++---
++
++## Sequencing & Validation
++
++| Order | Gap | Type | Depends on | Est. |
++|-------|-----|------|-----------|------|
++| 1 | Duplicate narrative + all-artifact eval | Correctness | — | ~1h |
++| 2 | Retry with feedback | Resilience | Gap 1 | ~2-3h |
++| 3 | Enrich stub skills | Output quality | — (parallelizable) | ~2-3h |
++| 4 | Semantic evaluation | Depth | Gaps 1-3 | ~4-5h |
++
++**Validation strategy throughout:**
++- Keep `test_evaluator.py` green at every step (objective-check regression guard).
++- After Gap 2, add a retry-specific test (placeholder-then-clean fixture).
++- After Gap 3, run a real `--print` dispatch of `verification-before-completion` and confirm a clean pass.
++- After Gap 4, run an end-to-end `test_dispatch.py` and target the **first clean full-workflow run**.
++
++**Definition of done for the whole plan:** one end-to-end automated dispatch completes all steps with every artifact passing evaluation (no placeholders, no aborts), with retries and semantic checks active.
+diff --git a/workflow-engine/skill_evaluator.py b/workflow-engine/skill_evaluator.py
+index ce07613..d932ae1 100644
+--- a/workflow-engine/skill_evaluator.py
++++ b/workflow-engine/skill_evaluator.py
+@@ -32,15 +32,27 @@ class SkillEvaluator:
+     - Confidence-based decision logic
+     """
+ 
+-    def __init__(self, harness_root: Path):
++    def __init__(self, harness_root: Path, enable_semantic: bool = False, devin_cli_path: Optional[str] = None):
+         """
+         Initialize skill evaluator
+ 
+         Args:
+             harness_root: Root directory of the harness
++            enable_semantic: Enable semantic evaluation layer (default: False)
++            devin_cli_path: Optional path to devin.exe for semantic evaluation
+         """
+         self.harness_root = harness_root
+         self.skills_dir = harness_root / 'skills'
++        self.enable_semantic = enable_semantic
++        self.devin_cli_path = devin_cli_path
++
++        # Map skills to their context artifacts for semantic evaluation
++        self.skill_context_map = {
++            'writing-plans': 'requirement.md',
++            'subagent-driven-development': 'design.md',
++            'verification-before-completion': 'design.md',
++            'code-review': 'requirement.md'
++        }
+ 
+     def evaluate_skill_output(
+         self,
+@@ -106,6 +118,15 @@ class SkillEvaluator:
+                 confidence -= 0.3
+             details['test_results'] = test_result
+ 
++        # Check 5: Semantic evaluation (if enabled)
++        if self.enable_semantic and self.devin_cli_path:
++            semantic_result = self._check_semantic(artifact_path, skill_name, context)
++            if semantic_result['checked']:
++                if not semantic_result['passed']:
++                    issues.extend(semantic_result['issues'])
++                    confidence -= 0.3  # Advisory weight
++                details['semantic'] = semantic_result
++
+         # Clamp confidence to [0, 1]
+         confidence = max(0.0, min(1.0, confidence))
+ 
+@@ -290,6 +311,137 @@ class SkillEvaluator:
+             'issues': issues
+         }
+ 
++    def _check_semantic(self, artifact_path: Path, skill_name: str, context: Dict[str, Any]) -> Dict[str, Any]:
++        """
++        Check if artifact semantically satisfies the requirement/context
++
++        Args:
++            artifact_path: Path to the artifact to evaluate
++            skill_name: Name of the skill that produced the artifact
++            context: Context data including session_id and step
++
++        Returns:
++            Dict with 'checked', 'passed', 'issues', and 'details'
++        """
++        # Check if this skill has a context artifact mapping
++        context_artifact_name = self.skill_context_map.get(skill_name)
++        if not context_artifact_name:
++            return {
++                'checked': False,
++                'passed': True,
++                'issues': []
++            }
++
++        # Load context artifact
++        session_dir = Path(context.get('session_dir', '.'))
++        context_path = session_dir / context_artifact_name
++
++        if not context_path.exists():
++            return {
++                'checked': False,
++                'passed': True,
++                'issues': []
++            }
++
++        # Read both artifacts
++        context_content = context_path.read_text(encoding='utf-8')
++        artifact_content = artifact_path.read_text(encoding='utf-8')
++
++        # Build semantic evaluation prompt
++        eval_prompt = f"""You are evaluating whether an artifact satisfies its requirement.
++
++## Requirement/Context:
++{context_content[:2000]}...
++
++## Artifact to Evaluate:
++{artifact_content[:2000]}...
++
++## Task:
++Evaluate whether the artifact addresses the requirement. Respond with ONLY a JSON object in this exact format:
++{{"score": 0.0-1.0, "missing": ["list of missing items"], "notes": "brief explanation"}}
++
++- score: 0.0-1.0 confidence that artifact satisfies requirement
++- missing: list of specific items from requirement not addressed
++- notes: brief explanation of the evaluation
++
++Respond with JSON only, no other text.
++"""
++
++        try:
++            import subprocess
++            result = subprocess.run(
++                [self.devin_cli_path, '--permission-mode', 'dangerous', '--print', eval_prompt],
++                capture_output=True,
++                text=True,
++                encoding='utf-8',
++                errors='replace',
++                timeout=60,
++                cwd=str(session_dir)
++            )
++
++            if result.returncode != 0:
++                return {
++                    'checked': False,
++                    'passed': True,
++                    'issues': [],
++                    'error': f"Semantic evaluation failed: {result.stderr}"
++                }
++
++            # Parse JSON response
++            import json
++            eval_output = result.stdout.strip()
++
++            # Try to extract JSON from output
++            json_match = re.search(r'\{[^}]+\}', eval_output, re.DOTALL)
++            if json_match:
++                json_str = json_match.group(0)
++                eval_data = json.loads(json_str)
++
++                score = eval_data.get('score', 0.0)
++                missing = eval_data.get('missing', [])
++                notes = eval_data.get('notes', '')
++
++                issues = []
++                if score < 0.6:
++                    issues.append(f"Semantic score {score:.2f} below threshold 0.6")
++                if missing:
++                    for item in missing:
++                        issues.append(f"Missing requirement: {item}")
++
++                return {
++                    'checked': True,
++                    'passed': score >= 0.6 and len(missing) == 0,
++                    'issues': issues,
++                    'details': {
++                        'score': score,
++                        'missing': missing,
++                        'notes': notes
++                    }
++                }
++            else:
++                # Could not parse JSON, treat as requires user input
++                return {
++                    'checked': True,
++                    'passed': False,
++                    'issues': ["Could not parse semantic evaluation response"],
++                    'error': "JSON parse failed"
++                }
++
++        except subprocess.TimeoutExpired:
++            return {
++                'checked': False,
++                'passed': True,
++                'issues': [],
++                'error': "Semantic evaluation timed out"
++            }
++        except Exception as e:
++            return {
++                'checked': False,
++                'passed': True,
++                'issues': [],
++                'error': f"Semantic evaluation error: {str(e)}"
++            }
++
+     def _load_skill_definition(self, skill_name: str) -> Optional[Dict[str, Any]]:
+         """Load skill YAML definition"""
+         skill_yaml = self.skills_dir / f"{skill_name}.yaml"
+diff --git a/workflow-engine/skill_invoker.py b/workflow-engine/skill_invoker.py
+index a229edb..1cae3c5 100644
+--- a/workflow-engine/skill_invoker.py
++++ b/workflow-engine/skill_invoker.py
+@@ -47,7 +47,8 @@ class SkillInvoker:
+         self,
+         skill_name: str,
+         context: Dict[str, Any],
+-        workspace: Optional[str] = None
++        workspace: Optional[str] = None,
++        custom_prompt: Optional[str] = None
+     ) -> SkillInvocationResult:
+         """
+         Invoke a skill using the devin-cli transport adapter
+@@ -56,6 +57,7 @@ class SkillInvoker:
+             skill_name: Name of the skill to invoke
+             context: Context data for the skill (e.g., session_id, step, artifacts)
+             workspace: Optional workspace path
++            custom_prompt: Optional custom prompt (for retry with feedback)
+ 
+         Returns:
+             SkillInvocationResult with success status and output
+@@ -88,18 +90,11 @@ class SkillInvoker:
+                 error=f"Skill narrative not found: {skill_name}"
+             )
+ 
+-        # Build prompt for the skill
+-        # Include skill narrative as system context in the prompt
+-        prompt = f"""You are executing the {skill_name} skill. Follow these instructions:
+-
+-{skill_narrative}
+-
+----
+-
+-Task:
+-"""
+-
+-        prompt += self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
++        # Use custom prompt if provided (for retry), otherwise build standard prompt
++        if custom_prompt:
++            prompt = custom_prompt
++        else:
++            prompt = self._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
+ 
+         # Generate session ID for tracking
+         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"
+diff --git a/workflow-engine/step_executor.py b/workflow-engine/step_executor.py
+index 99c66ba..bd2cc8a 100644
+--- a/workflow-engine/step_executor.py
++++ b/workflow-engine/step_executor.py
+@@ -25,7 +25,7 @@ class StepResult:
+ class StepExecutor:
+     """Executes workflow steps with manual skill invocation"""
+ 
+-    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous"):
++    def __init__(self, harness_root: Path, work_dir: Path, interactive: bool = True, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous", max_retries: int = 2):
+         """
+         Initialize step executor
+ 
+@@ -36,6 +36,7 @@ class StepExecutor:
+             devin_cli_path: Optional path to devin.exe for automated dispatch
+             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
+             permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
++            max_retries: Maximum number of retry attempts on evaluation failure (default: 2)
+         """
+         self.harness_root = harness_root
+         self.work_dir = work_dir
+@@ -46,12 +47,37 @@ class StepExecutor:
+         self.devin_cli_path = devin_cli_path
+         self.model = model
+         self.permission_mode = permission_mode
++        self.max_retries = max_retries
+         self.skill_invoker: Optional[SkillInvoker] = None
+-        self.skill_evaluator = SkillEvaluator(harness_root)
++        self.skill_evaluator = SkillEvaluator(harness_root, enable_semantic=False, devin_cli_path=devin_cli_path)
+ 
+         if devin_cli_path:
+             self.skill_invoker = SkillInvoker(harness_root, devin_cli_path, model, permission_mode)
+ 
++    def _build_feedback_prompt(self, original_prompt: str, issues: List[str]) -> str:
++        """
++        Build a feedback prompt for retrying a skill with evaluation feedback
++
++        Args:
++            original_prompt: The original skill invocation prompt
++            issues: List of evaluation issues to address
++
++        Returns:
++            Feedback prompt with issue context
++        """
++        feedback = f"""Your previous output failed validation for the following reasons:
++
++{chr(10).join(f"- {issue}" for issue in issues)}
++
++Please regenerate the artifact(s) fixing ONLY these problems. Do not introduce placeholders (PLACEHOLDER/TODO/TBD). Follow the skill instructions strictly.
++
++---
++
++Original task:
++{original_prompt}
++"""
++        return feedback
++
+     def execute_workflow(self, manifest_name: str, session_id: str) -> bool:
+         """
+         Execute a complete workflow
+@@ -230,80 +256,140 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
+                     'required_artifacts': self.manifest.required_artefacts.get(step, [])
+                 }
+ 
+-                result = self.skill_invoker.invoke_skill(
+-                    skill_name=skill_name,
+-                    context=context,
+-                    workspace=str(self.session_manager.get_session_dir())
+-                )
+-
+-                if result.success:
+-                    print(f"Skill {skill_name} invoked successfully")
+-                    print(f"Session ID: {result.session_id}")
+-                    print(f"Output: {result.output[:200]}...")  # Truncate output
+-
+-                    # Evaluate skill output with confidence scoring
+-                    required_artifacts = self.manifest.required_artefacts.get(step, [])
+-                    if required_artifacts:
+-                        # Evaluate the first required artifact (usually the main output)
+-                        artifact_path = self.session_manager.get_session_dir() / required_artifacts[0]
+-                        if artifact_path.exists():
+-                            evaluation = self.skill_evaluator.evaluate_skill_output(
+-                                skill_name=skill_name,
+-                                artifact_path=artifact_path,
+-                                context={'session_id': self.session_manager.state.session_id, 'step': step}
++                # Build the original prompt for potential retry
++                skill_def = self.skill_invoker._load_skill_definition(skill_name)
++                skill_narrative = self.skill_invoker._load_skill_narrative(skill_name)
++                original_prompt = self.skill_invoker._build_skill_prompt(skill_name, skill_def, skill_narrative, context)
++
++                # Retry loop with feedback
++                attempt = 0
++                max_attempts = self.max_retries + 1  # initial attempt + retries
++                step_evaluation = None
++
++                while attempt < max_attempts:
++                    attempt += 1
++                    if attempt > 1:
++                        print(f"\n[RETRY ATTEMPT {attempt}/{max_attempts}]")
++
++                    result = self.skill_invoker.invoke_skill(
++                        skill_name=skill_name,
++                        context=context,
++                        workspace=str(self.session_manager.get_session_dir()),
++                        custom_prompt=None if attempt == 1 else self._build_feedback_prompt(original_prompt, step_evaluation.issues)
++                    )
++
++                    if result.success:
++                        print(f"Skill {skill_name} invoked successfully")
++                        print(f"Session ID: {result.session_id}")
++                        print(f"Output: {result.output[:200]}...")  # Truncate output
++
++                        # Evaluate skill output with confidence scoring
++                        required_artifacts = self.manifest.required_artefacts.get(step, [])
++                        if required_artifacts:
++                            # Evaluate ALL required artifacts (not just the first)
++                            evaluations = []
++                            all_issues = []
++                            min_confidence = 1.0
++                            all_auto_approvable = True
++
++                            for artifact_name in required_artifacts:
++                                artifact_path = self.session_manager.get_session_dir() / artifact_name
++                                if artifact_path.exists():
++                                    evaluation = self.skill_evaluator.evaluate_skill_output(
++                                        skill_name=skill_name,
++                                        artifact_path=artifact_path,
++                                        context={'session_id': self.session_manager.state.session_id, 'step': step}
++                                    )
++                                    evaluations.append((artifact_name, evaluation))
++                                    min_confidence = min(min_confidence, evaluation.confidence)
++                                    all_auto_approvable = all_auto_approvable and evaluation.auto_approvable
++
++                                    if evaluation.issues:
++                                        for issue in evaluation.issues:
++                                            all_issues.append(f"{artifact_name}: {issue}")
++                                else:
++                                    all_issues.append(f"{artifact_name}: Artifact does not exist")
++                                    all_auto_approvable = False
++                                    min_confidence = 0.0
++
++                            # Aggregate step evaluation
++                            step_evaluation = EvaluationResult(
++                                confidence=min_confidence,
++                                passed=len(all_issues) == 0,
++                                issues=all_issues,
++                                auto_approvable=all_auto_approvable,
++                                requires_user_input=min_confidence < 0.7 or len(all_issues) > 0,
++                                details={'per_artifact': evaluations, 'attempt': attempt}
+                             )
+ 
+-                            print(f"\n[EVALUATION - Confidence: {evaluation.confidence:.2f}]")
+-                            if evaluation.issues:
+-                                print(f"Issues: {', '.join(evaluation.issues)}")
++                            print(f"\n[EVALUATION - Confidence: {step_evaluation.confidence:.2f}]")
++                            if step_evaluation.issues:
++                                print(f"Issues: {', '.join(step_evaluation.issues)}")
+ 
+                             # Confidence-based decision logic
+-                            if evaluation.auto_approvable:
++                            if step_evaluation.auto_approvable:
+                                 print("✓ Auto-approved (high confidence, no issues)")
+-                            elif evaluation.requires_user_input:
+-                                print(f"\n⚠ Requires user review (confidence: {evaluation.confidence:.2f})")
+-                                print(f"Issues: {evaluation.issues}")
+-                                print("\nOptions:")
+-                                print("  1. Proceed anyway")
+-                                print("  2. Retry skill")
+-                                print("  3. Abort workflow")
+-
+-                                if self.interactive:
+-                                    choice = input("Your choice (1/2/3): ").strip()
+-                                    if choice == '2':
+-                                        print("Retrying skill...")
+-                                        # Would retry here (for now, proceed)
+-                                    elif choice == '3':
+-                                        print("Workflow aborted by user")
+-                                        return False
+-                                    else:
+-                                        print("Proceeding with user approval")
++                                break  # Success, exit retry loop
++                            elif step_evaluation.requires_user_input:
++                                print(f"\n⚠ Requires user review (confidence: {step_evaluation.confidence:.2f})")
++                                print(f"Issues: {step_evaluation.issues}")
++
++                                # If we have retries left, try automatic retry
++                                if attempt < max_attempts:
++                                    print(f"Retrying with feedback ({attempt}/{self.max_retries})...")
++                                    continue
+                                 else:
+-                                    # Non-interactive mode: abort on evaluation failure
+-                                    print("Non-interactive mode: aborting workflow due to evaluation failure")
+-                                    return False
++                                    # No more retries, escalate to user or abort
++                                    print(f"\nMax retries ({self.max_retries}) exhausted.")
++                                    print("\nOptions:")
++                                    print("  1. Proceed anyway")
++                                    print("  2. Abort workflow")
++
++                                    if self.interactive:
++                                        choice = input("Your choice (1/2): ").strip()
++                                        if choice == '2':
++                                            print("Workflow aborted by user")
++                                            # Record escalation to session audit
++                                            self.session_manager.append_audit_entry(
++                                                f"ESCALATE: {step} failed after {max_attempts} attempts with issues: {step_evaluation.issues}"
++                                            )
++                                            return False
++                                        else:
++                                            print("Proceeding with user approval")
++                                            break
++                                    else:
++                                        # Non-interactive mode: abort after retries
++                                        print("Non-interactive mode: aborting workflow after max retries")
++                                        # Record escalation to session audit
++                                        self.session_manager.append_audit_entry(
++                                            f"ESCALATE: {step} failed after {max_attempts} attempts with issues: {step_evaluation.issues}"
++                                        )
++                                        return False
+                             else:
+                                 # Medium confidence - quick confirmation
+-                                print(f"⚠ Medium confidence ({evaluation.confidence:.2f})")
++                                print(f"⚠ Medium confidence ({step_evaluation.confidence:.2f})")
+                                 if self.interactive:
+                                     proceed = input("Proceed? (y/n): ").strip().lower()
+                                     if proceed != 'y':
+                                         print("Workflow aborted by user")
+                                         return False
++                                    else:
++                                        break
+                                 else:
+                                     # Non-interactive mode: abort on medium confidence
+                                     print("Non-interactive mode: aborting workflow due to medium confidence")
+                                     return False
+-                else:
+-                    print(f"Skill {skill_name} invocation failed: {result.error}")
+-                    # Fall back to placeholder creation
+-                    print("Creating placeholder artifacts as fallback...")
+-                    required_artifacts = self.manifest.required_artefacts.get(step, [])
+-                    for artifact in required_artifacts:
+-                        artifact_path = self.session_manager.get_session_dir() / artifact
+-                        if not artifact_path.exists():
+-                            artifact_path.write_text(f"# Placeholder for {artifact}\n\n# Created after dispatch failure\n", encoding='utf-8')
+-                    print(f"Created placeholder artifacts: {', '.join(required_artifacts)}")
++                    else:
++                        print(f"Skill {skill_name} invocation failed: {result.error}")
++                        # Fall back to placeholder creation
++                        print("Creating placeholder artifacts as fallback...")
++                        required_artifacts = self.manifest.required_artefacts.get(step, [])
++                        for artifact in required_artifacts:
++                            artifact_path = self.session_manager.get_session_dir() / artifact
++                            if not artifact_path.exists():
++                                artifact_path.write_text(f"# Placeholder for {artifact}\n\n# Created after dispatch failure\n", encoding='utf-8')
++                        print(f"Created placeholder artifacts: {', '.join(required_artifacts)}")
++                        break  # Invocation failed, no point retrying
+             else:
+                 print("\n[NON-INTERACTIVE MODE - Skipping manual execution]")
+                 print("Creating placeholder artifacts for testing...")
+diff --git a/workflow-engine/test_dispatch.py b/workflow-engine/test_dispatch.py
+index 5086c0d..a6e41fd 100644
+--- a/workflow-engine/test_dispatch.py
++++ b/workflow-engine/test_dispatch.py
+@@ -54,6 +54,14 @@ def test_automated_dispatch():
+     permission_mode = os.environ.get('DEVIN_PERMISSION_MODE', 'dangerous')
+     print(f"Using permission mode: {permission_mode}")
+ 
++    # Max retries (default 2)
++    max_retries = int(os.environ.get('DEVIN_MAX_RETRIES', '2'))
++    print(f"Max retries: {max_retries}")
++
++    # Enable semantic evaluation (default False)
++    enable_semantic = os.environ.get('DEVIN_ENABLE_SEMANTIC', 'false').lower() == 'true'
++    print(f"Semantic evaluation: {enable_semantic}")
++
+     # Create executor with automated dispatch
+     executor = StepExecutor(
+         harness_root,
+@@ -61,9 +69,14 @@ def test_automated_dispatch():
+         interactive=False,  # Use automated dispatch
+         devin_cli_path=devin_cli_path,
+         model=model,  # Optional model selection
+-        permission_mode=permission_mode  # Permission mode for artifact creation
++        permission_mode=permission_mode,  # Permission mode for artifact creation
++        max_retries=max_retries  # Max retry attempts
+     )
+ 
++    # Enable semantic evaluation if requested
++    if enable_semantic:
++        executor.skill_evaluator.enable_semantic = True
++
+     # Execute workflow with unique session ID to avoid artifact contamination
+     import time
+     session_id = f"FEATURE-DISPATCH-{int(time.time())}"
+diff --git a/workflow-engine/test_multi_artifact_eval.py b/workflow-engine/test_multi_artifact_eval.py
+new file mode 100644
+index 0000000..263baba
+--- /dev/null
++++ b/workflow-engine/test_multi_artifact_eval.py
+@@ -0,0 +1,106 @@
++# -*- coding: utf-8 -*-
++"""
++Test multi-artifact evaluation - verify all artifacts are evaluated
++"""
++
++import sys
++from pathlib import Path
++
++# Add workflow-engine to path
++sys.path.insert(0, str(Path(__file__).parent))
++
++from skill_evaluator import SkillEvaluator, EvaluationResult
++
++
++def test_multi_artifact_evaluation():
++    """Test that multiple artifacts are evaluated correctly"""
++    print("=" * 60)
++    print("Multi-Artifact Evaluation Test")
++    print("=" * 60)
++
++    harness_root = Path(__file__).parent.parent
++    evaluator = SkillEvaluator(harness_root)
++
++    # Create test session directory
++    test_dir = Path(__file__).parent / 'test_multi_artifacts'
++    test_dir.mkdir(exist_ok=True)
++
++    # Create 3 artifacts with varying quality
++    # Artifact 1: Valid
++    artifact1 = test_dir / 'artifact1.md'
++    artifact1.write_text('# Valid Artifact\n\nAll tests passed: 70/70', encoding='utf-8')
++
++    # Artifact 2: Placeholder
++    artifact2 = test_dir / 'artifact2.md'
++    artifact2.write_text('# PLACEHOLDER\n\nTODO: implement', encoding='utf-8')
++
++    # Artifact 3: Valid
++    artifact3 = test_dir / 'artifact3.md'
++    artifact3.write_text('# Valid Artifact\n\nContent is complete', encoding='utf-8')
++
++    # Evaluate all artifacts
++    artifacts = ['artifact1.md', 'artifact2.md', 'artifact3.md']
++    evaluations = []
++    all_issues = []
++    min_confidence = 1.0
++    all_auto_approvable = True
++
++    for artifact_name in artifacts:
++        artifact_path = test_dir / artifact_name
++        evaluation = evaluator.evaluate_skill_output(
++            skill_name='verification-before-completion',  # Use a real skill name
++            artifact_path=artifact_path,
++            context={'session_id': 'test', 'step': 'test'}
++        )
++        evaluations.append((artifact_name, evaluation))
++        min_confidence = min(min_confidence, evaluation.confidence)
++        all_auto_approvable = all_auto_approvable and evaluation.auto_approvable
++
++        if evaluation.issues:
++            for issue in evaluation.issues:
++                all_issues.append(f"{artifact_name}: {issue}")
++
++    # Aggregate step evaluation
++    step_evaluation = EvaluationResult(
++        confidence=min_confidence,
++        passed=len(all_issues) == 0,
++        issues=all_issues,
++        auto_approvable=all_auto_approvable,
++        requires_user_input=min_confidence < 0.7 or len(all_issues) > 0,
++        details={'per_artifact': evaluations}
++    )
++
++    print(f"\nAggregated Step Evaluation:")
++    print(f"Confidence: {step_evaluation.confidence:.2f}")
++    print(f"Passed: {step_evaluation.passed}")
++    print(f"Auto-approvable: {step_evaluation.auto_approvable}")
++    print(f"Requires user input: {step_evaluation.requires_user_input}")
++    print(f"Issues: {step_evaluation.issues}")
++
++    # Verify expectations
++    assert step_evaluation.confidence == 0.70, f"Expected confidence 0.70, got {step_evaluation.confidence}"
++    assert not step_evaluation.passed, "Expected step to fail due to placeholder"
++    assert not step_evaluation.auto_approvable, "Expected not auto-approvable"
++    assert step_evaluation.requires_user_input, "Expected requires user input"
++    assert len(step_evaluation.issues) == 1, f"Expected 1 issue, got {len(step_evaluation.issues)}"
++
++    print("\n✓ All assertions passed")
++
++    # Cleanup
++    try:
++        artifact1.unlink()
++        artifact2.unlink()
++        artifact3.unlink()
++        test_dir.rmdir()
++    except PermissionError:
++        # Windows file handle issue - directory will be cleaned up later
++        pass
++
++    print("\n" + "=" * 60)
++    print("Multi-Artifact Evaluation Test: PASSED")
++    print("=" * 60)
++    return 0
++
++
++if __name__ == '__main__':
++    sys.exit(test_multi_artifact_evaluation())

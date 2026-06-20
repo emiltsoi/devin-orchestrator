@@ -1,0 +1,23 @@
+Extract the structural and Iron-Law checks from skill_evaluator.py into a new standalone floor_validator.py module.
+
+Current skill_evaluator.py:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine\skill_evaluator.py -Raw)
+
+Requirements:
+1. Create workflow-engine/floor_validator.py with:
+   - validate_structural(artifacts) function - checks existence, non-emptiness, no placeholders
+   - validate_iron_law(artifact, iron_law) function - checks Iron Law compliance
+   - validate_format(artifact) function - checks YAML/JSON format if applicable
+   - All functions should be side-effect-free and deterministic
+   - Return { "result": "PASS|FAIL", "failures": [...] } format
+
+2. The floor validator should NOT include:
+   - Semantic evaluation (that's separate)
+   - Confidence scoring (that's Cascade's job)
+   - Test result parsing (that's separate)
+
+3. Keep the existing skill_evaluator.py but refactor it to use the new floor_validator module for the structural/Iron-Law/format checks.
+
+4. Ensure the floor validator is importable and can be called independently by Cascade.
+
+Write the complete floor_validator.py module.

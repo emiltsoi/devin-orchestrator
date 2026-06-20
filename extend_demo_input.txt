@@ -1,0 +1,38 @@
+Extend demo_orchestrator_worker.py to execute all 8 stages of the feature workflow.
+
+Current demo script:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine\demo_orchestrator_worker.py -Raw)
+
+Feature runbook (reference for all stages):
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflows\feature.runbook.md -Raw)
+
+Requirements:
+1. Add functions for stages 2-7 (stage 0 is session_init, stage 1 already exists):
+   - Stage 2: test-driven-development → baseline.md
+   - Stage 3: writing-plans → design.md (g2 gate)
+   - Stage 4: subagent-driven-development → implementation.md
+   - Stage 5: verification-before-completion → verification.md
+   - Stage 6: code-review → review-spec.md, review-quality.md, human-verdict.md
+   - Stage 7: final summary → summary.md, metrics.json, retro.md (g3 gate)
+
+2. Each stage function should:
+   - Accept focused context artifacts (per per-skill context manifest)
+   - Simulate worker dispatch (create output artifacts)
+   - Call validate_structural on output artifacts
+   - Simulate neutral reviewer dispatch
+   - Simulate Cascade triage decision
+   - Call append_audit and write_run_jsonl
+   - Call record_gate for gated stages (g2, g3)
+
+3. Update main() to execute all stages in sequence
+4. Keep the resumability demo at the end
+
+5. Use the per-skill context manifest from the runbook:
+   - brainstorming → request.md
+   - test-driven-development → requirement.md
+   - writing-plans → requirement.md, baseline.md
+   - subagent-driven-development → design.md
+   - verification-before-completion → design.md, implementation.md
+   - code-review → requirement.md, design.md, diff
+
+Extend the demo script to cover all 8 stages.

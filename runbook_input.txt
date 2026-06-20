@@ -1,0 +1,20 @@
+Format spec:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\ORCHESTRATION-RUNBOOK.md -Raw)
+
+Manifest (source of truth for stages, skills, artifacts, gates):
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflows\feature.manifest.yaml -Raw)
+
+Design doc (for context on v2 decisions):
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\work\CASCADE-PIPELINE-DESIGN.md -Raw)
+
+Write the complete feature.runbook.md with:
+- All 8 stages (step_0 through step_7)
+- Each stage with skill, required artifacts, gate, injected context
+- Full dispatch protocol, semantic evaluation, correction loop, gate protocol, audit recording
+- Triage protocol section
+- Escalation policy section
+- Deterministic tool calls section
+- Per-skill context manifest table
+- Resumability protocol section
+
+Follow the format spec exactly. Ensure parity with the manifest.

@@ -1,0 +1,15 @@
+name: devin-support
+description: "Devin support workflow - Cascade orchestrates superpower workflow using skill_invoker"
+version: 1.0.0
+source: devin-orchestrator
+installed: 2026-06-20
+
+stages:
+  - name: orchestrate-superpower
+    step: 0
+    skill: orchestrate-superpower
+    required_artifacts: []
+    output_artifacts: []
+    gate: none
+
+terminal_state: Superpower workflow orchestrated and executed by Cascade

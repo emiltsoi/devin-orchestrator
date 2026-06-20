@@ -1,0 +1,17 @@
+Runbook to review:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflows\feature.runbook.md -Raw)
+
+Manifest (source of truth):
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflows\feature.manifest.yaml -Raw)
+
+Format spec:
+$(Get-Content C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\ORCHESTRATION-RUNBOOK.md -Raw)
+
+Validate:
+1. Does runbook agree with manifest (stages, skills, artifacts, gates)?
+2. Does runbook follow the format spec structure?
+3. Are all 8 stages present with complete protocols?
+4. Is per-skill context manifest correct?
+5. Are all sections present (triage, escalation, tools, resumability)?
+
+Provide specific feedback. If RED, list issues. If GREEN, confirm parity.
