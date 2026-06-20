@@ -52,17 +52,29 @@ cp ~/.devin-orchestrator/workflows/code_review.manifest.yaml .devin/workflows/
 
 ### Cascade Workflow Execution
 
-**Important:** Cascade cannot spawn external processes (subprocess calls). Cascade executes skill logic directly using its available tools.
+**Important:** Cascade uses the orchestrator-worker pattern. Cascade orchestrates the workflow and dispatches skills to Devin via the bash tool.
 
 When Cascade loads a workflow, it will:
 1. Read the manifest from `.devin/workflows/`
 2. Load the orchestrate-superpower skill
-3. Load skill definitions and narratives from `~/.devin-orchestrator/skills/`
-4. Execute skill logic directly using its available tools (read files, write files, run commands, etc.)
-5. Reason through results and make triage decisions
-6. Handle gates and structural floor validation
+3. For each stage: dispatch skill via `dispatch_skill.py` using the bash tool
+4. Reason through results and make triage decisions
+5. Handle gates and structural floor validation
 
-**Cascade is both the orchestrator AND the worker.** It does not dispatch to external processes like devin.exe.
+**Cascade is the orchestrator, Devin is the worker.** Cascade dispatches to Devin via subprocess calls.
+
+### Example Dispatch
+
+```bash
+python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false true
+```
+
+Parameters:
+- `skill_name`: Name of the skill (e.g., brainstorming, writing-plans)
+- `session_id`: Session identifier
+- `workspace`: Path to session directory
+- `is_reviewer`: true for reviewer stages, false otherwise
+- `demo_mode`: true for testing, false for production
 
 ## Configuration
 
@@ -74,10 +86,12 @@ skills_dir: ~/.devin-orchestrator/skills
 workflows_dir: ~/.devin-orchestrator/workflows
 workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
 
+devin_cli_path: C:/Users/<user>/AppData/Local/devin/cli/bin/devin.exe
+default_model: swe-1.6
+default_permission_mode: dangerous
+
 session_work_dir: ~/.devin-orchestrator/work
 ```
-
-**Note:** `devin_cli_path`, `default_model`, and `default_permission_mode` are not used by Cascade since it executes skills directly and cannot spawn external processes.
 
 ## Environment Variables
 
@@ -87,6 +101,9 @@ Override config with environment variables:
 export DEVIN_ORCHESTRATOR_ROOT=~/.devin-orchestrator
 export DEVIN_ORCHESTRATOR_SKILLS_DIR=~/.devin-orchestrator/skills
 export DEVIN_ORCHESTRATOR_WORKFLOWS_DIR=~/.devin-orchestrator/workflows
+export DEVIN_CLI_PATH=C:/Users/<user>/AppData/Local/devin/cli/bin/devin.exe
+export DEVIN_DEFAULT_MODEL=swe-1.6
+export DEVIN_DEFAULT_PERMISSION_MODE=dangerous
 ```
 
 ## Architecture
@@ -94,13 +111,13 @@ export DEVIN_ORCHESTRATOR_WORKFLOWS_DIR=~/.devin-orchestrator/workflows
 - **Global Skills**: Stored in `~/.devin-orchestrator/skills/` (no workspace duplication)
 - **Local Workflows**: Stored in `.devin/workflows/` (Cascade requirement)
 - **Global Workflow Engine**: Stored in `~/.devin-orchestrator/workflow-engine/`
-- **Cascade Execution**: Cascade loads skill definitions and executes logic directly using available tools
+- **Dispatch Script**: Stored in `~/.devin-orchestrator/dispatch_skill.py`
 
-**Important Limitations:**
-- Cascade cannot spawn external processes (subprocess calls)
-- Cascade cannot dispatch to devin.exe
-- Cascade executes skill logic directly using its available tools
-- Cascade is both orchestrator and worker
+**Orchestrator-Worker Pattern:**
+- Cascade is the orchestrator (intelligent decision-making)
+- Devin is the worker (stateless execution)
+- Cascade dispatches to Devin via subprocess calls
+- Cascade reasons through results and makes triage decisions
 
 ## Updating
 
@@ -122,8 +139,8 @@ Check that skills are in `~/.devin-orchestrator/skills/` and config points to co
 ### Workflow Not Found
 Check that manifests are in `.devin/workflows/` in your workspace.
 
-### Cascade Cannot Execute Skills
-Cascade executes skills directly using its available tools. If skills require external processes that Cascade cannot spawn, the skill may not work. Skills should be designed to use Cascade's available tools (read files, write files, run commands, etc.).
+### Devin CLI Not Found
+Update `devin_cli_path` in `~/.devin-orchestrator/config.yaml` to your Devin CLI path.
 
-### Module Import Errors
-Ensure `~/.devin-orchestrator/workflow-engine/` is in Python path if importing modules.
+### Bash Tool Not Available
+If Cascade cannot use the bash tool to dispatch skills, check Cascade's tool configuration. The orchestrator-worker pattern requires Cascade to be able to spawn subprocess calls to dispatch to Devin.
