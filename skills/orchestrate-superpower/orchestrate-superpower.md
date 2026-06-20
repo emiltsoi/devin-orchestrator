@@ -1,6 +1,6 @@
 # Orchestrate Superpower Workflow
 
-You are the orchestrator. Your job is to load the superpower manifest and execute each stage directly, reasoning through results and making triage decisions.
+You are the orchestrator. Your job is to load the superpower manifest and execute each stage using dispatch_skill.py to dispatch Devin, reasoning through results and making triage decisions.
 
 ## Process
 
@@ -11,33 +11,35 @@ You are the orchestrator. Your job is to load the superpower manifest and execut
 
 ### 2. Execute Stages
 For each stage in the manifest:
-- Load skill definition and narrative from `~/.devin-orchestrator/skills/{skill_name}/`
-- **Execute the skill logic directly** (you are the worker, not a dispatcher)
+- Load skill definition and narrative
+- **Dispatch skill using dispatch_skill.py to call Devin**
 - Read output artifacts
 - Validate structural floor (no TODO, no placeholders, non-empty)
 - Reason about results
 - Make triage decision (proceed/retry/escalate)
 - Handle gate if present
 
-### 3. Skill Execution (IMPORTANT)
-You MUST execute the skill logic directly. Do NOT dispatch to external processes - you are the worker.
+### 3. Skill Invocation (IMPORTANT)
+You MUST use the dispatch_skill.py script to dispatch Devin. Do NOT execute the skill yourself - dispatch it to Devin.
 
-Load the skill definition and narrative:
-```python
-from pathlib import Path
-import yaml
-
-skill_dir = Path.home() / ".devin-orchestrator" / "skills" / stage['skill']
-skill_def = yaml.safe_load((skill_dir / f"{stage['skill']}.yaml").read_text())
-skill_narrative = (skill_dir / f"{stage['skill']}.md").read_text()
+Use the bash tool to call dispatch_skill.py:
+```bash
+python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode]
 ```
 
-Execute the skill by following the skill narrative:
-- Read the skill narrative (markdown file)
-- Follow the checklist and instructions
-- Use your available tools to execute the skill logic
-- Produce the required artifacts
-- Follow the iron_law constraints
+Example:
+```bash
+python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false true
+```
+
+Parameters:
+- skill_name: Name of the skill to dispatch (e.g., brainstorming, writing-plans)
+- session_id: Session identifier (e.g., SUPERPOWER-001)
+- workspace: Path to session directory
+- is_reviewer: true if this is a reviewer stage (requesting-code-review), false otherwise
+- demo_mode: true for testing (simulated dispatch), false for production (real Devin dispatch)
+
+The script returns JSON output with success, session_id, output, and error fields.
 
 ### 4. Structural Floor Validation
 Check each output artifact:
@@ -50,7 +52,7 @@ If structural floor fails: triage decision = retry
 
 ### 5. Triage Decision
 Based on:
-- Skill execution success/failure
+- Skill invocation success/failure
 - Structural floor validation
 - Reviewer verdict (if reviewer stage)
 - Gate status (if gate present)
@@ -74,12 +76,9 @@ If stage has a gate:
 - Append to session-audit.md after each stage
 
 ## Important
-- You are the orchestrator AND the worker
-- **You MUST execute skill logic directly using your available tools**
-- Do NOT dispatch to external processes - you are the worker
-- Load skill definitions and narratives from global location
-- Follow skill checklists and instructions
-- Produce required artifacts
+- You are the orchestrator, not a mechanical script
+- **You MUST use dispatch_skill.py via bash tool to dispatch Devin for each stage**
+- Do NOT execute skills yourself - dispatch them to Devin
 - Reason through each stage's results
 - Make intelligent triage decisions
 - Handle gates appropriately
