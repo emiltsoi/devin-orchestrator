@@ -2,13 +2,28 @@
 
 ## Quick Start
 
-### 1. Clone the Repository
+### Option 1: Automated Installation (Recommended)
+
+Run the automated installation script from any workspace:
+
+```bash
+python install_automated.py
+```
+
+This will:
+1. Clone the repository (if not already cloned)
+2. Install globally to `~/.devin-orchestrator/`
+3. Set up the current workspace with workflow manifests
+
+### Option 2: Manual Installation
+
+#### 1. Clone the Repository
 ```bash
 git clone <devin-orchestrator-url>
 cd devin-orchestrator
 ```
 
-### 2. Install Globally
+#### 2. Install Globally
 ```bash
 python install.py
 ```
