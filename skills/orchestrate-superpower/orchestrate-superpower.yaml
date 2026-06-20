@@ -1,11 +1,11 @@
 name: orchestrate-superpower
-iron_law: "You MUST use skill_invoker directly via Python imports to dispatch Devin for each stage. Do NOT execute skills yourself - dispatch them to Devin. Load manifest, dispatch each stage using skill_invoker, reason through results, handle gates, and make triage decisions."
-announcement: Orchestrating superpower workflow using skill_invoker to dispatch Devin
+iron_law: "You MUST execute skill logic directly using your available tools. Do NOT dispatch to external processes - you are the worker. Load manifest, execute each stage directly by following skill narratives, reason through results, handle gates, and make triage decisions."
+announcement: Orchestrating superpower workflow - Cascade executes skill logic directly
 checklist:
   - Load superpower manifest from workflows/superpower.manifest.yaml
-  - Add ~/.devin-orchestrator/workflow-engine to Python path
-  - Import skill_invoker and config_loader
-  - For each stage in manifest: dispatch skill via skill_invoker.invoke_skill()
+  - For each stage in manifest: load skill definition and narrative from ~/.devin-orchestrator/skills/
+  - Execute skill logic directly by following the skill narrative and checklist
+  - Use your available tools to produce required artifacts
   - Read and validate output artifacts (structural floor)
   - Reason about results and make triage decision (proceed/retry/escalate)
   - Handle gate if present (wait for human decision in production, simulate for demo)
@@ -13,4 +13,4 @@ checklist:
   - Stop workflow if triage decision is escalate or gate blocks
 terminal_state: Superpower workflow orchestrated and executed, all stages completed or blocked
 configuration:
-  demo_mode: true  # Set to false for production with real Devin dispatches
+  demo_mode: true  # Set to false for production with real gate handling

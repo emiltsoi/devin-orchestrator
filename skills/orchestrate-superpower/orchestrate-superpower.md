@@ -1,6 +1,6 @@
 # Orchestrate Superpower Workflow
 
-You are the orchestrator. Your job is to load the superpower manifest and execute each stage using skill_invoker to dispatch Devin, reasoning through results and making triage decisions.
+You are the orchestrator. Your job is to load the superpower manifest and execute each stage directly, reasoning through results and making triage decisions.
 
 ## Process
 
@@ -11,51 +11,33 @@ You are the orchestrator. Your job is to load the superpower manifest and execut
 
 ### 2. Execute Stages
 For each stage in the manifest:
-- Load skill definition and narrative
-- **Dispatch skill using skill_invoker.invoke_skill() to call Devin**
+- Load skill definition and narrative from `~/.devin-orchestrator/skills/{skill_name}/`
+- **Execute the skill logic directly** (you are the worker, not a dispatcher)
 - Read output artifacts
 - Validate structural floor (no TODO, no placeholders, non-empty)
 - Reason about results
 - Make triage decision (proceed/retry/escalate)
 - Handle gate if present
 
-### 3. Skill Invocation (IMPORTANT)
-You MUST use skill_invoker directly to dispatch Devin. Do NOT execute the skill yourself - dispatch it to Devin.
+### 3. Skill Execution (IMPORTANT)
+You MUST execute the skill logic directly. Do NOT dispatch to external processes - you are the worker.
 
-First, add the global orchestrator to Python path:
+Load the skill definition and narrative:
 ```python
-import sys
 from pathlib import Path
-sys.path.insert(0, str(Path.home() / ".devin-orchestrator" / "workflow-engine"))
+import yaml
+
+skill_dir = Path.home() / ".devin-orchestrator" / "skills" / stage['skill']
+skill_def = yaml.safe_load((skill_dir / f"{stage['skill']}.yaml").read_text())
+skill_narrative = (skill_dir / f"{stage['skill']}.md").read_text()
 ```
 
-Then import and use skill_invoker:
-```python
-from skill_invoker import SkillInvoker
-from config_loader import ConfigLoader
-
-config = ConfigLoader.load()
-skill_invoker = SkillInvoker(demo_mode=False)  # Set to True for testing
-
-# Dispatch skill to Devin
-result = skill_invoker.invoke_skill(
-    skill_name=stage['skill'],
-    context={'session_id': session_id, 'stage': stage['name'], 'skill': stage['skill']},
-    workspace=str(session_dir),
-    focused_context=required_artifacts,
-    is_reviewer=(stage['skill'] == 'requesting-code-review')
-)
-```
-
-Parameters:
-- skill_name: Name of the skill to dispatch (e.g., brainstorming, writing-plans)
-- context: Dictionary with session_id, stage, skill
-- workspace: Path to session directory
-- focused_context: Required artifacts from previous stages
-- is_reviewer: true if this is a reviewer stage (requesting-code-review), false otherwise
-- demo_mode: true for testing (simulated dispatch), false for production (real Devin dispatch)
-
-The result object has success, session_id, output, and error fields.
+Execute the skill by following the skill narrative:
+- Read the skill narrative (markdown file)
+- Follow the checklist and instructions
+- Use your available tools to execute the skill logic
+- Produce the required artifacts
+- Follow the iron_law constraints
 
 ### 4. Structural Floor Validation
 Check each output artifact:
@@ -68,7 +50,7 @@ If structural floor fails: triage decision = retry
 
 ### 5. Triage Decision
 Based on:
-- Skill invocation success/failure
+- Skill execution success/failure
 - Structural floor validation
 - Reviewer verdict (if reviewer stage)
 - Gate status (if gate present)
@@ -91,17 +73,13 @@ If stage has a gate:
 - Update status.md after each stage
 - Append to session-audit.md after each stage
 
-## Demo Mode
-When `demo_mode: true` in configuration:
-- Skip real Devin dispatches
-- Simulate skill execution success
-- Create placeholder artifacts
-- Simulate gate approval
-
 ## Important
-- You are the orchestrator, not a mechanical script
-- **You MUST use skill_invoker.invoke_skill() to dispatch Devin for each stage**
-- Do NOT execute skills yourself - dispatch them to Devin
+- You are the orchestrator AND the worker
+- **You MUST execute skill logic directly using your available tools**
+- Do NOT dispatch to external processes - you are the worker
+- Load skill definitions and narratives from global location
+- Follow skill checklists and instructions
+- Produce required artifacts
 - Reason through each stage's results
 - Make intelligent triage decisions
 - Handle gates appropriately
