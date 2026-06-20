@@ -1,9 +1,11 @@
 name: orchestrate-superpower
-iron_law: "You are the orchestrator. Load the manifest, dispatch each stage using skill_invoker, reason through results, handle gates, and make triage decisions. Do NOT use mechanical scripts - orchestrate directly."
-announcement: Orchestrating superpower workflow using skill_invoker
+iron_law: "You MUST use skill_invoker.invoke_skill() to dispatch Devin for each stage. Do NOT execute skills yourself - dispatch them to Devin. Load manifest, dispatch each stage using skill_invoker, reason through results, handle gates, and make triage decisions."
+announcement: Orchestrating superpower workflow using skill_invoker to dispatch Devin
 checklist:
   - Load superpower manifest from workflows/superpower.manifest.yaml
-  - For each stage in manifest: dispatch skill via skill_invoker.invoke_skill()
+  - Add ~/.devin-orchestrator to Python path
+  - Import skill_invoker and config_loader
+  - For each stage in manifest: dispatch skill via skill_invoker.invoke_skill() to call Devin
   - Read and validate output artifacts (structural floor)
   - Reason about results and make triage decision (proceed/retry/escalate)
   - Handle gate if present (wait for human decision in production, simulate for demo)

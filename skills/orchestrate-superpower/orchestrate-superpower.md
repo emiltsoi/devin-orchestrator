@@ -1,6 +1,6 @@
 # Orchestrate Superpower Workflow
 
-You are the orchestrator. Your job is to load the superpower manifest and execute each stage using skill_invoker, reasoning through results and making triage decisions.
+You are the orchestrator. Your job is to load the superpower manifest and execute each stage using skill_invoker to dispatch Devin, reasoning through results and making triage decisions.
 
 ## Process
 
@@ -12,20 +12,40 @@ You are the orchestrator. Your job is to load the superpower manifest and execut
 ### 2. Execute Stages
 For each stage in the manifest:
 - Load skill definition and narrative
-- Dispatch skill using `skill_invoker.invoke_skill()`
+- **Dispatch skill using skill_invoker.invoke_skill() to call Devin**
 - Read output artifacts
 - Validate structural floor (no TODO, no placeholders, non-empty)
 - Reason about results
 - Make triage decision (proceed/retry/escalate)
 - Handle gate if present
 
-### 3. Skill Invocation
-Use `skill_invoker.invoke_skill()` with:
-- `skill_name`: from manifest
-- `context`: session_id, stage, skill
-- `workspace`: session directory
-- `focused_context`: required artifacts from previous stages
-- `is_reviewer`: true for reviewer stages (requesting-code-review)
+### 3. Skill Invocation (IMPORTANT)
+You MUST use skill_invoker to dispatch Devin. Do NOT execute the skill yourself - dispatch it to Devin.
+
+First, add the global orchestrator to Python path:
+```python
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.home() / ".devin-orchestrator"))
+```
+
+Then import and use skill_invoker:
+```python
+from skill_invoker import SkillInvoker
+from config_loader import ConfigLoader
+
+config = ConfigLoader.load()
+skill_invoker = SkillInvoker(demo_mode=False)  # Set to True for testing
+
+# Dispatch skill to Devin
+result = skill_invoker.invoke_skill(
+    skill_name=stage['skill'],
+    context={'session_id': session_id, 'stage': stage['name'], 'skill': stage['skill']},
+    workspace=str(session_dir),
+    focused_context=required_artifacts,
+    is_reviewer=(stage['skill'] == 'requesting-code-review')
+)
+```
 
 ### 4. Structural Floor Validation
 Check each output artifact:
@@ -68,47 +88,10 @@ When `demo_mode: true` in configuration:
 - Create placeholder artifacts
 - Simulate gate approval
 
-## Example Orchestration
-
-```python
-from skill_invoker import SkillInvoker
-from config_loader import ConfigLoader
-import yaml
-
-config = ConfigLoader.load()
-skill_invoker = SkillInvoker(demo_mode=True)
-
-# Load manifest
-with open(config.workflows_dir / "superpower.manifest.yaml") as f:
-    manifest = yaml.safe_load(f)
-
-# Execute stages
-for stage in manifest['stages']:
-    # Dispatch skill
-    result = skill_invoker.invoke_skill(
-        skill_name=stage['skill'],
-        context={'session_id': session_id, 'stage': stage['name']},
-        workspace=session_dir
-    )
-    
-    # Validate artifacts
-    structural_result = validate_structural(stage['output_artifacts'])
-    
-    # Make triage decision
-    if structural_result == 'PASS':
-        triage_decision = 'proceed'
-    else:
-        triage_decision = 'retry'
-    
-    # Handle gate
-    if stage['gate'] != 'none':
-        gate_verdict = handle_gate(stage['gate'])
-        if gate_verdict == 'BLOCK':
-            break
-```
-
 ## Important
 - You are the orchestrator, not a mechanical script
+- **You MUST use skill_invoker.invoke_skill() to dispatch Devin for each stage**
+- Do NOT execute skills yourself - dispatch them to Devin
 - Reason through each stage's results
 - Make intelligent triage decisions
 - Handle gates appropriately
