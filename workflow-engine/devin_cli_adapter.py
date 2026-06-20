@@ -150,13 +150,16 @@ class DevinCliAdapter:
             cmd.extend(['--model', self.model])
 
         # Add focused context artifacts if provided
+        # Note: Devin CLI doesn't support --context, so we inject into prompt instead
         if focused_context:
+            prompt += "\n\n## Focused Context Artifacts\n"
             for artifact_path in focused_context:
-                cmd.extend(['--context', artifact_path])
+                prompt += f"- {artifact_path}\n"
 
         # Add correction artifact if provided
+        # Note: Devin CLI doesn't support --correction, so we inject into prompt instead
         if correction_artifact:
-            cmd.extend(['--correction', correction_artifact])
+            prompt += f"\n\n## Correction Artifact\n- {correction_artifact}\n"
 
         # Add print and prompt
         cmd.extend(['--print', prompt])

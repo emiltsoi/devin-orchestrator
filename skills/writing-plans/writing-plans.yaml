@@ -1,5 +1,5 @@
 name: writing-plans
-iron_law: Write comprehensive implementation plans assuming the engineer has zero context for our codebase. Document everything they need to know: which files to touch for each task, code, testing, docs, how to test it.
+iron_law: "Write comprehensive implementation plans assuming the engineer has zero context for our codebase. Document everything they need to know: which files to touch for each task, code, testing, docs, how to test it."
 announcement: Using writing-plans skill to create the implementation plan.
 checklist:
   - Scope check — ensure spec covers single subsystem
