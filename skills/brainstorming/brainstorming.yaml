@@ -6,11 +6,25 @@ checklist:
   - Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
   - Propose 2-3 approaches — with trade-offs and your recommendation
   - Present design — in sections scaled to their complexity, get user approval after each section
-  - Optional: Adversarial review — if enabled, conduct multi-perspective review before final approval
+  - Conditional: Adversarial review — auto-trigger if complexity/risk thresholds met
   - Write design doc — save to design.md (include adversarial review findings if conducted)
   - Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
   - User reviews written spec — ask user to review the spec file before proceeding
 terminal_state: Design approved and saved to design.md, ready to invoke writing-plans skill
 configuration:
-  use_adversarial_review: false
-  adversarial_review_mode: standard
+  adversarial_review_policy: conditional  # always, never, conditional
+  adversarial_review_mode: standard  # fast, standard, deep
+  adversarial_review_triggers:
+    complexity:
+      sections_threshold: 10  # auto-trigger if design has > 10 sections
+      files_threshold: 5  # auto-trigger if design affects > 5 files
+      size_threshold: 500  # auto-trigger if design document > 500 lines
+    risk_keywords:
+      - security
+      - data_loss
+      - breaking
+      - performance
+      - critical
+      - production
+      - deployment
+    user_override: true  # allow manual override via flag

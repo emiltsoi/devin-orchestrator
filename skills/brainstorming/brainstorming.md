@@ -53,8 +53,20 @@ You MUST create a task for each of these items and complete them in order:
    - Get user approval after each section
    - Revise based on feedback
 
-5. **Optional: Adversarial review** (if enabled)
-   - Invoke adversarial-review skill with the design proposal
+5. **Conditional: Adversarial review** (if policy is conditional and triggers met)
+   - Check if adversarial review should be triggered based on policy
+   - **Policy modes:**
+     - `always`: Always trigger adversarial review
+     - `never`: Never trigger adversarial review
+     - `conditional`: Trigger only if complexity/risk thresholds met
+   - **Complexity triggers:**
+     - Design has > 10 sections
+     - Design affects > 5 files
+     - Design document > 500 lines
+   - **Risk triggers:**
+     - Design contains risk keywords (security, data_loss, breaking, performance, critical, production, deployment)
+   - **User override:** Manual flag can force enable/disable regardless of policy
+   - If triggered, invoke adversarial-review skill with the design proposal
    - Dispatch 4 personas: Advocate, Skeptic, Oracle, Contrarian
    - Synthesize results into structured verdict (allow/allow_with_conditions/deny)
    - Include top_risks, required_checks, missing_evidence in design document
