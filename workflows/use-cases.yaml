@@ -1,0 +1,96 @@
+# Use Case Registry
+# Defines available use cases for the orchestrator with their characteristics
+
+use_cases:
+  - id: rca
+    name: Root Cause Analysis
+    type: investigation
+    workflow: rca
+    description: "Investigation-only workflow for analyzing incidents, bugs, or failures. Read-only git operations."
+    input_required:
+      - incident_report
+      - logs
+      - reproduction_steps
+    output:
+      - rca_document
+      - fix_recommendations
+    git_operations: read_only
+    session_id_format: RCA-NNN
+    slash_command: /rca
+
+  - id: pr_review
+    name: Pull Request Review
+    type: review
+    workflow: pr_review
+    description: "Review-only workflow for evaluating pull requests. Read-only git operations."
+    input_required:
+      - pr_url
+      - diff
+      - pr_description
+    output:
+      - review_findings
+      - approval_decision
+    git_operations: read_only
+    session_id_format: PRREVIEW-NNN
+    slash_command: /pr-review
+
+  - id: code_review
+    name: Code Review
+    type: review
+    workflow: code_review
+    description: "Review-only workflow for evaluating code changes. Read-only git operations."
+    input_required:
+      - code_diff
+      - files_to_review
+      - review_criteria
+    output:
+      - review_findings
+      - approval_decision
+    git_operations: read_only
+    session_id_format: CODEREVIEW-NNN
+    slash_command: /code-review
+
+  - id: gated_change
+    name: Gated Change (Superpower)
+    type: development
+    workflow: superpower
+    description: "Full development workflow for implementing features and bug fixes. Full git operations."
+    input_required:
+      - feature_request
+    output:
+      - completed_feature
+      - merged_code
+    git_operations: full
+    session_id_format: SUPERPOWER-NNN
+    slash_command: /superpower
+
+# Use case types and their characteristics
+use_case_types:
+  investigation:
+    description: "Read-only investigation workflows"
+    git_operations: read_only
+    skills:
+      - systematic-debugging
+      - verification-before-completion
+    typical_duration: "30-60 minutes"
+
+  review:
+    description: "Read-only review workflows"
+    git_operations: read_only
+    skills:
+      - requesting-code-review
+      - swe-compliance
+    typical_duration: "15-30 minutes"
+
+  development:
+    description: "Full development workflows with git operations"
+    git_operations: full
+    skills:
+      - brainstorming
+      - using-git-worktrees
+      - writing-plans
+      - subagent-driven-development
+      - test-driven-development
+      - requesting-code-review
+      - finishing-a-development-branch
+    typical_duration: "2-4 hours"

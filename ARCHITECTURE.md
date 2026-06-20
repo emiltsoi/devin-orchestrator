@@ -7,6 +7,7 @@ related:
   - https://github.com/obra/superpowers
   - workflows/superpower.manifest.yaml
   - workflows/superpower.runbook.md
+  - workflows/use-cases.yaml
   - skills/README.md
 ---
 
@@ -15,6 +16,13 @@ related:
 ## Executive Summary
 
 This design implements the [obra/superpowers](https://github.com/obra/superpowers) methodology as the canonical workflow for AI-assisted software development. The architecture separates **skills** (process disciplines) from **harness mechanisms** (transport adapters), enabling the same methodology to work across Windsurf Cascade, Claude Code, Devin CLI, and future platforms.
+
+**Use Case Taxonomy**: The orchestrator supports multiple use cases organized by type:
+- **Investigation**: RCA (Root Cause Analysis) - read-only, no git write operations
+- **Review**: PR Review, Code Review - read-only, no git write operations
+- **Development**: Gated Change (Superpower) - full git operations, implementation
+
+See `workflows/use-cases.yaml` for the complete use case registry.
 
 **Cross-Platform Design**: The harness is designed to be platform-agnostic. Skills, workflows, and contracts are YAML/markdown-based and work on any platform. Platform-specific concerns (PowerShell vs Bash, file paths, etc.) are isolated in transport adapters and execution scripts.
 
