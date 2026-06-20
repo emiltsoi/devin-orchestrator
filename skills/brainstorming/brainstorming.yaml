@@ -6,7 +6,11 @@ checklist:
   - Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
   - Propose 2-3 approaches — with trade-offs and your recommendation
   - Present design — in sections scaled to their complexity, get user approval after each section
-  - Write design doc — save to design.md
+  - Optional: Adversarial review — if enabled, conduct multi-perspective review before final approval
+  - Write design doc — save to design.md (include adversarial review findings if conducted)
   - Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
   - User reviews written spec — ask user to review the spec file before proceeding
 terminal_state: Design approved and saved to design.md, ready to invoke writing-plans skill
+configuration:
+  use_adversarial_review: false
+  adversarial_review_mode: standard

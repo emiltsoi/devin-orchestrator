@@ -25,10 +25,11 @@ You MUST create a task for each of these items and complete them in order:
 2. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
 3. **Propose 2-3 approaches** — with trade-offs and your recommendation
 4. **Present design** — in sections scaled to their complexity, get user approval after each section
-5. **Write design doc** — save to `design.md`
-6. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope
-7. **User reviews written spec** — ask user to review the spec file before proceeding
-8. **Transition to implementation** — invoke writing-plans skill to create implementation plan
+5. **Optional: Adversarial review** — if enabled, conduct multi-perspective review before final approval
+6. **Write design doc** — save to `design.md` (include adversarial review findings if conducted)
+7. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope
+8. **User reviews written spec** — ask user to review the spec file before proceeding
+9. **Transition to implementation** — invoke writing-plans skill to create implementation plan
 
 ## The Process
 
@@ -52,23 +53,31 @@ You MUST create a task for each of these items and complete them in order:
    - Get user approval after each section
    - Revise based on feedback
 
-5. **Write design document**
+5. **Optional: Adversarial review** (if enabled)
+   - Invoke adversarial-review skill with the design proposal
+   - Dispatch 4 personas: Advocate, Skeptic, Oracle, Contrarian
+   - Synthesize results into structured verdict (allow/allow_with_conditions/deny)
+   - Include top_risks, required_checks, missing_evidence in design document
+   - Use adversarial review findings to inform final approval
+
+6. **Write design document**
    - Save to `design.md`
    - Include all approved sections
    - Document decisions and trade-offs
+   - Include adversarial review findings if conducted
 
-6. **Spec self-review**
+7. **Spec self-review**
    - Check for placeholders
    - Check for contradictions
    - Check for ambiguity
    - Check scope boundaries
 
-7. **User review**
+8. **User review**
    - Ask user to review the spec file
    - Address any feedback
    - Get final approval
 
-8. **Transition to implementation**
+9. **Transition to implementation**
    - Invoke writing-plans skill
    - Do NOT invoke any other implementation skill
 
