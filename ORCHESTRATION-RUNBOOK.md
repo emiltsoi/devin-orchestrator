@@ -212,6 +212,8 @@ Cascade must call these deterministic tools at specific points to ensure reprodu
 | `append_audit(...)` | After every stage decision | Appends structured entry to session-audit.md |
 | `write_run_jsonl(entry)` | After every stage decision | Appends machine-readable entry to run.jsonl for resumability |
 | `git_ops(branch, commit_message)` | After gated stages (optional) | Commits to implementation branch if policy requires |
+| `verify_compliance_block(block_verdict, file_path)` | After reviewer BLOCK verdict | Independently verifies compliance reviewer BLOCK verdicts (hallucination guard) |
+| `check_leaf_module_boundary(target_module, workspace)` | Before coder dispatch | Verifies target module respects leaf module boundary (coupling ≤2) |
 
 **Tool signatures (for reference):**
 ```python
@@ -237,11 +239,77 @@ Cascade must call these deterministic tools at specific points to ensure reprodu
 # git_ops(branch, commit_message)
 # Input: branch (str), commit_message (str)
 # Performs: git checkout -b <branch>, git add, git commit
+
+# verify_compliance_block(block_verdict, file_path)
+# Input: block_verdict (str), file_path (Path)
+# Returns: { "verified": bool, "notes": list[str] }
+# Purpose: Independently verify compliance reviewer BLOCK verdicts (hallucination guard)
+# Note: Compliance reviewers hallucinate ~70% of syntax claims on async code
+
+# check_leaf_module_boundary(target_module, workspace)
+# Input: target_module (Path), workspace (Path)
+# Returns: { "is_leaf": bool, "coupling_count": int }
+# Purpose: Verify target module respects leaf module boundary (coupling ≤2)
+# Note: SWE-1.6 excels at leaf modules but lacks reasoning depth for cross-cutting work
 ```
 
 ---
 
-## 6. Per-Skill Context Manifest
+## 6. Devin Dispatch Protocol
+
+Cascade dispatches to SWE-1.6 (free tier) via Devin CLI with specific guardrails based on learned behavior:
+
+### Skill Loading via Description Matching
+
+Devin CLI loads skills via description matching in `-p` mode. Skills are installed in `workflow-engine/skills/` and automatically injected when their description matches prompt content.
+
+**Installed skills:**
+- `ponytail` - YAGNI/laziness discipline (triggers on "coding dispatch and implementation task")
+- `swe-compliance` - Ruthless compliance reviewer (triggers on "compliance review task, code verification, artifact audit, and quality check")
+
+**Trigger phrases in prompts:**
+- Coder dispatch: "This is a coding dispatch and implementation task."
+- Reviewer dispatch: "This is a compliance review task, code verification, artifact audit, and quality check."
+
+### Guardrails
+
+**1. Leaf modules only (coupling ≤2)**
+- Before dispatching coder, call `check_leaf_module_boundary(target_module, workspace)`
+- If `is_leaf == False`, ESCALATE to human (SWE-1.6 lacks reasoning depth for cross-cutting work)
+- A leaf module imports from ≤2 other modules and no other module depends on it
+
+**2. Harness timeout enforcement**
+- Devin CLI has no `--max-turns` flag
+- Harness enforces timeout wall-clock (default: 30 turns ≈ 300 seconds)
+- If dispatch exceeds timeout, process is killed and artifact is discarded
+
+**3. Independent verification for reviewer BLOCK verdicts**
+- Compliance reviewers hallucinate ~70% of syntax claims on async code
+- After reviewer BLOCK verdict, call `verify_compliance_block(block_verdict, file_path)`
+- For syntax claims: `py_compile` is ground truth
+- For behavioral claims: read the file yourself
+- Trust compliance BLOCKs only on sync/pandas code; escalate async-code BLOCKs to human
+
+**4. Coder devictory guard**
+- SWE-1.6 may claim completion without writing files
+- Always dispatch compliance reviewer after every coder
+- Verify with `grep`/`stat`/`git diff` before accepting completion claims
+
+### When to Use SWE-1.6 vs Higher-Quality Model
+
+| Use SWE-1.6 | Use Higher-Quality Model |
+|---|---|
+| Single-file or 2-file leaf modules | Architecture review, cross-cutting work |
+| The spec is tight — exact behavior, no ambiguity | The spec needs interpretation or design |
+| The task is boring and mechanical | The task requires judgment or adversarial thinking |
+| You need 8-10 workers in parallel, free | You need reasoning depth |
+| Compliance review (spec adherence, file existence) | Security surface analysis |
+
+**When in doubt:** Would you give this task to a junior who follows instructions exactly, or a senior who thinks before acting? SWE-1.6 is the junior.
+
+---
+
+## 7. Per-Skill Context Manifest
 
 Each skill declares exactly which artifacts are injected into its worker dispatch. This preserves worker neutrality by limiting context to only what's needed.
 
@@ -264,7 +332,7 @@ Each skill declares exactly which artifacts are injected into its worker dispatc
 
 ---
 
-## 7. Resumability Protocol
+## 8. Resumability Protocol
 
 A fresh Cascade session can resume from a previous session using:
 
@@ -292,7 +360,7 @@ A fresh Cascade session can resume from a previous session using:
 
 ---
 
-## 8. Example: Feature Workflow Runbook
+## 9. Example: Feature Workflow Runbook
 
 ```markdown
 # Feature Workflow Runbook

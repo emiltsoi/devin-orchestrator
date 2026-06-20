@@ -50,7 +50,8 @@ class SkillInvoker:
         workspace: Optional[str] = None,
         custom_prompt: Optional[str] = None,
         focused_context: Optional[list] = None,
-        correction_artifact: Optional[str] = None
+        correction_artifact: Optional[str] = None,
+        is_reviewer: bool = False
     ) -> SkillInvocationResult:
         """
         Invoke a skill using the devin-cli transport adapter
@@ -62,6 +63,7 @@ class SkillInvoker:
             custom_prompt: Optional custom prompt (for retry with feedback)
             focused_context: Optional list of artifact paths to inject into worker dispatch
             correction_artifact: Optional path to correction artifact for retry loops
+            is_reviewer: Whether this is a reviewer dispatch (triggers swe-compliance skill)
 
         Returns:
             SkillInvocationResult with success status and output
@@ -98,7 +100,7 @@ class SkillInvoker:
         if custom_prompt:
             prompt = custom_prompt
         else:
-            prompt = self.build_skill_prompt(skill_name, skill_def, skill_narrative, context, focused_context, correction_artifact)
+            prompt = self.build_skill_prompt(skill_name, skill_def, skill_narrative, context, focused_context, correction_artifact, is_reviewer)
 
         # Generate session ID for tracking
         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"
@@ -150,7 +152,8 @@ class SkillInvoker:
         skill_narrative: str,
         context: Dict[str, Any],
         focused_context: Optional[list] = None,
-        correction_artifact: Optional[str] = None
+        correction_artifact: Optional[str] = None,
+        is_reviewer: bool = False
     ) -> str:
         """
         Build prompt for skill invocation
@@ -162,11 +165,22 @@ class SkillInvoker:
             context: Context data
             focused_context: Optional list of artifact paths to inject into worker dispatch
             correction_artifact: Optional path to correction artifact for retry loops
+            is_reviewer: Whether this is a reviewer dispatch (triggers swe-compliance skill)
 
         Returns:
             Prompt string
         """
+        # Add skill trigger phrases for description matching
+        # These trigger the ponytail and swe-compliance skills via description matching
+        trigger_phrase = ""
+        if is_reviewer:
+            trigger_phrase = "This is a compliance review task, code verification, artifact audit, and quality check."
+        else:
+            trigger_phrase = "This is a coding dispatch and implementation task."
+
         prompt = f"""# Skill Invocation: {skill_name}
+
+{trigger_phrase}
 
 ## Context
 """
