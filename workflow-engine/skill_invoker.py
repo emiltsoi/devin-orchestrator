@@ -25,6 +25,10 @@ class SkillInvoker:
 
     Loads skill definitions and uses transport adapters to spawn
     agent sessions for skill execution.
+
+    Caching: Skill definitions and narratives are cached in-memory
+    after first load to avoid redundant file I/O. Cache is per-instance
+    and can be cleared via clear_skill_cache() if needed.
     """
 
     def __init__(self, harness_root: Path, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous"):
@@ -38,10 +42,14 @@ class SkillInvoker:
             permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
         """
         self.harness_root = harness_root
-        self.skills_dir = harness_root / 'skills'
+        self.skills_dir = harness_root.parent / 'skills'
         self.devin_cli_path = devin_cli_path
         self.model = model
         self.permission_mode = permission_mode
+        self._skill_definition_cache: Dict[str, Dict[str, Any]] = {}
+        self._skill_narrative_cache: Dict[str, str] = {}
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     def invoke_skill(
         self,
@@ -77,7 +85,7 @@ class SkillInvoker:
             )
 
         # Load skill definition
-        skill_def = self._load_skill_definition(skill_name)
+        skill_def = self.load_skill_definition(skill_name)
         if not skill_def:
             return SkillInvocationResult(
                 success=False,
@@ -87,7 +95,7 @@ class SkillInvoker:
             )
 
         # Load skill narrative
-        skill_narrative = self._load_skill_narrative(skill_name)
+        skill_narrative = self.load_skill_narrative(skill_name)
         if not skill_narrative:
             return SkillInvocationResult(
                 success=False,
@@ -107,8 +115,9 @@ class SkillInvoker:
 
         try:
             # Use simple adapter with --print mode
+            # Disable skill injection since we load skills directly via skill_invoker
             adapter = DevinCliAdapter(self.devin_cli_path, workspace, self.model, self.permission_mode)
-            result = adapter.invoke(prompt, timeout=300, focused_context=focused_context, correction_artifact=correction_artifact)  # 5 minute timeout for skills
+            result = adapter.invoke(prompt, timeout=300, focused_context=focused_context, correction_artifact=correction_artifact, enable_skills=False)  # 5 minute timeout for skills
 
             return SkillInvocationResult(
                 success=result.success,
@@ -126,24 +135,65 @@ class SkillInvoker:
             )
 
     def load_skill_definition(self, skill_name: str) -> Optional[Dict[str, Any]]:
-        """Load skill YAML definition"""
+        """Load skill YAML definition with caching"""
+        # Check cache first
+        if skill_name in self._skill_definition_cache:
+            self._cache_hits += 1
+            return self._skill_definition_cache[skill_name]
+
         import yaml
 
-        skill_yaml = self.skills_dir / f"{skill_name}.yaml"
+        # Try subdirectory structure first (skills/skill_name/skill_name.yaml)
+        skill_yaml = self.skills_dir / skill_name / (skill_name + ".yaml")
+        if not skill_yaml.exists():
+            # Try flat structure (skills/skill_name.yaml)
+            skill_yaml = self.skills_dir / (skill_name + ".yaml")
+
         if not skill_yaml.exists():
             return None
 
         with open(skill_yaml, 'r', encoding='utf-8') as f:
-            return yaml.safe_load(f)
+            skill_def = yaml.safe_load(f)
+
+        # Cache the loaded definition
+        self._cache_misses += 1
+        self._skill_definition_cache[skill_name] = skill_def
+        return skill_def
 
     def load_skill_narrative(self, skill_name: str) -> Optional[str]:
-        """Load skill markdown narrative"""
-        skill_md = self.skills_dir / f"{skill_name}.md"
+        """Load skill markdown narrative with caching"""
+        # Check cache first
+        if skill_name in self._skill_narrative_cache:
+            self._cache_hits += 1
+            return self._skill_narrative_cache[skill_name]
+
+        # Try subdirectory structure first (skills/skill_name/skill_name.md)
+        skill_md = self.skills_dir / skill_name / (skill_name + ".md")
+        if not skill_md.exists():
+            # Try flat structure (skills/skill_name.md)
+            skill_md = self.skills_dir / (skill_name + ".md")
+
         if not skill_md.exists():
             return None
 
         with open(skill_md, 'r', encoding='utf-8') as f:
-            return f.read()
+            skill_narrative = f.read()
+
+        # Cache the loaded narrative
+        self._cache_misses += 1
+        self._skill_narrative_cache[skill_name] = skill_narrative
+        return skill_narrative
+
+    def clear_skill_cache(self) -> None:
+        """
+        Clear the skill definition and narrative caches
+
+        Useful for testing or if skill files are updated during runtime
+        """
+        self._skill_definition_cache.clear()
+        self._skill_narrative_cache.clear()
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     def build_skill_prompt(
         self,

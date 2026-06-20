@@ -25,7 +25,8 @@ class TestSkillInvoker(unittest.TestCase):
         """Set up test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
-        self.harness_root = self.temp_path
+        self.harness_root = self.temp_path / 'harness'
+        self.harness_root.mkdir()
         self.skills_dir = self.temp_path / 'skills'
         self.skills_dir.mkdir()
         
@@ -121,8 +122,8 @@ class TestSkillInvoker(unittest.TestCase):
 
     def test_load_skill_definition(self):
         """Should load skill YAML correctly"""
-        skill_def = self.skill_invoker._load_skill_definition('brainstorming')
-        
+        skill_def = self.skill_invoker.load_skill_definition('brainstorming')
+
         self.assertIsNotNone(skill_def)
         self.assertEqual(skill_def['name'], 'brainstorming')
         self.assertEqual(skill_def['schema_version'], 1)
@@ -130,28 +131,28 @@ class TestSkillInvoker(unittest.TestCase):
 
     def test_load_skill_definition_not_found(self):
         """Should return None for missing skill YAML"""
-        skill_def = self.skill_invoker._load_skill_definition('nonexistent')
-        
+        skill_def = self.skill_invoker.load_skill_definition('nonexistent')
+
         self.assertIsNone(skill_def)
 
     def test_load_skill_narrative(self):
         """Should load skill markdown correctly"""
-        skill_narrative = self.skill_invoker._load_skill_narrative('brainstorming')
-        
+        skill_narrative = self.skill_invoker.load_skill_narrative('brainstorming')
+
         self.assertIsNotNone(skill_narrative)
         self.assertIn('Brainstorming Skill', skill_narrative)
         self.assertIn('Iron Law', skill_narrative)
 
     def test_load_skill_narrative_not_found(self):
         """Should return None for missing skill markdown"""
-        skill_narrative = self.skill_invoker._load_skill_narrative('nonexistent')
-        
+        skill_narrative = self.skill_invoker.load_skill_narrative('nonexistent')
+
         self.assertIsNone(skill_narrative)
 
     def test_build_skill_prompt(self):
         """Should build correct prompt with context and skill content"""
-        skill_def = self.skill_invoker._load_skill_definition('brainstorming')
-        skill_narrative = self.skill_invoker._load_skill_narrative('brainstorming')
+        skill_def = self.skill_invoker.load_skill_definition('brainstorming')
+        skill_narrative = self.skill_invoker.load_skill_narrative('brainstorming')
         
         context = {
             'session_id': 'TEST-005',
@@ -159,7 +160,7 @@ class TestSkillInvoker(unittest.TestCase):
             'required_artifacts': ['requirement.md']
         }
         
-        prompt = self.skill_invoker._build_skill_prompt(
+        prompt = self.skill_invoker.build_skill_prompt(
             'brainstorming',
             skill_def,
             skill_narrative,
@@ -247,6 +248,7 @@ class TestSkillInvoker(unittest.TestCase):
             self.assertFalse(result.success)
             self.assertIsNone(result.session_id)
             self.assertIsNone(result.output)
+            self.assertIsNotNone(result.error)
             self.assertIn('Adapter error', result.error)
 
     def test_session_id_generation(self):
@@ -266,6 +268,77 @@ class TestSkillInvoker(unittest.TestCase):
             self.assertIsNotNone(result.session_id)
             self.assertIn('brainstorming', result.session_id)
             self.assertIn('TEST-009', result.session_id)
+
+    def test_skill_definition_caching(self):
+        """Should cache skill definitions after first load"""
+        # First load - cache miss
+        skill_def_1 = self.skill_invoker.load_skill_definition('brainstorming')
+        self.assertIsNotNone(skill_def_1)
+        initial_misses = self.skill_invoker._cache_misses
+        initial_hits = self.skill_invoker._cache_hits
+
+        # Second load - cache hit
+        skill_def_2 = self.skill_invoker.load_skill_definition('brainstorming')
+        self.assertIsNotNone(skill_def_2)
+        self.assertEqual(skill_def_1, skill_def_2)
+
+        # Verify cache stats
+        self.assertEqual(self.skill_invoker._cache_misses, initial_misses)
+        self.assertEqual(self.skill_invoker._cache_hits, initial_hits + 1)
+
+    def test_skill_narrative_caching(self):
+        """Should cache skill narratives after first load"""
+        # First load - cache miss
+        skill_narrative_1 = self.skill_invoker.load_skill_narrative('brainstorming')
+        self.assertIsNotNone(skill_narrative_1)
+        initial_misses = self.skill_invoker._cache_misses
+        initial_hits = self.skill_invoker._cache_hits
+
+        # Second load - cache hit
+        skill_narrative_2 = self.skill_invoker.load_skill_narrative('brainstorming')
+        self.assertIsNotNone(skill_narrative_2)
+        self.assertEqual(skill_narrative_1, skill_narrative_2)
+
+        # Verify cache stats
+        self.assertEqual(self.skill_invoker._cache_misses, initial_misses)
+        self.assertEqual(self.skill_invoker._cache_hits, initial_hits + 1)
+
+    def test_cache_stats_initialization(self):
+        """Should initialize cache stats to zero"""
+        self.assertEqual(self.skill_invoker._cache_hits, 0)
+        self.assertEqual(self.skill_invoker._cache_misses, 0)
+
+    def test_cache_independent_instances(self):
+        """Should have independent caches per SkillInvoker instance"""
+        # Create second invoker with same harness
+        invoker_2 = SkillInvoker(self.harness_root, self.devin_cli_path)
+
+        # Load skill in first invoker
+        self.skill_invoker.load_skill_definition('brainstorming')
+
+        # Second invoker should have empty cache
+        self.assertEqual(invoker_2._cache_hits, 0)
+        self.assertEqual(invoker_2._cache_misses, 0)
+        self.assertEqual(len(invoker_2._skill_definition_cache), 0)
+
+    def test_clear_skill_cache(self):
+        """Should clear all cache data and reset stats"""
+        # Load some skills to populate cache
+        self.skill_invoker.load_skill_definition('brainstorming')
+        self.skill_invoker.load_skill_narrative('brainstorming')
+
+        # Verify cache is populated
+        self.assertGreater(len(self.skill_invoker._skill_definition_cache), 0)
+        self.assertGreater(len(self.skill_invoker._skill_narrative_cache), 0)
+
+        # Clear cache
+        self.skill_invoker.clear_skill_cache()
+
+        # Verify cache is cleared
+        self.assertEqual(len(self.skill_invoker._skill_definition_cache), 0)
+        self.assertEqual(len(self.skill_invoker._skill_narrative_cache), 0)
+        self.assertEqual(self.skill_invoker._cache_hits, 0)
+        self.assertEqual(self.skill_invoker._cache_misses, 0)
 
 
 if __name__ == '__main__':
