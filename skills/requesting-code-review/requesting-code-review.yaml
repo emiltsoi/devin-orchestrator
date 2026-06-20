@@ -1,0 +1,9 @@
+name: requesting-code-review
+iron_law: Review early, review often. Never skip review because "it's simple".
+announcement: Using requesting-code-review skill to dispatch code reviewer subagent.
+checklist:
+  - Get git SHAs — BASE_SHA and HEAD_SHA
+  - Dispatch code reviewer subagent — with precise context
+  - Act on feedback — fix Critical immediately, fix Important before proceeding
+  - Push back if reviewer wrong — with technical reasoning
+terminal_state: Code review complete, findings addressed, ready to invoke finishing-a-development-branch skill

@@ -1,0 +1,13 @@
+name: subagent-driven-development
+iron_law: Fresh subagent per task + task review (spec + quality) + broad final review = high quality, fast iteration
+announcement: Using subagent-driven-development skill to execute implementation plan task-by-task.
+checklist:
+  - Pre-flight plan review — verify plan is complete and unambiguous
+  - Model selection — choose appropriate model for each task
+  - Dispatch implementer subagent per task — fresh subagent with isolated context
+  - Task review — spec compliance + code quality review after each task
+  - Handle reviewer items — address ⚠️ items from review
+  - File handoffs — pass files between subagents as needed
+  - Durable progress — track completed tasks
+  - Broad final review — whole-branch review at the end
+terminal_state: All tasks completed with reviews, ready to invoke test-driven-development skill

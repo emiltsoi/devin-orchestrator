@@ -1,0 +1,11 @@
+name: finishing-a-development-branch
+iron_law: Verify tests → Detect environment → Present options → Execute choice → Clean up
+announcement: Using finishing-a-development-branch skill to complete this work.
+checklist:
+  - Verify tests — run project's test suite
+  - Detect environment — determine workspace state
+  - Determine base branch — find merge base
+  - Present options — merge locally, push and create PR, keep as-is, discard
+  - Execute choice — perform selected action
+  - Cleanup workspace — remove worktree if appropriate
+terminal_state: Work completed and integrated (or discarded), workspace cleaned up

@@ -1,0 +1,11 @@
+name: test-driven-development
+iron_law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
+announcement: Using test-driven-development skill to enforce RED-GREEN-REFACTOR cycle.
+checklist:
+  - RED - Write failing test
+  - Verify RED - Watch it fail correctly
+  - GREEN - Write minimal code to pass
+  - Verify GREEN - Watch it pass
+  - REFACTOR - Clean up while staying green
+  - Repeat for next feature
+terminal_state: All features implemented with TDD, ready to invoke requesting-code-review skill

@@ -1,0 +1,12 @@
+name: brainstorming
+iron_law: Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it.
+announcement: Using brainstorming skill to explore user intent, requirements and design before implementation.
+checklist:
+  - Explore project context — check files, docs, recent commits
+  - Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
+  - Propose 2-3 approaches — with trade-offs and your recommendation
+  - Present design — in sections scaled to their complexity, get user approval after each section
+  - Write design doc — save to design.md
+  - Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
+  - User reviews written spec — ask user to review the spec file before proceeding
+terminal_state: Design approved and saved to design.md, ready to invoke writing-plans skill
