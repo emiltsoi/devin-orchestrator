@@ -106,9 +106,17 @@ class DevinCliAdapter:
 
         for skill_name, skill_data in self.skills.items():
             description = skill_data['description'].lower()
-            # Check if skill description matches prompt content
-            if any(keyword in prompt_lower for keyword in description.split()[:5]):  # Match on first 5 keywords
-                injected_skills.append(skill_data['content'])
+            # Match on specific trigger phrases to avoid false positives
+            # ponytail: "coding dispatch and implementation task"
+            # swe-compliance: "compliance review task, code verification, artifact audit, and quality check"
+            if skill_name == "ponytail":
+                # Trigger on "coding dispatch" or "implementation task"
+                if "coding dispatch" in prompt_lower or "implementation task" in prompt_lower:
+                    injected_skills.append(skill_data['content'])
+            elif skill_name == "swe-compliance":
+                # Trigger on "compliance review" or "code verification" or "artifact audit"
+                if "compliance review" in prompt_lower or "code verification" in prompt_lower or "artifact audit" in prompt_lower:
+                    injected_skills.append(skill_data['content'])
 
         if injected_skills:
             # Inject skills at the beginning of the prompt

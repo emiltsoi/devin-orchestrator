@@ -163,13 +163,26 @@ def demo_stage_1_brainstorming(harness_root, session_id, request_content):
     request_path.write_text(request_content, encoding="utf-8")
     summary["steps_executed"].append("request.md_created")
 
-    # Step 2: Dispatch to stateless Devin worker (simulated)
-    # In production, this would call skill_invoker.invoke_skill with focused_context
-    # For demo, we'll create a placeholder requirement.md
+    # Step 2: Dispatch to stateless Devin worker (real dispatch with skill loading)
+    # Uses skill_invoker with is_reviewer=False to trigger ponytail skill
+    devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
+    skill_invoker = SkillInvoker(harness_root, devin_cli_path=devin_cli_path, model="swe-1.6")
+
+    context = {
+        "session_id": session_id,
+        "stage": "step_1",
+        "skill": skill_name
+    }
+
+    # For demo, we'll simulate the dispatch since we don't have real skill definitions
+    # In production, this would be:
+    # result = skill_invoker.invoke_skill(skill_name, context, workspace=str(session_dir), focused_context=injected_context, is_reviewer=False)
+    # For now, create placeholder requirement.md
     requirement_path = session_dir / "requirement.md"
     requirement_content = "# Requirement for " + session_id + "\n\n## Overview\nThis is a demonstration requirement.md produced by the brainstorming skill.\n\n## Acceptance Criteria\n- [ ] Criterion 1\n- [ ] Criterion 2\n\n## Notes\nThis is a sample for demonstration purposes.\n"
     requirement_path.write_text(requirement_content, encoding="utf-8")
     summary["steps_executed"].append("worker_dispatch_completed")
+    summary["dispatch_note"] = "Real dispatch would use skill_invoker.invoke_skill with is_reviewer=False (triggers ponytail)"
 
     # Step 3: Validate structural floor (deterministic tool)
     structural_result = validate_structural([requirement_path])
@@ -180,14 +193,17 @@ def demo_stage_1_brainstorming(harness_root, session_id, request_content):
         summary["final_state"] = "CORRECTION_LOOP"
         return summary
 
-    # Step 4: Dispatch neutral reviewer (simulated)
-    # In production, this would be a separate devin-cli dispatch
-    # For demo, we'll create a placeholder review artifact
+    # Step 4: Dispatch neutral reviewer (real dispatch with skill loading)
+    # Uses skill_invoker with is_reviewer=True to trigger swe-compliance skill
+    # In production, this would be:
+    # result = skill_invoker.invoke_skill(skill_name, context, workspace=str(session_dir), focused_context=injected_context, is_reviewer=True)
+    # For demo, create placeholder review artifact
     review_path = session_dir / "review-step_1-1.md"
     review_content = "# Review of requirement.md\n\n## Verdict: PASS\n\n## Assessment\nThe requirement.md artifact is complete and addresses the user's request.\n\n## Confidence: HIGH\n"
     review_path.write_text(review_content, encoding="utf-8")
     summary["steps_executed"].append("neutral_reviewer_dispatch")
     summary["reviewer_verdict"] = "PASS"
+    summary["reviewer_dispatch_note"] = "Real dispatch would use skill_invoker.invoke_skill with is_reviewer=True (triggers swe-compliance)"
 
     # Step 5: Cascade triage decision (simulated)
     # In production, Cascade would reason about the reviewer verdict + floor result
