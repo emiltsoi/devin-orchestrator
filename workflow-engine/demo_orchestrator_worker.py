@@ -17,21 +17,18 @@ from pathlib import Path
 from orchestrator_executor import OrchestratorExecutor
 
 
-def demo_superpower_workflow(harness_root, session_id, request_content):
+def demo_superpower_workflow(session_id, request_content):
     """
     Demonstrate the superpower workflow using orchestrator_executor.
 
     Args:
-        harness_root: Root directory of the harness (workflow-engine/)
         session_id: Session identifier (e.g., "SUPERPOWER-001")
         request_content: Content for request.md
 
     Returns:
         Summary of the workflow execution
     """
-    devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
-    
-    executor = OrchestratorExecutor(harness_root, devin_cli_path)
+    executor = OrchestratorExecutor()
     
     result = executor.execute_workflow(
         session_id=session_id,
@@ -43,11 +40,10 @@ def demo_superpower_workflow(harness_root, session_id, request_content):
 
 if __name__ == "__main__":
     # Test the superpower workflow
-    harness_root = Path(__file__).parent
     session_id = "SUPERPOWER-TEST-001"
     request_content = "# Request\n\nImplement a caching layer for skill loading."
     
-    result = demo_superpower_workflow(harness_root, session_id, request_content)
+    result = demo_superpower_workflow(session_id, request_content)
     
     print("=== Superpower Workflow Demo ===")
     print("Success:", result.get("success"))

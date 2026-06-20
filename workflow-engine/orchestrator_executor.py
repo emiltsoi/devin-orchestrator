@@ -41,20 +41,26 @@ class OrchestratorExecutor:
     and follows the orchestrator–worker pattern with reasoning and triage.
     """
     
-    def __init__(self, harness_root: Path, devin_cli_path: str, model: str = "swe-1.6"):
+    def __init__(self, devin_cli_path: Optional[str] = None, model: Optional[str] = None, demo_mode: bool = True):
         """
         Initialize orchestrator executor
         
         Args:
-            harness_root: Root directory of the harness (workflow-engine/)
-            devin_cli_path: Path to devin.exe
-            model: Model to use for Devin dispatch
+            devin_cli_path: Optional path to devin.exe (defaults to global config)
+            model: Optional model to use for Devin dispatch (defaults to global config)
+            demo_mode: If True, skip real Devin dispatches and simulate (for testing)
         """
-        self.harness_root = harness_root
-        self.devin_cli_path = devin_cli_path
-        self.model = model
-        self.workflows_dir = harness_root.parent / "workflows"
-        self.skill_invoker = SkillInvoker(harness_root, devin_cli_path, model)
+        from config_loader import ConfigLoader
+        
+        config = ConfigLoader.load()
+        
+        self.harness_root = config.workflow_engine_dir
+        self.devin_cli_path = devin_cli_path or config.devin_cli_path
+        self.model = model or config.default_model
+        self.workflows_dir = config.workflows_dir
+        self.session_work_dir = config.session_work_dir
+        self.demo_mode = demo_mode
+        self.skill_invoker = SkillInvoker(devin_cli_path=self.devin_cli_path, model=self.model, demo_mode=demo_mode)
         
     def load_manifest(self, manifest_path: Path) -> Optional[Dict[str, Any]]:
         """Load workflow manifest from YAML"""
@@ -93,7 +99,7 @@ class OrchestratorExecutor:
             }
         
         # Initialize session
-        session_dir = self.harness_root / "work" / session_id
+        session_dir = self.session_work_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         
         # Create initial artifacts

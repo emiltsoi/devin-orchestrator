@@ -31,21 +31,26 @@ class SkillInvoker:
     and can be cleared via clear_skill_cache() if needed.
     """
 
-    def __init__(self, harness_root: Path, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous"):
+    def __init__(self, skills_dir: Optional[Path] = None, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous", demo_mode: bool = False):
         """
         Initialize skill invoker
 
         Args:
-            harness_root: Root directory of the harness
+            skills_dir: Optional path to skills directory (defaults to global config)
             devin_cli_path: Optional path to devin.exe (for devin-cli adapter)
             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
             permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
+            demo_mode: If True, skip real Devin dispatches and simulate (for testing)
         """
-        self.harness_root = harness_root
-        self.skills_dir = harness_root.parent / 'skills'
-        self.devin_cli_path = devin_cli_path
-        self.model = model
-        self.permission_mode = permission_mode
+        from config_loader import ConfigLoader
+        
+        config = ConfigLoader.load()
+        
+        self.skills_dir = skills_dir or config.skills_dir
+        self.devin_cli_path = devin_cli_path or config.devin_cli_path
+        self.model = model or config.default_model
+        self.permission_mode = permission_mode or config.default_permission_mode
+        self.demo_mode = demo_mode
         self._skill_definition_cache: Dict[str, Dict[str, Any]] = {}
         self._skill_narrative_cache: Dict[str, str] = {}
         self._cache_hits = 0
@@ -112,6 +117,15 @@ class SkillInvoker:
 
         # Generate session ID for tracking
         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"
+
+        # Demo mode: skip real Devin dispatch and simulate success
+        if self.demo_mode:
+            return SkillInvocationResult(
+                success=True,
+                session_id=session_id,
+                output=f"Simulated output for {skill_name} skill (demo mode)",
+                error=None
+            )
 
         try:
             # Use simple adapter with --print mode

@@ -1,0 +1,15 @@
+# Global Configuration for Devin Orchestrator
+# This file defines the global paths for skills, workflows, and workflow engine
+
+global_root: ~/.devin-orchestrator
+skills_dir: ~/.devin-orchestrator/skills
+workflows_dir: ~/.devin-orchestrator/workflows
+workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
+
+# Devin CLI configuration
+devin_cli_path: C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
+default_model: swe-1.6
+default_permission_mode: dangerous
+
+# Session configuration
+session_work_dir: ~/.devin-orchestrator/work

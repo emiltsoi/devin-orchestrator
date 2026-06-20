@@ -26,7 +26,9 @@ See `workflows/use-cases.yaml` for the complete use case registry.
 
 **Cross-Platform Design**: The harness is designed to be platform-agnostic. Skills, workflows, and contracts are YAML/markdown-based and work on any platform. Platform-specific concerns (PowerShell vs Bash, file paths, etc.) are isolated in transport adapters and execution scripts.
 
-**Deployment Model**: Per-workspace deployment with canonical harness. Each project workspace has its own orchestrator instance that pulls from the canonical devin-orchestrator library (via git submodule, npm package, or similar). This fits the Cascade/Devin environment where each workspace is self-contained.
+**Deployment Model**: Global-only deployment. Skills, workflows, and workflow engine are installed to a global location (`~/.devin-orchestrator/`) and referenced from any workspace. No per-workspace deployment needed. Single source of truth for all workspaces.
+
+**Installation**: Run `python install.py` to install devin-orchestrator to global location. Configuration is managed via `~/.devin-orchestrator/config.yaml` and environment variables.
 
 ## Core Abstractions
 
