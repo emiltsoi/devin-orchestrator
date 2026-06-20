@@ -20,32 +20,26 @@ For each stage in the manifest:
 - Handle gate if present
 
 ### 3. Skill Invocation (IMPORTANT)
-You MUST use skill_invoker to dispatch Devin. Do NOT execute the skill yourself - dispatch it to Devin.
+You MUST use the dispatch_skill.py script to dispatch Devin. Do NOT execute the skill yourself - dispatch it to Devin.
 
-First, add the global orchestrator to Python path:
-```python
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path.home() / ".devin-orchestrator"))
+Use the bash tool to call dispatch_skill.py:
+```bash
+python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode]
 ```
 
-Then import and use skill_invoker:
-```python
-from skill_invoker import SkillInvoker
-from config_loader import ConfigLoader
-
-config = ConfigLoader.load()
-skill_invoker = SkillInvoker(demo_mode=False)  # Set to True for testing
-
-# Dispatch skill to Devin
-result = skill_invoker.invoke_skill(
-    skill_name=stage['skill'],
-    context={'session_id': session_id, 'stage': stage['name'], 'skill': stage['skill']},
-    workspace=str(session_dir),
-    focused_context=required_artifacts,
-    is_reviewer=(stage['skill'] == 'requesting-code-review')
-)
+Example:
+```bash
+python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false true
 ```
+
+Parameters:
+- skill_name: Name of the skill to dispatch (e.g., brainstorming, writing-plans)
+- session_id: Session identifier (e.g., SUPERPOWER-001)
+- workspace: Path to session directory
+- is_reviewer: true if this is a reviewer stage (requesting-code-review), false otherwise
+- demo_mode: true for testing (simulated dispatch), false for production (real Devin dispatch)
+
+The script returns JSON output with success, session_id, output, and error fields.
 
 ### 4. Structural Floor Validation
 Check each output artifact:
