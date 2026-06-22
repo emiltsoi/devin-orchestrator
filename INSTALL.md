@@ -62,19 +62,21 @@ This installs devin-orchestrator to `~/.devin-orchestrator/`:
 - Workflow Engine: `~/.devin-orchestrator/workflow-engine/`
 - Config: `~/.devin-orchestrator/config.yaml`
 
-### 3. Setup Workspace
+### 3. Setup Workspace (Optional - for local overrides)
 For each workspace where you want to use devin-orchestrator:
 
 ```bash
-# Create .devin/workflows directory
+# Create .devin/workflows directory (optional - for local overrides)
 mkdir -p .devin/workflows
 
-# Copy workflow manifests
+# Copy workflow manifests (optional - for local overrides)
 cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
 cp ~/.devin-orchestrator/workflows/rca.manifest.yaml .devin/workflows/
 cp ~/.devin-orchestrator/workflows/pr_review.manifest.yaml .devin/workflows/
 cp ~/.devin-orchestrator/workflows/code_review.manifest.yaml .devin/workflows/
 ```
+
+Note: This step is optional. The canonical source is `~/.devin-orchestrator/workflows/`. Copying to `.devin/workflows/` allows per-workspace overrides.
 
 ## Usage
 
@@ -83,7 +85,7 @@ cp ~/.devin-orchestrator/workflows/code_review.manifest.yaml .devin/workflows/
 **Important:** Cascade uses the orchestrator-worker pattern. Cascade orchestrates the workflow and dispatches skills to Devin via the bash tool.
 
 When Cascade loads a workflow, it will:
-1. Read the manifest from `.devin/workflows/`
+1. Read the manifest from `~/.devin-orchestrator/workflows/` (canonical) or `.devin/workflows/` (local override)
 2. Load the orchestrate-superpower skill
 3. For each stage: dispatch skill via `dispatch_skill.py` using the bash tool
 4. Reason through results and make triage decisions
@@ -137,7 +139,8 @@ export DEVIN_DEFAULT_PERMISSION_MODE=dangerous
 ## Architecture
 
 - **Global Skills**: Stored in `~/.devin-orchestrator/skills/` (no workspace duplication)
-- **Local Workflows**: Stored in `.devin/workflows/` (Cascade requirement)
+- **Global Workflows**: Stored in `~/.devin-orchestrator/workflows/` (canonical source)
+- **Local Workflows**: Stored in `.devin/workflows/` (optional - for per-workspace overrides)
 - **Global Workflow Engine**: Stored in `~/.devin-orchestrator/workflow-engine/`
 - **Dispatch Script**: Stored in `~/.devin-orchestrator/dispatch_skill.py`
 
@@ -277,7 +280,7 @@ This will overwrite the global installation with the latest skills, workflows, a
 Check that skills are in `~/.devin-orchestrator/skills/` and config points to correct location.
 
 ### Workflow Not Found
-Check that manifests are in `.devin/workflows/` in your workspace.
+Check that manifests are in `~/.devin-orchestrator/workflows/` (canonical) or `.devin/workflows/` (if using local overrides).
 
 ### Devin CLI Not Found
 Update `devin_cli_path` in `~/.devin-orchestrator/config.yaml` to your Devin CLI path.

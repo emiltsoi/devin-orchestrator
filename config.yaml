@@ -9,6 +9,12 @@ workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
 # Devin CLI configuration
 devin_cli_path: C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
 default_model: swe-1.6
+# NOTE: default_permission_mode is set to "dangerous" for automated dispatch workflows.
+# This is intentional because:
+# 1. Automated dispatch (via skill_invoker.py) cannot handle interactive permission prompts
+# 2. The orchestrator-worker pattern requires non-interactive execution
+# 3. Security is maintained through other means: path validation, input sanitization, audit trails
+# For interactive sessions, consider using "smart" or "auto" mode instead.
 default_permission_mode: dangerous
 
 # Session configuration

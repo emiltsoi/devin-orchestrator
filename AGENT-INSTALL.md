@@ -26,9 +26,9 @@ This single command:
 ls ~/.devin-orchestrator/
 # Should show: skills/, workflows/, workflow-engine/, config.yaml
 
-# Check if workspace is set up
+# Check if workspace is set up (optional - for local overrides)
 ls .devin/workflows/
-# Should show: *.manifest.yaml files
+# Should show: *.manifest.yaml files (if copied for local overrides)
 ```
 
 ## Manual Installation (Alternative)
@@ -38,11 +38,13 @@ ls .devin/workflows/
 python install.py
 ```
 
-### Step 2: Setup Workspace
+### Step 2: Setup Workspace (Optional - for local overrides)
 ```bash
 mkdir -p .devin/workflows
 cp ~/.devin-orchestrator/workflows/*.manifest.yaml .devin/workflows/
 ```
+
+Note: This step is optional. The canonical source is `~/.devin-orchestrator/workflows/`. Copying to `.devin/workflows/` allows per-workspace overrides.
 
 ## Deployment to Existing Workspaces
 
@@ -52,14 +54,16 @@ For existing repositories, after global installation:
 # Navigate to existing repo
 cd /path/to/existing/repo
 
-# Create workflows directory
+# Create workflows directory (optional - for local overrides)
 mkdir -p .devin/workflows
 
-# Copy desired workflow manifests
+# Copy desired workflow manifests (optional - for local overrides)
 cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
 cp ~/.devin-orchestrator/workflows/rca.manifest.yaml .devin/workflows/
 # Add other workflows as needed
 ```
+
+Note: Copying to `.devin/workflows/` is optional. The canonical source is `~/.devin-orchestrator/workflows/`. Use `.devin/workflows/` only for per-workspace overrides.
 
 ## Available Workflows
 
@@ -111,16 +115,18 @@ After successful installation:
 ```
 ~/.devin-orchestrator/
 ├── skills/              # Global skills (shared across workspaces)
-├── workflows/           # Workflow manifests
+├── workflows/           # Canonical workflow manifests
 ├── workflow-engine/     # Orchestration engine
 ├── config.yaml          # Configuration
 └── dispatch_skill.py    # Dispatch script
 
-.devin/workflows/        # Per-workspace workflow manifests
+.devin/workflows/        # Per-workspace workflow overrides (optional)
 ├── superpower.manifest.yaml
 ├── rca.manifest.yaml
 └── ...
 ```
+
+Note: `.devin/workflows/` is optional and only needed for per-workspace overrides. The canonical source is `~/.devin-orchestrator/workflows/`.
 
 ## Success Indicators
 

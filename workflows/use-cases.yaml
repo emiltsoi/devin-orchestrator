@@ -6,14 +6,16 @@ use_cases:
     name: Root Cause Analysis
     type: investigation
     workflow: rca
+    session_shape: rca
     description: "Investigation-only workflow for analyzing incidents, bugs, or failures. Read-only git operations."
     input_required:
       - incident_report
       - logs
-      - reproduction_steps
     output:
-      - rca_document
-      - fix_recommendations
+      - evidence.md
+      - analysis.md
+      - root_cause.md
+      - fix_recommendations.md
     git_operations: read_only
     session_id_format: RCA-NNN
     slash_command: /rca

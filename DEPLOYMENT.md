@@ -1,36 +1,54 @@
-# Deployment Guide: Canonical Source + Workspace Deployment
+# Deployment Guide: Hybrid Global + Local Override Deployment
 
-**Purpose:** Document the canonical source deployment model for orchestrator–worker workflows.
+**Purpose:** Document the hybrid deployment model for orchestrator–worker workflows.
 
-## Canonical Source
+## Deployment Model
 
-The canonical source of truth for workflow definitions is the `devin-orchestrator` repository:
+The hybrid deployment model combines global installation with optional per-workspace overrides:
+
+- **Global Installation**: Skills, workflows, and workflow engine are installed to `~/.devin-orchestrator/` and serve as the canonical source for all workspaces
+- **Local Overrides**: Optional per-workspace workflow overrides via `.devin/workflows/` for workspace-specific customization
+- **Single Source of Truth**: Global installation is the authoritative source; local overrides provide flexibility
+
+## Global Installation
+
+The canonical source of truth is installed globally:
+
+```bash
+# Install devin-orchestrator globally
+python install.py
+
+# Or use automated installation
+python install_automated.py
+```
+
+This installs to `~/.devin-orchestrator/`:
+- `skills/*` - Skill definitions (.yaml) and narratives (.md)
 - `workflows/*.manifest.yaml` - Structured workflow manifests
 - `workflows/*.runbook.md` - Agent-facing orchestration runbooks
-- `skills/*` - Skill definitions (.yaml) and narratives (.md)
 - `workflow-engine/*` - Deterministic tools and dispatch mechanics
+- `config.yaml` - Configuration file
 
-## Workspace Deployment
+## Local Overrides (Optional)
 
-When deploying workflow changes to a workspace:
+For workspace-specific workflow customization:
 
-1. **Update canonical source first:**
-   - Modify `workflows/<workflow>.manifest.yaml` (structured source)
-   - Modify `workflows/<workflow>.runbook.md` (agent-facing companion)
-   - Ensure parity between manifest and runbook
+```bash
+# Create local overrides directory
+mkdir -p .devin/workflows
 
-2. **Deploy to workspace:**
-   - Copy `workflows/<workflow>.manifest.yaml` to workspace
-   - Copy `workflows/<workflow>.runbook.md` to workspace
-   - Copy `skills/*` to workspace (if skill changes)
-   - Copy `workflow-engine/*` to workspace (if tool changes)
+# Copy specific workflow manifests to override
+cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
 
-3. **Validate deployment:**
-   - Run parity test: manifest.stages == runbook.stages
-   - Verify all required skills are present
-   - Verify all deterministic tools are present
+# Modify the local override as needed
+vim .devin/workflows/superpower.manifest.yaml
+```
+
+**Note**: Local overrides are optional. Most workspaces can use the global installation directly.
 
 ## Deployment Workflow
+
+### Updating Global Installation
 
 ```bash
 # In canonical source (devin-orchestrator)
@@ -49,9 +67,27 @@ python -m workflow_engine.parity_test workflows/feature.manifest.yaml workflows/
 git add workflows/feature.manifest.yaml workflows/feature.runbook.md
 git commit -m "Update feature workflow: <description>"
 
-# 5. Deploy to workspace
-cp workflows/feature.manifest.yaml /path/to/workspace/workflows/
-cp workflows/feature.runbook.md /path/to/workspace/workflows/
+# 5. Reinstall globally
+python install.py
+```
+
+### Adding Local Override
+
+```bash
+# In workspace
+cd /path/to/workspace
+
+# 1. Create local overrides directory
+mkdir -p .devin/workflows
+
+# 2. Copy workflow to override
+cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
+
+# 3. Modify local override
+vim .devin/workflows/superpower.manifest.yaml
+
+# 4. Test the override
+# (The system will use .devin/workflows/superpower.manifest.yaml instead of global)
 ```
 
 ## Parity Test
@@ -64,17 +100,29 @@ The parity test ensures manifest and runbook agree:
 
 If parity fails, the deployment is blocked.
 
-## Canonical Source Invariant
+## Resolution Order
 
-The canonical source (devin-orchestrator) is always the authoritative source. Workspace copies are deployed from canonical source and should not be modified independently.
+When loading workflows, the system checks in this order:
+1. `.devin/workflows/<workflow>.manifest.yaml` (local override, if exists)
+2. `~/.devin-orchestrator/workflows/<workflow>.manifest.yaml` (global source)
+
+This allows workspace-specific customization while maintaining a global baseline.
 
 ## Rollback
 
-If a deployment causes issues:
+### Global Rollback
+
+If a global update causes issues:
 1. Revert canonical source changes
-2. Re-deploy previous version to workspace
-3. Verify parity
-4. Resume workflow execution
+2. Reinstall globally: `python install.py`
+3. Verify all workspaces work correctly
+
+### Local Override Rollback
+
+If a local override causes issues:
+1. Delete the local override: `rm .devin/workflows/<workflow>.manifest.yaml`
+2. The system will fall back to the global version
+3. Verify the workspace works correctly
 
 ## Versioning
 
@@ -82,3 +130,12 @@ Workflow definitions are versioned via git:
 - `manifest.yaml` includes `schema_version` field
 - `runbook.md` includes `schema version` in header
 - Breaking changes require schema version bump
+- Global installation tracks version via git commit hash
+
+## Best Practices
+
+- **Prefer Global**: Use global installation for most workflows
+- **Local for Customization**: Use local overrides only for workspace-specific needs
+- **Document Overrides**: Document why a local override exists in `.devin/workflows/README.md`
+- **Keep Overrides Minimal**: Override only what's necessary, not entire workflows
+- **Sync Regularly**: Reinstall globally regularly to get updates

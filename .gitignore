@@ -13,3 +13,16 @@ Thumbs.db
 # Session work directories (optional - uncomment if you want to ignore)
 # sessions/
 # work/
+
+# Per-workspace deployment directories
+.devin/workflows/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Logs
+logs/
+*.log

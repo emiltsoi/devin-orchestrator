@@ -26,7 +26,7 @@ See `workflows/use-cases.yaml` for the complete use case registry.
 
 **Cross-Platform Design**: The harness is designed to be platform-agnostic. Skills, workflows, and contracts are YAML/markdown-based and work on any platform. Platform-specific concerns (PowerShell vs Bash, file paths, etc.) are isolated in transport adapters and execution scripts.
 
-**Deployment Model**: Global-only deployment. Skills, workflows, and workflow engine are installed to a global location (`~/.devin-orchestrator/`) and referenced from any workspace. No per-workspace deployment needed. Single source of truth for all workspaces.
+**Deployment Model**: Hybrid deployment. Skills, workflows, and workflow engine are installed to a global location (`~/.devin-orchestrator/`) and referenced from any workspace. Per-workspace overrides are optional via `.devin/workflows/` for workflow customization. Canonical source is global; local overrides provide flexibility for workspace-specific needs.
 
 **Installation**: Run `python install.py` to install devin-orchestrator to global location. Configuration is managed via `~/.devin-orchestrator/config.yaml` and environment variables.
 
@@ -66,59 +66,98 @@ skill:
 
 **Contract** (manifest.yaml):
 ```yaml
-workflow:
-  session_shape: superpower
-  session_id_format: SUPERPOWER-NNN
-  session_init:
-    command: session_init
-    creates_workdir: work/<session_id>/
-  auto_load:
-    - path: skills/README.md
-      always: true
-  required_artifacts:
-    step_0: [request.md, status.md, session-audit.md]
-    step_1: [design.md]
-    step_2: [worktree-info.md, baseline-test-results.md]
-    step_3: [plan.md]
-    step_4: [implementation.md, task-results.md]
-    step_5: [test-results.md, implementation-final.md]
-    step_6: [review-findings.md]
-    step_7: [completion-summary.md, merge-decision.md]
-  gates:
-    - id: g1_design_approval
-      after_step: 1
-      type: user_gate
-    - id: g2_plan_approval
-      after_step: 3
-      type: user_gate
-    - id: g3_review_approval
-      after_step: 5
-      type: user_gate
-    - id: g4_completion_approval
-      after_step: 7
-      type: user_gate
-  skills:
-    - name: brainstorming
-      phases: [step_0]
-    - name: using-git-worktrees
-      phases: [step_1]
-    - name: writing-plans
-      phases: [step_2]
-    - name: subagent-driven-development
-      phases: [step_3]
-    - name: test-driven-development
-      phases: [step_4]
-    - name: requesting-code-review
-      phases: [step_5]
-    - name: finishing-a-development-branch
-      phases: [step_6]
+name: superpower
+description: "Superpowers workflow - complete software development methodology for coding agents"
+version: 1.0.0
+schema_version: 1
+session_shape: superpower
+
+stages:
+  - step: 0
+    name: brainstorming
+    skill: brainstorming
+    description: "Refines rough ideas through questions, explores alternatives, presents design in sections for validation"
+    required_artifacts: []
+    output_artifacts: [design.md]
+    gate: none
+    optional: true
+
+  - step: 1
+    name: using-git-worktrees
+    skill: using-git-worktrees
+    description: "Creates isolated workspace on new branch, runs project setup, verifies clean test baseline"
+    required_artifacts: [design.md]
+    output_artifacts: [worktree-info.md, baseline-test-results.md]
+    gate: g1_design_approval
+
+  - step: 2
+    name: writing-plans
+    skill: writing-plans
+    description: "Breaks work into bite-sized tasks (2-5 minutes each) with exact file paths, complete code, verification steps"
+    required_artifacts: [design.md]
+    output_artifacts: [plan.md]
+    gate: none
+
+  - step: 3
+    name: subagent-driven-development
+    skill: subagent-driven-development
+    description: "Dispatches fresh subagent per task with two-stage review (spec compliance, then code quality)"
+    required_artifacts: [plan.md, design.md]
+    output_artifacts: [implementation.md, task-results.md]
+    gate: g2_plan_approval
+
+  - step: 4
+    name: test-driven-development
+    skill: test-driven-development
+    description: "Enforces RED-GREEN-REFACTOR: write failing test, watch it fail, write minimal code, watch it pass, commit"
+    required_artifacts: [implementation.md]
+    output_artifacts: [test-results.md, implementation-final.md]
+    gate: none
+
+  - step: 5
+    name: requesting-code-review
+    skill: requesting-code-review
+    description: "Reviews against plan, reports issues by severity. Critical issues block progress"
+    required_artifacts: [plan.md, implementation-final.md]
+    output_artifacts: [review-findings.md]
+    gate: g3_review_approval
+
+  - step: 6
+    name: finishing-a-development-branch
+    skill: finishing-a-development-branch
+    description: "Verifies tests, presents options (merge/PR/keep/discard), cleans up worktree"
+    required_artifacts: [test-results.md, review-findings.md]
+    output_artifacts: [completion-summary.md, merge-decision.md]
+    gate: g4_completion_approval
+
+gates:
+  - id: g1_design_approval
+    name: Design Approval
+    description: "Human approval of design document before creating worktree"
+    type: human
+
+  - id: g2_plan_approval
+    name: Plan Approval
+    description: "Human approval of implementation plan before execution"
+    type: human
+
+  - id: g3_review_approval
+    description: "Human approval of code review findings before completion"
+    name: Review Approval
+    type: human
+
+  - id: g4_completion_approval
+    name: Completion Approval
+    description: "Human approval of merge/PR/keep/discard decision"
+    type: human
 ```
 
 **Key properties**:
-- **Dual source of truth**: Markdown (narrative) + YAML (structured)
-- **Artifact contracts**: Required files per step, validated at close
-- **Gate definitions**: User gates, mid-step checks, artifact checks
-- **Skill scoping**: Which skills apply to which phases
+- **Structured stages**: Each stage has step number, name, skill, description, artifacts, and gate
+- **Artifact contracts**: required_artifacts (inputs) and output_artifacts per stage
+- **Gate definitions**: Gates with id, name, description, and type (human, automated, none)
+- **Skill references**: Each stage references a skill by name that must exist in skills/
+- **Optional stages**: Stages can be marked optional to skip when not needed
 
 ### 3. Transport Adapters (Mechanism Layer)
 

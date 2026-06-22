@@ -89,9 +89,13 @@ def install(global_root: Optional[Path] = None, source_dir: Optional[Path] = Non
     print(f"Work directory: {work_dir}")
     print()
     print("To use devin-orchestrator from any workspace:")
-    print("  import sys")
-    print("  sys.path.insert(0, '" + str(global_root) + "')")
-    print("  from workflow_engine.orchestrator_executor import OrchestratorExecutor")
+    print("  - Skills are available at: " + str(target_skills))
+    print("  - Workflows are available at: " + str(target_workflows))
+    print("  - Workflow engine is available at: " + str(target_engine))
+    print("  - Config is available at: " + str(target_config))
+    print()
+    print("For Cascade integration, use the dispatch_skill.py script:")
+    print("  python " + str(global_root / "dispatch_skill.py") + " <skill> <session_id> <workspace> <is_reviewer> <focused_context>")
 
 
 if __name__ == "__main__":

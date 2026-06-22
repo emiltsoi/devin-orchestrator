@@ -1,0 +1,28 @@
+schema_version: 1
+name: systematic-debugging
+description: Use when investigating incidents, bugs, or failures through systematic evidence gathering and analysis
+iron_law: "INVESTIGATION MUST BE EVIDENCE-BASED AND SYSTEMATIC"
+triggers:
+  - incident_investigation
+  - bug_analysis
+  - root_cause_analysis
+  - failure_investigation
+checklist:
+  - id: gather_evidence
+    description: Gather evidence from logs, code, and reproduction steps
+  - id: analyze_evidence
+    description: Analyze evidence to identify potential causes
+  - id: identify_root_cause
+    description: Identify the root cause of the incident
+  - id: propose_fixes
+    description: Propose fixes for the identified root cause
+  - id: document_findings
+    description: Document findings and recommendations
+terminal_state: null
+announcement: "Using the systematic-debugging skill for structured incident investigation"
+red_flags:
+  - Jumping to conclusions without evidence
+  - Treating symptoms as root cause
+  - Missing evidence collection
+  - Incomplete analysis
+  - Fixes that don't address root cause

@@ -13,9 +13,14 @@ checklist:
     description: Verify tests pass (no regression)
   - id: check_artifacts
     description: Check expected artifacts exist
+  - id: document_verification
+    description: Document verification results in verification.md
+  - id: invoke_review
+    description: Invoke code-review skill
 terminal_state: code-review
 announcement: "Using the verification-before-completion skill to confirm build+tests on HEAD"
 red_flags:
   - Claiming completion without verification
   - Skipping test execution
   - Ignoring build failures
+  - Using cached verification results

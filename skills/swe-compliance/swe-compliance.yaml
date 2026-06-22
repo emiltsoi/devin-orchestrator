@@ -1,0 +1,29 @@
+schema_version: 1
+name: swe-compliance
+description: Use when reviewing code for software engineering best practices, coding standards, and compliance
+iron_law: "CODE MUST FOLLOW ESTABLISHED CONVENTIONS AND BEST PRACTICES"
+triggers:
+  - code_quality_review
+  - standards_compliance_check
+  - security_review
+checklist:
+  - id: code_structure_review
+    description: Review code structure and organization
+  - id: standards_compliance
+    description: Check coding standards compliance
+  - id: error_handling_review
+    description: Review error handling and edge cases
+  - id: security_assessment
+    description: Assess security best practices
+  - id: documentation_check
+    description: Check documentation and comments
+  - id: document_findings
+    description: Document findings in quality_review.md
+terminal_state: null
+announcement: "Using the swe-compliance skill for code quality and standards compliance review"
+red_flags:
+  - Inconsistent coding style
+  - Missing error handling
+  - Security vulnerabilities
+  - Code duplication
+  - Poor naming conventions

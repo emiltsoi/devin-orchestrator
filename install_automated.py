@@ -37,7 +37,7 @@ def main():
     print()
     
     # Configuration
-    repo_url = "https://github.com/your-username/devin-orchestrator.git"  # TODO: Update with actual repo URL
+    repo_url = "https://github.com/cognition-dev/devin-orchestrator.git"  # Update with actual repo URL
     install_dir = Path.home() / "devin-orchestrator"
     global_root = Path.home() / ".devin-orchestrator"
     current_dir = Path.cwd()
@@ -124,12 +124,17 @@ def main():
         print("=== Installation Complete ===")
         print()
         print("You can now use devin-orchestrator with Cascade:")
-        print("  - Workflows are available in .devin/workflows/")
+        print("  - Workflows are available in .devin/workflows/ (optional - for local overrides)")
         print("  - Skills are available globally at ~/.devin-orchestrator/skills/")
-        print("  - Dispatch script is available at ~/.devin-orchestrator/dispatch_skill.py")
+        print("  - Workflows are available globally at ~/.devin-orchestrator/workflows/")
+        print("  - Workflow engine is available at ~/.devin-orchestrator/workflow-engine/")
+        print("  - Config is available at ~/.devin-orchestrator/config.yaml")
         print()
         print("Example dispatch:")
         print("  python ~/.devin-orchestrator/dispatch_skill.py brainstorming SESSION-001 ~/.devin-orchestrator/work/SESSION-001 false true")
+        print()
+        print("Note: .devin/workflows/ is optional for per-workspace overrides.")
+        print("The canonical source is ~/.devin-orchestrator/workflows/.")
     else:
         print("=== Installation Incomplete ===")
         print("Some checks failed. Please review the errors above.")
