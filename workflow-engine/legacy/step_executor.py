@@ -270,8 +270,10 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                 }
 
                 # Build the original prompt for potential retry
-                skill_def = self.skill_invoker.load_skill_definition(skill_name)
-                skill_narrative = self.skill_invoker.load_skill_narrative(skill_name)
+                from deterministic_tools import load_skill
+                skill_data = load_skill(self.skill_invoker.skills_dir, skill_name)
+                skill_def = skill_data['definition']
+                skill_narrative = skill_data['narrative']
                 original_prompt = self.skill_invoker.build_skill_prompt(skill_name, skill_def, skill_narrative, context)
 
                 # Retry loop with feedback
