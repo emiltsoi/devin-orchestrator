@@ -27,6 +27,7 @@ from deterministic_tools import (
 )
 from skill_invoker import SkillInvoker
 from config_loader import ConfigLoader
+from metrics import get_metrics_collector
 
 # Configure logging
 logging.basicConfig(
@@ -58,6 +59,7 @@ class OrchestrationEngine:
             self.work_dir = work_dir
             self.config = config or {}
             self.skill_invoker = SkillInvoker(demo_mode=config.get('demo_mode', False))
+            self.metrics = get_metrics_collector()
             logger.info(f"OrchestrationEngine initialized with work_dir: {work_dir}")
         except Exception as e:
             logger.error(f"Error initializing OrchestrationEngine: {e}")
@@ -157,6 +159,9 @@ class OrchestrationEngine:
         # Override skip_brainstorming if provided
         if skip_brainstorming is not None:
             manifest['skip_brainstorming'] = skip_brainstorming
+        
+        # Start metrics tracking for this workflow
+        self.metrics.start_workflow(session_id, manifest['name'])
         
         # Execute stages
         results = {
