@@ -28,6 +28,13 @@ from deterministic_tools import (
 from skill_invoker import SkillInvoker
 from config_loader import ConfigLoader
 from metrics import get_metrics_collector
+from monitoring import get_monitoring_system
+from security_utils import (
+    validate_session_id,
+    validate_path_safe,
+    InvalidInputError,
+    PathTraversalError
+)
 
 # Configure logging
 logging.basicConfig(
@@ -60,6 +67,7 @@ class OrchestrationEngine:
             self.config = config or {}
             self.skill_invoker = SkillInvoker(demo_mode=config.get('demo_mode', False))
             self.metrics = get_metrics_collector()
+            self.monitoring = get_monitoring_system()
             logger.info(f"OrchestrationEngine initialized with work_dir: {work_dir}")
         except Exception as e:
             logger.error(f"Error initializing OrchestrationEngine: {e}")
@@ -87,6 +95,21 @@ class OrchestrationEngine:
             Dictionary with execution results
         """
         try:
+            # Validate and sanitize inputs
+            try:
+                session_id = validate_session_id(session_id)
+                manifest_path = validate_path_safe(self.work_dir, manifest_path, allow_absolute=True)
+            except (InvalidInputError, PathTraversalError) as e:
+                logger.error(f"Input validation failed: {e}")
+                return {
+                    'session_id': session_id,
+                    'manifest': 'unknown',
+                    'stages': [],
+                    'final_status': 'failed',
+                    'error': f"Input validation failed: {str(e)}",
+                    'error_type': 'InvalidInputError'
+                }
+            
             # Load manifest
             manifest = load_manifest(manifest_path)
             logger.info(f"Loaded manifest from {manifest_path}: {manifest.get('name', 'unknown')}")
@@ -244,12 +267,7 @@ class OrchestrationEngine:
                     update_status(session_dir, stage['name'], 'escalated', f"Max retries ({max_retries}) exceeded: {last_error}")
                     
                     # Log retry exhaustion
-                    self.logger.log_retry_exhausted(
-                        session_id=session_id,
-                        stage_name=stage['name'],
-                        max_retries=max_retries,
-                        final_error=last_error
-                    )
+                    logger.warning(f"Retry attempts exhausted for stage {stage['name']} after {max_retries} attempts: {last_error}")
                     break
             
             # Handle gate if present
@@ -272,6 +290,12 @@ class OrchestrationEngine:
         # Export metrics to file
         metrics_file = session_dir / "metrics.json"
         self.metrics.export_to_file(metrics_file, session_id)
+        
+        # Monitor workflow completion for alerting
+        try:
+            self.monitoring.monitor_workflow(session_id)
+        except Exception as e:
+            logger.error(f"Error in workflow monitoring: {e}")
         
         return results
     

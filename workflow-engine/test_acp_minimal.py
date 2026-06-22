@@ -15,8 +15,9 @@ def test_acp_minimal():
     print("Minimal ACP Test (Python 3 + Batch File)")
     print("=" * 60)
 
-    workspace = r"C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator"
-    batch_file = r"C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine\test_acp_simple.bat"
+    # Use current directory instead of hardcoded path
+    workspace = os.getcwd()
+    batch_file = os.path.join(workspace, "workflow-engine", "test_acp_simple.bat")
 
     print(f"\nWorkspace: {workspace}")
     print(f"Batch file: {batch_file}")

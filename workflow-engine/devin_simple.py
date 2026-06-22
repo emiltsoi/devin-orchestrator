@@ -26,7 +26,14 @@ def run_devin_non_interactive(prompt, workspace=None, timeout=120):
             'exit_code': int
         }
     """
-    devin_cli_path = r"C:\Users\<username>\AppData\Local\devin\cli\bin\devin.exe"
+    # Load devin_cli_path from config instead of hardcoding
+    try:
+        from config_loader import ConfigLoader
+        config = ConfigLoader.load()
+        devin_cli_path = config.devin_cli_path
+    except Exception as e:
+        # Fallback to environment variable if config loading fails
+        devin_cli_path = os.getenv("DEVIN_CLI_PATH", "devin.exe")
     
     if workspace is None:
         workspace = os.getcwd()
@@ -74,7 +81,8 @@ def test_simple():
     print("Devin CLI Non-Interactive Test")
     print("=" * 60)
     
-    workspace = r"C:\Users\<username>\OneDrive\Documents\Work\devin-orchestrator\workflow-engine"
+    # Use current directory instead of hardcoded path
+    workspace = os.getcwd()
     prompt = "list the files in the current directory"
     
     print("\nWorkspace: {}".format(workspace))

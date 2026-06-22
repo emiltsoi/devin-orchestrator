@@ -27,16 +27,17 @@ def test_automated_dispatch():
     print(f"\nHarness root: {harness_root}")
     print(f"Work directory: {work_dir}")
 
-    # Devin CLI path - from environment variable or default
-    devin_cli_path = os.environ.get('DEVIN_CLI_PATH')
-
-    # Default path for Windows (adjust as needed)
-    if not devin_cli_path and os.name == 'nt':
-        devin_cli_path = r"C:\Users\<username>\AppData\Local\devin\cli\bin\devin.exe"
+    # Devin CLI path - from config or environment variable
+    try:
+        from config_loader import ConfigLoader
+        config = ConfigLoader.load()
+        devin_cli_path = config.devin_cli_path
+    except Exception:
+        devin_cli_path = os.environ.get('DEVIN_CLI_PATH')
 
     if not devin_cli_path:
         print("Skipping automated dispatch test (no DEVIN_CLI_PATH set)")
-        print("Set DEVIN_CLI_PATH environment variable to test automated dispatch")
+        print("Set DEVIN_CLI_PATH environment variable or configure in config.yaml")
         return 0
 
     if not os.path.exists(devin_cli_path):

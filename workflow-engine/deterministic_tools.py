@@ -11,6 +11,9 @@ import json
 from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def session_init(session_id: str, work_dir: Path, request_content: str = "") -> Path:
@@ -28,25 +31,48 @@ def session_init(session_id: str, work_dir: Path, request_content: str = "") -> 
     Returns:
         Path to the created session directory
     """
-    session_dir = work_dir / session_id
-    session_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create consolidated session file
-    session_file = session_dir / "session.json"
-    if not session_file.exists():
-        session_data = {
-            'session_id': session_id,
-            'created': datetime.now().isoformat(),
-            'status': 'initialized',
-            'request': request_content,
-            'stages': [],
-            'gates': [],
-            'audit_log': []
-        }
-        with open(session_file, 'w', encoding='utf-8') as f:
-            json.dump(session_data, f, indent=2)
-    
-    return session_dir
+    try:
+        # Import security utilities for permission checks
+        from security_utils import check_directory_permissions
+        
+        session_dir = work_dir / session_id
+        
+        # Check parent directory permissions before creating session directory
+        if work_dir.exists():
+            if not check_directory_permissions(work_dir, required_write=True, required_execute=True):
+                logger.error(f"Insufficient permissions on work directory: {work_dir}")
+                raise PermissionError(f"Insufficient permissions on work directory: {work_dir}")
+        
+        session_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Verify the created directory has appropriate permissions
+        if not check_directory_permissions(session_dir, required_write=True, required_execute=True):
+            logger.error(f"Failed to create session directory with proper permissions: {session_dir}")
+            raise PermissionError(f"Failed to create session directory with proper permissions: {session_dir}")
+        
+        # Create consolidated session file
+        session_file = session_dir / "session.json"
+        if not session_file.exists():
+            session_data = {
+                'session_id': session_id,
+                'created': datetime.now().isoformat(),
+                'status': 'initialized',
+                'request': request_content,
+                'stages': [],
+                'gates': [],
+                'audit_log': []
+            }
+            with open(session_file, 'w', encoding='utf-8') as f:
+                json.dump(session_data, f, indent=2)
+        
+        return session_dir
+        
+    except PermissionError as e:
+        logger.error(f"Permission error in session_init: {e}")
+        raise
+    except OSError as e:
+        logger.error(f"OS error in session_init: {e}")
+        raise
 
 
 def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:

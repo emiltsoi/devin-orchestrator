@@ -19,6 +19,12 @@ sys.path.insert(0, str(Path.home() / ".devin-orchestrator" / "workflow-engine"))
 
 from skill_invoker import SkillInvoker
 from config_loader import ConfigLoader
+from security_utils import (
+    validate_session_id,
+    validate_skill_name,
+    validate_workspace_path,
+    InvalidInputError
+)
 
 def main():
     # Parse command line arguments
@@ -32,6 +38,15 @@ def main():
     is_reviewer = len(sys.argv) > 4 and sys.argv[4].lower() == 'true'
     demo_mode = len(sys.argv) > 5 and sys.argv[5].lower() == 'true'
     config_overrides_json = sys.argv[6] if len(sys.argv) > 6 else None
+    
+    # Validate and sanitize inputs
+    try:
+        skill_name = validate_skill_name(skill_name)
+        session_id = validate_session_id(session_id)
+        workspace = str(validate_workspace_path(workspace))
+    except InvalidInputError as e:
+        print(f"Input validation error: {e}", file=sys.stderr)
+        sys.exit(1)
     
     # Parse config overrides if provided
     config_overrides = {}
