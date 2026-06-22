@@ -33,7 +33,16 @@ def run_command(cmd, cwd=None):
 
 
 def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Automated installation script for devin-orchestrator')
+    parser.add_argument('--dry-run', action='store_true', help='Dry run - show what would be done without actually doing it')
+    
+    args = parser.parse_args()
+    
     print("=== Automated Devin Orchestrator Installation ===")
+    if args.dry_run:
+        print("DRY RUN MODE - No actual installation will be performed")
     print()
     
     # Configuration
@@ -41,6 +50,16 @@ def main():
     install_dir = Path.home() / "devin-orchestrator"
     global_root = Path.home() / ".devin-orchestrator"
     current_dir = Path.cwd()
+    
+    if args.dry_run:
+        print("Would clone repository from:", repo_url)
+        print("Would install to:", install_dir)
+        print("Would set global root to:", global_root)
+        print("Would set up workspace at:", current_dir)
+        print()
+        print("=== Dry Run Complete ===")
+        print("No changes were made.")
+        return
     
     # Step 1: Clone repository (if not already cloned)
     print("Step 1: Cloning repository...")

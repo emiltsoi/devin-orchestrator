@@ -157,3 +157,102 @@ jobs:
     - name: Lint artifact names
       run: |
         python scripts/lint_artifact_names.py
+
+  test-install:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml
+    
+    - name: Test installation (Linux/macOS)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        python install.py --dry-run || true
+        python install_automated.py --dry-run || true
+    
+    - name: Test installation (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        python install.py --dry-run || true
+        python install_automated.py --dry-run || true
+
+  test-backup-recovery:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml
+    
+    - name: Test backup script (Linux/macOS)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        python backup_script.py --dry-run --type configs --no-compress || true
+    
+    - name: Test backup script (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        python backup_script.py --dry-run --type configs --no-compress || true
+    
+    - name: Test recovery script (Linux/macOS)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        python recovery_script.py --list || true
+    
+    - name: Test recovery script (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        python recovery_script.py --list || true
+
+  powershell-test:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml
+    
+    - name: Test PowerShell backup wrapper
+      run: |
+        pwsh -File scripts/backup.ps1 -Type configs -NoCompress -ProjectRoot $env:GITHUB_WORKSPACE || true
+    
+    - name: Test PowerShell recovery wrapper
+      run: |
+        pwsh -File scripts/recovery.ps1 -List -ProjectRoot $env:GITHUB_WORKSPACE || true

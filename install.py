@@ -13,13 +13,14 @@ from pathlib import Path
 from typing import Optional
 
 
-def install(global_root: Optional[Path] = None, source_dir: Optional[Path] = None):
+def install(global_root: Optional[Path] = None, source_dir: Optional[Path] = None, dry_run: bool = False):
     """
     Install devin-orchestrator to global location
     
     Args:
         global_root: Optional global root path (defaults to ~/.devin-orchestrator/)
         source_dir: Optional source directory (defaults to current directory)
+        dry_run: If True, only print what would be done without actually doing it
     """
     # Determine paths
     if global_root is None:
@@ -32,82 +33,97 @@ def install(global_root: Optional[Path] = None, source_dir: Optional[Path] = Non
     source_dir = source_dir.expanduser()
     
     print("=== Installing Devin Orchestrator ===")
+    if dry_run:
+        print("DRY RUN MODE - No actual installation will be performed")
     print(f"Source: {source_dir}")
     print(f"Target: {global_root}")
     print()
     
     # Create global root
-    global_root.mkdir(parents=True, exist_ok=True)
-    print(f"Created global root: {global_root}")
+    if not dry_run:
+        global_root.mkdir(parents=True, exist_ok=True)
+    print(f"Would create global root: {global_root}")
     
     # Copy skills
     source_skills = source_dir / "skills"
     target_skills = global_root / "skills"
     if source_skills.exists():
-        if target_skills.exists():
-            shutil.rmtree(target_skills)
-        shutil.copytree(source_skills, target_skills)
-        print(f"Copied skills: {source_skills} -> {target_skills}")
+        if not dry_run:
+            if target_skills.exists():
+                shutil.rmtree(target_skills)
+            shutil.copytree(source_skills, target_skills)
+        print(f"Would copy skills: {source_skills} -> {target_skills}")
     
     # Copy workflows
     source_workflows = source_dir / "workflows"
     target_workflows = global_root / "workflows"
     if source_workflows.exists():
-        if target_workflows.exists():
-            shutil.rmtree(target_workflows)
-        shutil.copytree(source_workflows, target_workflows)
-        print(f"Copied workflows: {source_workflows} -> {target_workflows}")
+        if not dry_run:
+            if target_workflows.exists():
+                shutil.rmtree(target_workflows)
+            shutil.copytree(source_workflows, target_workflows)
+        print(f"Would copy workflows: {source_workflows} -> {target_workflows}")
     
     # Copy workflow engine
     source_engine = source_dir / "workflow-engine"
     target_engine = global_root / "workflow-engine"
     if source_engine.exists():
-        if target_engine.exists():
-            shutil.rmtree(target_engine)
-        shutil.copytree(source_engine, target_engine)
-        print(f"Copied workflow engine: {source_engine} -> {target_engine}")
+        if not dry_run:
+            if target_engine.exists():
+                shutil.rmtree(target_engine)
+            shutil.copytree(source_engine, target_engine)
+        print(f"Would copy workflow engine: {source_engine} -> {target_engine}")
     
     # Copy config
     source_config = source_dir / "config.yaml"
     target_config = global_root / "config.yaml"
     if source_config.exists():
-        shutil.copy2(source_config, target_config)
-        print(f"Copied config: {source_config} -> {target_config}")
+        if not dry_run:
+            shutil.copy2(source_config, target_config)
+        print(f"Would copy config: {source_config} -> {target_config}")
     
     # Create work directory
     work_dir = global_root / "work"
-    work_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Created work directory: {work_dir}")
+    if not dry_run:
+        work_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Would create work directory: {work_dir}")
     
-    print()
-    print("=== Installation Complete ===")
-    print(f"Global root: {global_root}")
-    print(f"Skills: {target_skills}")
-    print(f"Workflows: {target_workflows}")
-    print(f"Workflow engine: {target_engine}")
-    print(f"Config: {target_config}")
-    print(f"Work directory: {work_dir}")
-    print()
-    print("To use devin-orchestrator from any workspace:")
-    print("  - Skills are available at: " + str(target_skills))
-    print("  - Workflows are available at: " + str(target_workflows))
-    print("  - Workflow engine is available at: " + str(target_engine))
-    print("  - Config is available at: " + str(target_config))
-    print()
-    print("For Cascade integration, use the dispatch_skill.py script:")
-    print("  python " + str(global_root / "dispatch_skill.py") + " <skill> <session_id> <workspace> <is_reviewer> <focused_context>")
+    if dry_run:
+        print()
+        print("=== Dry Run Complete ===")
+        print("No changes were made.")
+    else:
+        print()
+        print("=== Installation Complete ===")
+        print(f"Global root: {global_root}")
+        print(f"Skills: {target_skills}")
+        print(f"Workflows: {target_workflows}")
+        print(f"Workflow engine: {target_engine}")
+        print(f"Config: {target_config}")
+        print(f"Work directory: {work_dir}")
+        print()
+        print("To use devin-orchestrator from any workspace:")
+        print("  - Skills are available at: " + str(target_skills))
+        print("  - Workflows are available at: " + str(target_workflows))
+        print("  - Workflow engine is available at: " + str(target_engine))
+        print("  - Config is available at: " + str(target_config))
+        print()
+        print("For Cascade integration, use the dispatch_skill.py script:")
+        print("  python " + str(global_root / "dispatch_skill.py") + " <skill> <session_id> <workspace> <is_reviewer> <focused_context>")
 
 
 if __name__ == "__main__":
     import sys
+    import argparse
     
-    # Parse command line arguments
-    global_root = None
-    source_dir = None
+    parser = argparse.ArgumentParser(description='Install devin-orchestrator to global location')
+    parser.add_argument('global_root', nargs='?', help='Global root path (default: ~/.devin-orchestrator)')
+    parser.add_argument('source_dir', nargs='?', help='Source directory (default: current directory)')
+    parser.add_argument('--dry-run', action='store_true', help='Dry run - show what would be done without actually doing it')
     
-    if len(sys.argv) > 1:
-        global_root = Path(sys.argv[1])
-    if len(sys.argv) > 2:
-        source_dir = Path(sys.argv[2])
+    args = parser.parse_args()
     
-    install(global_root, source_dir)
+    global_root = Path(args.global_root) if args.global_root else None
+    source_dir = Path(args.source_dir) if args.source_dir else None
+    
+    install(global_root, source_dir, dry_run=args.dry_run)

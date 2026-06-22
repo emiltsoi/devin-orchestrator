@@ -341,6 +341,9 @@ def main():
                         action='store_false',
                         dest='compress',
                         help='Disable compression')
+    parser.add_argument('--dry-run',
+                        action='store_true',
+                        help='Dry run - show what would be backed up without actually doing it')
     parser.add_argument('--project-root', '-p',
                         help='Project root directory (default: current directory)')
     parser.add_argument('--validate', '-v',
@@ -361,6 +364,15 @@ def main():
     if args.validate:
         success = manager.validate_backup(args.validate)
         sys.exit(0 if success else 1)
+    
+    # Dry run mode
+    if args.dry_run:
+        logger.info("DRY RUN MODE - No actual backups will be created")
+        logger.info(f"Backup type: {args.type}")
+        logger.info(f"Compression: {args.compress}")
+        logger.info(f"Project root: {manager.project_root}")
+        logger.info(f"Backup destination: {manager.backup_destination}")
+        sys.exit(0)
     
     # Perform backup based on type
     backup_name = None
