@@ -12,35 +12,26 @@ from dataclasses import dataclass
 @dataclass
 class Manifest:
     """Parsed workflow manifest"""
+    name: str
+    description: str
+    version: str
     schema_version: int
     session_shape: str
-    description: str
-    slash_command: str
-    canonical_workflow: str
-    session_id_format: str
-    session_init: Dict[str, Any]
-    auto_load: List[Dict[str, Any]]
-    required_artefacts: Dict[str, List[str]]
+    skip_brainstorming: bool
+    stages: List[Dict[str, Any]]
     gates: List[Dict[str, Any]]
-    skills: List[Dict[str, Any]]
-    branch: Dict[str, str]
 
 
 class ManifestLoader:
     """Loads and validates workflow manifests from YAML files"""
 
     REQUIRED_FIELDS = [
+        'name',
+        'description',
+        'version',
         'schema_version',
         'session_shape',
-        'description',
-        'slash_command',
-        'session_id_format',
-        'session_init',
-        'auto_load',
-        'required_artefacts',
-        'gates',
-        'skills',
-        'branch'
+        'stages'
     ]
 
     def __init__(self, harness_root: Path):
@@ -82,25 +73,21 @@ class ManifestLoader:
         if data['schema_version'] != 1:
             raise ValueError(f"Unsupported schema version: {data['schema_version']}")
 
-        # Validate skill references
-        self._validate_skill_references(data['skills'])
+        # Validate stage references
+        self._validate_stage_references(data['stages'])
 
         # Validate gate references
-        self._validate_gate_references(data['gates'])
+        self._validate_gate_references(data.get('gates', []))
 
         return Manifest(
+            name=data['name'],
+            description=data['description'],
+            version=data['version'],
             schema_version=data['schema_version'],
             session_shape=data['session_shape'],
-            description=data['description'],
-            slash_command=data['slash_command'],
-            canonical_workflow=data.get('canonical_workflow', ''),
-            session_id_format=data['session_id_format'],
-            session_init=data['session_init'],
-            auto_load=data['auto_load'],
-            required_artefacts=data['required_artefacts'],
-            gates=data['gates'],
-            skills=data['skills'],
-            branch=data['branch']
+            skip_brainstorming=data.get('skip_brainstorming', False),
+            stages=data['stages'],
+            gates=data.get('gates', [])
         )
 
     def _validate_required_fields(self, data: Dict[str, Any]) -> None:
@@ -109,23 +96,26 @@ class ManifestLoader:
         if missing_fields:
             raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
-    def _validate_skill_references(self, skills: List[Dict[str, Any]]) -> None:
-        """Validate that skill references point to existing skill files"""
+    def _validate_stage_references(self, stages: List[Dict[str, Any]]) -> None:
+        """Validate that stage references point to existing skill files"""
         skills_dir = self.harness_root / 'skills'
 
-        for skill in skills:
-            skill_name = skill.get('name')
+        for stage in stages:
+            skill_name = stage.get('skill')
             if not skill_name:
-                raise ValueError("Skill missing 'name' field")
+                raise ValueError("Stage missing 'skill' field")
 
+            # Check both direct and subdirectory locations
             skill_yaml = skills_dir / f"{skill_name}.yaml"
+            skill_yaml_subdir = skills_dir / skill_name / f"{skill_name}.yaml"
             skill_md = skills_dir / f"{skill_name}.md"
+            skill_md_subdir = skills_dir / skill_name / f"{skill_name}.md"
 
-            if not skill_yaml.exists():
-                raise ValueError(f"Skill YAML not found: {skill_yaml}")
+            if not skill_yaml.exists() and not skill_yaml_subdir.exists():
+                raise ValueError(f"Skill YAML not found: {skill_yaml} or {skill_yaml_subdir}")
 
-            if not skill_md.exists():
-                raise ValueError(f"Skill markdown not found: {skill_md}")
+            if not skill_md.exists() and not skill_md_subdir.exists():
+                raise ValueError(f"Skill markdown not found: {skill_md} or {skill_md_subdir}")
 
     def _validate_gate_references(self, gates: List[Dict[str, Any]]) -> None:
         """Validate that gate references are well-formed"""
@@ -133,11 +123,8 @@ class ManifestLoader:
             if 'id' not in gate:
                 raise ValueError("Gate missing 'id' field")
 
-            if 'after_step' not in gate:
-                raise ValueError(f"Gate {gate['id']} missing 'after_step' field")
-
             if 'type' not in gate:
                 raise ValueError(f"Gate {gate['id']} missing 'type' field")
 
-            if gate['type'] not in ['user_gate', 'auto_gate']:
+            if gate['type'] not in ['human', 'auto']:
                 raise ValueError(f"Gate {gate['id']} has invalid type: {gate['type']}")
