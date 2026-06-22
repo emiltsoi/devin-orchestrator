@@ -17,6 +17,9 @@ def session_init(session_id: str, work_dir: Path, request_content: str = "") -> 
     """
     Scaffold session directory and initial artifacts
     
+    Consolidated to reduce artifact bloat:
+    - session.json: Single file with all session metadata, status, and audit log
+    
     Args:
         session_id: Unique session identifier
         work_dir: Base work directory
@@ -28,18 +31,20 @@ def session_init(session_id: str, work_dir: Path, request_content: str = "") -> 
     session_dir = work_dir / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create initial artifacts
-    request_file = session_dir / "request.md"
-    if not request_file.exists() and request_content:
-        request_file.write_text(request_content)
-    
-    status_file = session_dir / "status.md"
-    if not status_file.exists():
-        status_file.write_text(f"# Session Status\n\nSession ID: {session_id}\nCreated: {datetime.now().isoformat()}\nStatus: initialized\n")
-    
-    audit_file = session_dir / "session-audit.md"
-    if not audit_file.exists():
-        audit_file.write_text(f"# Session Audit\n\nSession ID: {session_id}\nCreated: {datetime.now().isoformat()}\n\n## Audit Log\n\n")
+    # Create consolidated session file
+    session_file = session_dir / "session.json"
+    if not session_file.exists():
+        session_data = {
+            'session_id': session_id,
+            'created': datetime.now().isoformat(),
+            'status': 'initialized',
+            'request': request_content,
+            'stages': [],
+            'gates': [],
+            'audit_log': []
+        }
+        with open(session_file, 'w', encoding='utf-8') as f:
+            json.dump(session_data, f, indent=2)
     
     return session_dir
 
@@ -118,52 +123,69 @@ def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:
 
 def record_gate(gate_id: str, verdict: str, session_dir: Path, notes: str = "") -> None:
     """
-    Record gate decision to audit ledger
+    Record gate decision to session.json
     
     Args:
         gate_id: Unique gate identifier
         verdict: Gate verdict (approve/request_changes/block)
-        session_dir: Session directory containing audit file
+        session_dir: Session directory containing session.json
         notes: Optional notes about the gate decision
     """
-    audit_file = session_dir / "session-audit.md"
+    session_file = session_dir / "session.json"
     
-    if not audit_file.exists():
-        audit_file.write_text(f"# Session Audit\n\n## Audit Log\n\n")
+    with open(session_file, 'r', encoding='utf-8') as f:
+        session_data = json.load(f)
     
-    timestamp = datetime.now().isoformat()
-    entry = f"\n## Gate Decision: {gate_id}\n\n"
-    entry += f"- Timestamp: {timestamp}\n"
-    entry += f"- Verdict: {verdict}\n"
-    entry += f"- Notes: {notes}\n"
+    gate_entry = {
+        'gate_id': gate_id,
+        'timestamp': datetime.now().isoformat(),
+        'verdict': verdict,
+        'notes': notes
+    }
     
-    with open(audit_file, 'a', encoding='utf-8') as f:
-        f.write(entry)
+    session_data['gates'].append(gate_entry)
+    session_data['audit_log'].append({
+        'type': 'gate_decision',
+        'timestamp': datetime.now().isoformat(),
+        'details': gate_entry
+    })
+    
+    with open(session_file, 'w', encoding='utf-8') as f:
+        json.dump(session_data, f, indent=2)
 
 
 def update_status(session_dir: Path, stage: str, status: str, notes: str = "") -> None:
     """
-    Update session status file
+    Update session status in session.json
     
     Args:
-        session_dir: Session directory containing status file
+        session_dir: Session directory containing session.json
         stage: Current stage name
         status: Current status (in_progress/completed/failed)
         notes: Optional notes about the status update
     """
-    status_file = session_dir / "status.md"
+    session_file = session_dir / "session.json"
     
-    timestamp = datetime.now().isoformat()
-    entry = f"\n## {stage}\n\n"
-    entry += f"- Timestamp: {timestamp}\n"
-    entry += f"- Status: {status}\n"
-    entry += f"- Notes: {notes}\n"
+    with open(session_file, 'r', encoding='utf-8') as f:
+        session_data = json.load(f)
     
-    if not status_file.exists():
-        status_file.write_text(f"# Session Status\n\n{entry}")
-    else:
-        with open(status_file, 'a', encoding='utf-8') as f:
-            f.write(entry)
+    stage_entry = {
+        'stage': stage,
+        'timestamp': datetime.now().isoformat(),
+        'status': status,
+        'notes': notes
+    }
+    
+    session_data['stages'].append(stage_entry)
+    session_data['status'] = status
+    session_data['audit_log'].append({
+        'type': 'status_update',
+        'timestamp': datetime.now().isoformat(),
+        'details': stage_entry
+    })
+    
+    with open(session_file, 'w', encoding='utf-8') as f:
+        json.dump(session_data, f, indent=2)
 
 
 def create_placeholder_artifact(artifact_path: Path, content: str) -> None:

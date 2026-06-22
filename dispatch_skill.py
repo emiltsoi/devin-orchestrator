@@ -3,9 +3,11 @@
 """
 Dispatch skill to Devin via skill_invoker
 
-This script is a wrapper for skill_invoker.invoke_skill() that can be called
-from bash to dispatch skills to Devin. This allows Cascade to dispatch skills
-using the bash tool.
+This script is a lightweight wrapper for skill_invoker.invoke_skill() that can be called
+from bash to dispatch skills to Devin. This allows Cascade to dispatch skills using the bash tool.
+
+The wrapper is necessary because Cascade cannot import Python modules directly, but can use
+the bash tool to execute scripts.
 """
 
 import sys
