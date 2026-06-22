@@ -153,3 +153,7 @@ jobs:
     - name: Validate manifest skill references
       run: |
         python scripts/validate_manifests.py
+    
+    - name: Lint artifact names
+      run: |
+        python scripts/lint_artifact_names.py

@@ -364,3 +364,35 @@ def redact_sensitive_data(data: str, patterns: List[str]) -> str:
     for pattern in patterns:
         redacted = re.sub(pattern, '[REDACTED]', redacted, flags=re.IGNORECASE)
     return redacted
+
+
+def validate_backup_name(backup_name: str) -> str:
+    """
+    Validate and sanitize a backup name to prevent directory traversal and injection.
+    
+    Args:
+        backup_name: The backup name to validate
+        
+    Returns:
+        Sanitized backup name
+        
+    Raises:
+        InvalidInputError: If the backup name is invalid
+    """
+    if not backup_name:
+        raise InvalidInputError("Backup name cannot be empty")
+    
+    # Remove path separators and parent directory references
+    sanitized = backup_name.replace('/', '').replace('\\', '').replace('..', '')
+    
+    # Remove null bytes and other dangerous characters
+    sanitized = sanitized.replace('\x00', '')
+    
+    # Remove control characters
+    sanitized = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', sanitized)
+    
+    # Ensure backup name is not empty after sanitization
+    if not sanitized:
+        raise InvalidInputError(f"Backup name is invalid after sanitization: {backup_name}")
+    
+    return sanitized

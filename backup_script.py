@@ -15,6 +15,12 @@ import subprocess
 import logging
 import re
 
+# Import shared security utilities
+script_dir = Path(__file__).parent
+workflow_engine_dir = script_dir.parent / "workflow-engine"
+sys.path.insert(0, str(workflow_engine_dir))
+from security_utils import validate_backup_name
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -60,38 +66,6 @@ def validate_path_safe(base_path, target_path, allow_absolute=False):
         
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {target_path}: {e}")
-
-
-def validate_backup_name(backup_name):
-    """
-    Validate backup name to prevent directory traversal and injection.
-    
-    Args:
-        backup_name: The backup name to validate
-        
-    Returns:
-        Sanitized backup name
-        
-    Raises:
-        ValueError: If the backup name is invalid
-    """
-    if not backup_name:
-        raise ValueError("Backup name cannot be empty")
-    
-    # Remove path separators and parent directory references
-    sanitized = backup_name.replace('/', '').replace('\\', '').replace('..', '')
-    
-    # Remove null bytes and other dangerous characters
-    sanitized = sanitized.replace('\x00', '')
-    
-    # Remove control characters
-    sanitized = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', sanitized)
-    
-    # Ensure backup name is not empty after sanitization
-    if not sanitized:
-        raise ValueError(f"Backup name is invalid after sanitization: {backup_name}")
-    
-    return sanitized
 
 
 class BackupManager:
