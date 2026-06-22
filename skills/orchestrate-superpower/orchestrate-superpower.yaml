@@ -3,11 +3,13 @@ iron_law: "You MUST use dispatch_skill.py script via bash tool to dispatch Devin
 announcement: Orchestrating superpower workflow using dispatch_skill.py to dispatch Devin
 checklist:
   - Load superpower manifest from workflows/superpower.manifest.yaml
+  - Check configuration for interactive_mode setting
   - Check if skip_brainstorming is true in manifest
   - For each stage in manifest: check if stage should be skipped
   - If skip_brainstorming and stage is brainstorming: create placeholder design.md and skip
   - Otherwise: dispatch skill via bash tool calling dispatch_skill.py
-  - Use: python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> <is_reviewer> <demo_mode>
+  - Use: python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> <is_reviewer> <demo_mode> [config_overrides]
+  - Pass config_overrides for brainstorming if interactive_mode is true: '{"interactive_mode": true}'
   - Read and validate output artifacts (structural floor)
   - Reason about results and make triage decision (proceed/retry/escalate)
   - Handle gate if present (wait for human decision in production, simulate for demo)
@@ -17,3 +19,4 @@ terminal_state: Superpower workflow orchestrated and executed, all stages comple
 configuration:
   demo_mode: true  # Set to false for production with real Devin dispatches
   skip_brainstorming: false  # Set to true to skip brainstorming when spec is clear
+  interactive_mode: false  # Set to true to enable interactive brainstorming (asks questions)

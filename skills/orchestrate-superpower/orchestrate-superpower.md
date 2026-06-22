@@ -43,7 +43,7 @@ You MUST use the dispatch_skill.py script to dispatch Devin. Do NOT execute the 
 
 Use the bash tool to call dispatch_skill.py:
 ```bash
-python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode]
+python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]
 ```
 
 Example:
@@ -57,6 +57,28 @@ Parameters:
 - workspace: Path to session directory
 - is_reviewer: true if this is a reviewer stage (requesting-code-review), false otherwise
 - demo_mode: true for testing (simulated dispatch), false for production (real Devin dispatch)
+- config_overrides: Optional JSON string with configuration overrides (e.g., '{"interactive_mode": true}')
+
+### 3.1. Managing Interactive vs Non-Interactive Mode
+
+The brainstorming skill supports two modes:
+- **Non-interactive mode (default)**: Makes reasonable assumptions, proceeds autonomously
+- **Interactive mode**: Asks questions one at a time, waits for human responses
+
+**How to determine which mode to use:**
+- Check the orchestrate-superpower skill configuration for `interactive_mode` setting
+- If `interactive_mode: true` in configuration, pass `{"interactive_mode": true}` as config_overrides to brainstorming
+- If `interactive_mode: false` (default), pass `{"interactive_mode": false}` or omit config_overrides
+
+**Example dispatch with interactive mode:**
+```bash
+python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false false '{"interactive_mode": true}'
+```
+
+**Example dispatch with non-interactive mode (default):**
+```bash
+python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false false
+```
 
 The script returns JSON output with success, session_id, output, and error fields.
 
