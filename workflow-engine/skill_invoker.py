@@ -90,31 +90,25 @@ class SkillInvoker:
                 error="Devin CLI path not configured"
             )
 
-        # Load skill definition
-        skill_def = self.load_skill_definition(skill_name)
-        if not skill_def:
+        # Load skill definition and narrative using deterministic_tools
+        from deterministic_tools import load_skill
+        skill_data = load_skill(self.skills_dir, skill_name)
+        if not skill_data:
             return SkillInvocationResult(
                 success=False,
                 session_id=None,
                 output=None,
-                error=f"Skill definition not found: {skill_name}"
+                error=f"Skill not found: {skill_name}"
             )
+        
+        skill_def = skill_data['definition']
+        skill_narrative = skill_data['narrative']
 
         # Apply config overrides to skill definition
         if config_overrides:
             if 'configuration' not in skill_def:
                 skill_def['configuration'] = {}
             skill_def['configuration'].update(config_overrides)
-
-        # Load skill narrative
-        skill_narrative = self.load_skill_narrative(skill_name)
-        if not skill_narrative:
-            return SkillInvocationResult(
-                success=False,
-                session_id=None,
-                output=None,
-                error=f"Skill narrative not found: {skill_name}"
-            )
 
         # Use custom prompt if provided (for retry), otherwise build standard prompt
         if custom_prompt:

@@ -58,6 +58,7 @@ def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:
     - File is not empty
     - No TODO placeholders
     - No PLACEHOLDER text
+    - Format validation (markdown, JSON, YAML)
     
     Args:
         artifacts: List of artifact paths to validate
@@ -82,6 +83,7 @@ def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:
             'exists': False,
             'non_empty': False,
             'no_placeholders': False,
+            'valid_format': False,
             'valid': False
         }
         
@@ -109,16 +111,67 @@ def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:
                 artifact_result['no_placeholders'] = False
                 results['errors'].append(f"{artifact_name}: Contains TODO or PLACEHOLDER")
                 results['valid'] = False
+            
+            # Format validation
+            artifact_result['valid_format'] = _validate_format(artifact, content)
+            if not artifact_result['valid_format']:
+                results['errors'].append(f"{artifact_name}: Format validation failed")
+                results['valid'] = False
         
         artifact_result['valid'] = all([
             artifact_result['exists'],
             artifact_result['non_empty'],
-            artifact_result['no_placeholders']
+            artifact_result['no_placeholders'],
+            artifact_result['valid_format']
         ])
         
         results['artifact_results'][artifact_name] = artifact_result
     
     return results
+
+
+def _validate_format(artifact_path: Path, content: str) -> bool:
+    """
+    Validate file format based on extension
+    
+    Args:
+        artifact_path: Path to the artifact
+        content: File content
+        
+    Returns:
+        True if format is valid, False otherwise
+    """
+    suffix = artifact_path.suffix.lower()
+    
+    if suffix == '.md':
+        # Markdown validation: check for basic markdown structure
+        # Should have at least one heading or list
+        lines = content.split('\n')
+        has_heading = any(line.startswith('#') for line in lines)
+        has_list = any(line.strip().startswith('-') or line.strip().startswith('*') for line in lines)
+        return has_heading or has_list or len(content) > 100  # Allow short content if meaningful
+    
+    elif suffix == '.json':
+        # JSON validation
+        import json
+        try:
+            json.loads(content)
+            return True
+        except json.JSONDecodeError:
+            return False
+    
+    elif suffix in ['.yaml', '.yml']:
+        # YAML validation
+        import yaml
+        try:
+            yaml.safe_load(content)
+            return True
+        except yaml.YAMLError:
+            return False
+    
+    else:
+        # Unknown format - assume valid
+        return True
 
 
 def record_gate(gate_id: str, verdict: str, session_dir: Path, notes: str = "") -> None:

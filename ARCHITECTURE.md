@@ -75,7 +75,7 @@ workflow:
   auto_load:
     - path: skills/README.md
       always: true
-  required_artefacts:
+  required_artifacts:
     step_0: [request.md, status.md, session-audit.md]
     step_1: [design.md]
     step_2: [worktree-info.md, baseline-test-results.md]

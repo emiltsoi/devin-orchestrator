@@ -105,10 +105,41 @@ class OrchestrationEngine:
                 update_status(session_dir, stage['name'], 'escalated', 'Workflow escalated to human')
                 break
             elif stage_result['triage_decision'] == TriageDecision.RETRY:
-                # Retry logic could be implemented here
-                update_status(session_dir, stage['name'], 'retrying', f"Retrying stage: {stage_result['error']}")
-                # For now, we'll just continue to next stage
-                continue
+                # Implement retry logic with max retries and backoff
+                max_retries = 3
+                retry_count = 0
+                last_error = stage_result['error']
+                
+                while retry_count < max_retries:
+                    retry_count += 1
+                    update_status(session_dir, stage['name'], 'retrying', f"Retry {retry_count}/{max_retries}: {last_error}")
+                    
+                    # Exponential backoff: 2^retry_count seconds
+                    import time
+                    backoff_seconds = 2 ** retry_count
+                    time.sleep(backoff_seconds)
+                    
+                    # Re-dispatch with correction artifact
+                    correction_artifact = session_dir / f"correction-{stage['name']}-attempt{retry_count}.md"
+                    correction_artifact.write_text(f"# Correction for {stage['name']}\n\nError: {last_error}\n\nPlease fix the issue and re-run the stage.")
+                    
+                    stage_result = self._execute_stage(
+                        stage=stage,
+                        manifest=manifest,
+                        session_dir=session_dir,
+                        session_id=session_id,
+                        config_overrides=config_overrides,
+                        correction_artifact=str(correction_artifact)
+                    )
+                    
+                    if stage_result['triage_decision'] == TriageDecision.PROCEED:
+                        break
+                    last_error = stage_result['error']
+                
+                if retry_count >= max_retries and stage_result['triage_decision'] != TriageDecision.PROCEED:
+                    results['final_status'] = 'escalated'
+                    update_status(session_dir, stage['name'], 'escalated', f"Max retries ({max_retries}) exceeded: {last_error}")
+                    break
             
             # Handle gate if present
             if 'gate' in stage and stage['gate'] != 'none':
@@ -132,7 +163,8 @@ class OrchestrationEngine:
         manifest: Dict[str, Any],
         session_dir: Path,
         session_id: str,
-        config_overrides: Optional[Dict[str, Any]] = None
+        config_overrides: Optional[Dict[str, Any]] = None,
+        correction_artifact: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Execute a single stage
@@ -156,8 +188,59 @@ class OrchestrationEngine:
         if manifest.get('skip_brainstorming', False) and stage_name == 'brainstorming':
             return self._skip_stage(stage, session_dir, session_id)
         
+        # Check if interactive mode is enabled for this stage
+        if config_overrides and config_overrides.get('interactive_mode', False):
+            # Create pause file for user input
+            pause_file = session_dir / f"pause-{stage_name}.md"
+            pause_file.write_text(f"""# Interactive Pause: {stage_name}
+
+The workflow is paused for interactive input.
+
+## Context
+Stage: {stage_name}
+Skill: {skill_name}
+
+## Instructions
+Review the current state and provide any input or feedback needed before proceeding.
+
+## Input Format
+```
+input: [your input here]
+```
+
+Edit this file with your input, then save to continue.
+""")
+            
+            # Wait for pause file to be modified
+            import time
+            max_wait_seconds = 3600  # 1 hour timeout
+            check_interval = 5
+            waited_seconds = 0
+            initial_content = pause_file.read_text()
+            
+            while waited_seconds < max_wait_seconds:
+                time.sleep(check_interval)
+                waited_seconds += check_interval
+                
+                current_content = pause_file.read_text()
+                if current_content != initial_content and 'input:' in current_content:
+                    # Parse user input
+                    user_input = ""
+                    for line in current_content.split('\n'):
+                        if line.startswith('input:'):
+                            user_input = line.split(':', 1)[1].strip()
+                            break
+                    
+                    update_status(session_dir, stage_name, 'paused', f"User input received: {user_input[:50]}...")
+                    break
+            
+            if waited_seconds >= max_wait_seconds:
+                update_status(session_dir, stage_name, 'timeout', f"Interactive pause timeout after {max_wait_seconds} seconds")
+        
         # Load skill
-        skills_dir = Path.home() / ".devin-orchestrator" / "skills"
+        from config_loader import ConfigLoader
+        config = ConfigLoader.load()
+        skills_dir = config.skills_dir
         skill_data = load_skill(skills_dir, skill_name)
         
         # Dispatch skill
@@ -170,7 +253,8 @@ class OrchestrationEngine:
             },
             workspace=str(session_dir),
             is_reviewer=stage.get('skill') == 'requesting-code-review',
-            config_overrides=config_overrides
+            config_overrides=config_overrides,
+            correction_artifact=correction_artifact
         )
         
         # Validate output artifacts
@@ -265,19 +349,70 @@ class OrchestrationEngine:
         """
         update_status(session_dir, f"gate_{gate_id}", 'waiting', f"Waiting for gate decision: {gate_id}")
         
-        # In production, this would wait for human decision
-        # For now, we'll simulate approval
-        verdict = 'approve'
-        notes = f"Auto-approved gate {gate_id} after stage {stage_name}"
+        # Create gate decision file for human input
+        gate_decision_file = session_dir / f"gate-{gate_id}-decision.md"
+        gate_decision_file.write_text(f"""# Gate Decision: {gate_id}
+
+Stage: {stage_name}
+
+Please review the stage output and provide your decision.
+
+## Options:
+- approve: Proceed to next stage
+- request_changes: Request changes and retry
+- block: Block workflow and escalate to human
+
+## Decision Format:
+```
+verdict: approve|request_changes|block
+notes: [optional notes]
+```
+
+Please edit this file with your decision.
+""")
         
+        # Wait for gate decision file to be modified
+        import time
+        max_wait_seconds = 3600  # 1 hour timeout
+        check_interval = 5  # Check every 5 seconds
+        waited_seconds = 0
+        
+        while waited_seconds < max_wait_seconds:
+            time.sleep(check_interval)
+            waited_seconds += check_interval
+            
+            # Check if file has been modified (contains decision)
+            content = gate_decision_file.read_text()
+            if 'verdict:' in content:
+                # Parse decision
+                verdict = None
+                notes = ""
+                for line in content.split('\n'):
+                    if line.startswith('verdict:'):
+                        verdict = line.split(':', 1)[1].strip()
+                    elif line.startswith('notes:'):
+                        notes = line.split(':', 1)[1].strip()
+                
+                if verdict in ['approve', 'request_changes', 'block']:
+                    record_gate(gate_id, verdict, session_dir, notes)
+                    update_status(session_dir, f"gate_{gate_id}", verdict, f"Gate {verdict}: {gate_id}")
+                    
+                    return {
+                        'gate_id': gate_id,
+                        'verdict': verdict,
+                        'blocked': verdict == 'block'
+                    }
+        
+        # Timeout reached - escalate
+        verdict = 'block'
+        notes = f"Gate decision timeout after {max_wait_seconds} seconds"
         record_gate(gate_id, verdict, session_dir, notes)
-        
-        update_status(session_dir, f"gate_{gate_id}", 'approved', f"Gate approved: {gate_id}")
+        update_status(session_dir, f"gate_{gate_id}", 'timeout', f"Gate timeout: {gate_id}")
         
         return {
             'gate_id': gate_id,
             'verdict': verdict,
-            'blocked': verdict == 'block'
+            'blocked': True
         }
 
 

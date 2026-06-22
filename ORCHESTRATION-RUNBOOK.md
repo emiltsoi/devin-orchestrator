@@ -54,7 +54,7 @@ Each stage is encoded as a markdown section with the following structure:
 
 **Skill:** `<skill_name>` (from manifest skills list)
 **Phase:** `step_N` (from manifest phases)
-**Required artifacts (output):** [list from manifest required_artefacts]
+**Required artifacts (output):** [list from manifest required_artifacts]
 **Gate:** `<gate_id>` or `none` (from manifest gates)
 **Injected context (worker dispatch):** [list from per-skill context manifest]
 
@@ -826,6 +826,6 @@ When updating a workflow:
 - Parse runbook for same information
 - Assert: manifest.stages == runbook.stages
 - Assert: manifest.skills == runbook.skills
-- Assert: manifest.required_artefacts == runbook.required_artifacts
+- Assert: manifest.required_artifacts == runbook.required_artifacts
 - Assert: manifest.gates == runbook.gates
 - Fail if any mismatch
