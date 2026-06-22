@@ -1,0 +1,33 @@
+[lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "ARG001", # unused function argument (common in test files)
+]
+
+[lint.per-file-ignores]
+"test_*.py" = [
+    "ARG",    # unused arguments in tests
+    "S101",   # assert allowed in tests
+]
+
+[format]
+indent-style = "space"
+quote-style = "double"
+line-ending = "auto"
+
+[lint.isort]
+known-first-party = ["workflow_engine"]
