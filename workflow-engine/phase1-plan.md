@@ -40,7 +40,7 @@ Implement basic workflow engine with manual skill invocation and step execution,
 - session_id_format required
 - session_init required
 - auto_load required
-- required_artefacts required
+- required_artifacts required
 - gates required
 - skills required
 - branch required

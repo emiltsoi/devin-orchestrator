@@ -23,7 +23,10 @@ class Manifest:
 
 
 class ManifestLoader:
-    """Loads and validates workflow manifests from YAML files"""
+    """Loads and validates workflow manifests from YAML files
+    
+    See MANIFEST-SCHEMA.md for the complete schema definition.
+    """
 
     REQUIRED_FIELDS = [
         'name',
@@ -41,8 +44,12 @@ class ManifestLoader:
         Args:
             harness_root: Root directory of the harness
         """
+        from config_loader import ConfigLoader
+        
+        config = ConfigLoader.load()
         self.harness_root = harness_root
-        self.workflows_dir = harness_root / 'workflows'
+        self.workflows_dir = config.workflows_dir
+        self.skills_dir = config.skills_dir
 
     def load(self, manifest_name: str) -> Manifest:
         """
@@ -98,18 +105,16 @@ class ManifestLoader:
 
     def _validate_stage_references(self, stages: List[Dict[str, Any]]) -> None:
         """Validate that stage references point to existing skill files"""
-        skills_dir = self.harness_root / 'skills'
-
         for stage in stages:
             skill_name = stage.get('skill')
             if not skill_name:
                 raise ValueError("Stage missing 'skill' field")
 
             # Check both direct and subdirectory locations
-            skill_yaml = skills_dir / f"{skill_name}.yaml"
-            skill_yaml_subdir = skills_dir / skill_name / f"{skill_name}.yaml"
-            skill_md = skills_dir / f"{skill_name}.md"
-            skill_md_subdir = skills_dir / skill_name / f"{skill_name}.md"
+            skill_yaml = self.skills_dir / f"{skill_name}.yaml"
+            skill_yaml_subdir = self.skills_dir / skill_name / f"{skill_name}.yaml"
+            skill_md = self.skills_dir / f"{skill_name}.md"
+            skill_md_subdir = self.skills_dir / skill_name / f"{skill_name}.md"
 
             if not skill_yaml.exists() and not skill_yaml_subdir.exists():
                 raise ValueError(f"Skill YAML not found: {skill_yaml} or {skill_yaml_subdir}")

@@ -47,13 +47,16 @@ class DevinCliAdapter:
             workspace: Optional workspace path (defaults to current directory)
             model: Optional model to use (e.g., "swe-1.6", "claude-sonnet-4")
             permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
-            skills_dir: Optional path to skills directory (defaults to workflow-engine/skills/)
+            skills_dir: Optional path to skills directory (defaults to config_loader skills_dir)
         """
+        from config_loader import ConfigLoader
+        
+        config = ConfigLoader.load()
         self.devin_cli_path = devin_cli_path
         self.workspace = workspace or str(Path.cwd())
         self.model = model or "swe-1.6"  # Default to SWE-1.6 for free tier
         self.permission_mode = permission_mode
-        self.skills_dir = Path(skills_dir) if skills_dir else Path(__file__).parent / "skills"
+        self.skills_dir = Path(skills_dir) if skills_dir else config.skills_dir
         self.skills = self._load_skills()
 
     def _load_skills(self) -> Dict[str, Dict[str, str]]:

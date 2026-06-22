@@ -4,6 +4,15 @@
 
 This document defines the YAML schema for workflow manifests. Workflows are stage sequences with gates, artifacts, and skill assignments.
 
+## Implementation
+
+The schema is implemented by:
+- `manifest_loader.py` - Loads and validates workflow manifests from YAML files
+- `deterministic_tools.py` - Provides `load_manifest()` function for parsing manifests
+- `orchestrate.py` - Uses manifests to orchestrate workflow execution
+
+See `manifest_loader.py` for validation logic and field reference implementation.
+
 ## File Structure
 
 Each workflow has a single file:
@@ -98,6 +107,7 @@ gates:
 - **Gate IDs**: Use `g<step>_<short>` format (e.g., g1_design_approval)
 - **Skill names**: Must match corresponding skill YAML file names
 - **Artifact names**: Use kebab-case with .md extension for markdown files
+- **Field names**: Schema field names must match exactly with implementation in `manifest_loader.py`
 
 ## Versioning
 

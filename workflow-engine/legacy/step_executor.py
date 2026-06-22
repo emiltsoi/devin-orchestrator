@@ -135,8 +135,8 @@ Original task:
 
     def _get_step_order(self) -> List[str]:
         """Get ordered list of steps from manifest"""
-        # Extract step keys from required_artefacts
-        steps = list(self.manifest.required_artefacts.keys())
+        # Extract step keys from required_artifacts
+        steps = list(self.manifest.required_artifacts.keys())
         # Sort to ensure step_0 is first, then step_1, step_2, etc.
         steps.sort()
         # Remove step_0 as it's handled separately
@@ -266,7 +266,7 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                     'session_id': self.session_manager.state.session_id,
                     'step': step,
                     'session_dir': str(self.session_manager.get_session_dir()),
-                    'required_artifacts': self.manifest.required_artefacts.get(step, [])
+                    'required_artifacts': self.manifest.required_artifacts.get(step, [])
                 }
 
                 # Build the original prompt for potential retry
@@ -297,7 +297,7 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                         print(f"Output: {result.output[:200]}...")  # Truncate output
 
                         # Evaluate skill output with confidence scoring
-                        required_artifacts = self.manifest.required_artefacts.get(step, [])
+                        required_artifacts = self.manifest.required_artifacts.get(step, [])
                         if required_artifacts:
                             # Evaluate ALL required artifacts (not just the first)
                             evaluations = []
@@ -396,7 +396,7 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                         print(f"Skill {skill_name} invocation failed: {result.error}")
                         # Fall back to placeholder creation
                         print("Creating placeholder artifacts as fallback...")
-                        required_artifacts = self.manifest.required_artefacts.get(step, [])
+                        required_artifacts = self.manifest.required_artifacts.get(step, [])
                         for artifact in required_artifacts:
                             artifact_path = self.session_manager.get_session_dir() / artifact
                             if not artifact_path.exists():
@@ -408,7 +408,7 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                 print("Creating placeholder artifacts for testing...")
 
                 # Create placeholder artifacts for testing
-                required_artifacts = self.manifest.required_artefacts.get(step, [])
+                required_artifacts = self.manifest.required_artifacts.get(step, [])
                 for artifact in required_artifacts:
                     artifact_path = self.session_manager.get_session_dir() / artifact
                     if not artifact_path.exists():
@@ -417,7 +417,7 @@ Implement and validate the orchestrator's skill evaluation system with confidenc
                 continue
 
             # Validate required artifacts
-            required_artifacts = self.manifest.required_artefacts.get(step, [])
+            required_artifacts = self.manifest.required_artifacts.get(step, [])
             missing_artifacts = self._validate_artifacts(required_artifacts)
 
             if missing_artifacts:

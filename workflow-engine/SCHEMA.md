@@ -92,7 +92,7 @@ end_time: null
 **Purpose**: Validate required artifacts exist
 
 **Process**:
-1. Check manifest required_artefacts for current step
+1. Check manifest required_artifacts for current step
 2. Verify each artifact exists in session directory
 3. Validate artifact schema if applicable
 4. Report missing artifacts

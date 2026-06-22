@@ -51,10 +51,6 @@ class SkillInvoker:
         self.model = model or config.default_model
         self.permission_mode = permission_mode or config.default_permission_mode
         self.demo_mode = demo_mode
-        self._skill_definition_cache: Dict[str, Dict[str, Any]] = {}
-        self._skill_narrative_cache: Dict[str, str] = {}
-        self._cache_hits = 0
-        self._cache_misses = 0
 
     def invoke_skill(
         self,
@@ -148,67 +144,6 @@ class SkillInvoker:
                 output=None,
                 error=str(e)
             )
-
-    def load_skill_definition(self, skill_name: str) -> Optional[Dict[str, Any]]:
-        """Load skill YAML definition with caching"""
-        # Check cache first
-        if skill_name in self._skill_definition_cache:
-            self._cache_hits += 1
-            return self._skill_definition_cache[skill_name]
-
-        import yaml
-
-        # Try subdirectory structure first (skills/skill_name/skill_name.yaml)
-        skill_yaml = self.skills_dir / skill_name / (skill_name + ".yaml")
-        if not skill_yaml.exists():
-            # Try flat structure (skills/skill_name.yaml)
-            skill_yaml = self.skills_dir / (skill_name + ".yaml")
-
-        if not skill_yaml.exists():
-            return None
-
-        with open(skill_yaml, 'r', encoding='utf-8') as f:
-            skill_def = yaml.safe_load(f)
-
-        # Cache the loaded definition
-        self._cache_misses += 1
-        self._skill_definition_cache[skill_name] = skill_def
-        return skill_def
-
-    def load_skill_narrative(self, skill_name: str) -> Optional[str]:
-        """Load skill markdown narrative with caching"""
-        # Check cache first
-        if skill_name in self._skill_narrative_cache:
-            self._cache_hits += 1
-            return self._skill_narrative_cache[skill_name]
-
-        # Try subdirectory structure first (skills/skill_name/skill_name.md)
-        skill_md = self.skills_dir / skill_name / (skill_name + ".md")
-        if not skill_md.exists():
-            # Try flat structure (skills/skill_name.md)
-            skill_md = self.skills_dir / (skill_name + ".md")
-
-        if not skill_md.exists():
-            return None
-
-        with open(skill_md, 'r', encoding='utf-8') as f:
-            skill_narrative = f.read()
-
-        # Cache the loaded narrative
-        self._cache_misses += 1
-        self._skill_narrative_cache[skill_name] = skill_narrative
-        return skill_narrative
-
-    def clear_skill_cache(self) -> None:
-        """
-        Clear the skill definition and narrative caches
-
-        Useful for testing or if skill files are updated during runtime
-        """
-        self._skill_definition_cache.clear()
-        self._skill_narrative_cache.clear()
-        self._cache_hits = 0
-        self._cache_misses = 0
 
     def build_skill_prompt(
         self,

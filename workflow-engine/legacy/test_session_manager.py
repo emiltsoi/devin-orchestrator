@@ -41,10 +41,10 @@ class TestSessionManager(unittest.TestCase):
             session_init={
                 'command': 'session-init',
                 'creates_workdir': 'work/<session_id>/',
-                'initial_artefacts': ['request.md', 'status.md']
+                'initial_artifacts': ['request.md', 'status.md']
             },
             auto_load=[],
-            required_artefacts={
+            required_artifacts={
                 'step_0': ['request.md', 'status.md'],
                 'step_1': ['requirement.md']
             },

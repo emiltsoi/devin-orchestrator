@@ -42,8 +42,11 @@ class SkillEvaluator:
             enable_semantic: Enable semantic evaluation layer (default: False)
             devin_cli_path: Optional path to devin.exe for semantic evaluation
         """
+        from config_loader import ConfigLoader
+        
+        config = ConfigLoader.load()
         self.harness_root = harness_root
-        self.skills_dir = harness_root / 'skills'
+        self.skills_dir = config.skills_dir
         self.enable_semantic = enable_semantic
         self.devin_cli_path = devin_cli_path
 
@@ -80,8 +83,9 @@ class SkillEvaluator:
         details = {}
 
         # Load skill definition to get Iron Law
-        skill_def = self._load_skill_definition(skill_name)
-        if not skill_def:
+        from deterministic_tools import load_skill
+        skill_data = load_skill(self.skills_dir, skill_name)
+        if not skill_data:
             return EvaluationResult(
                 confidence=0.0,
                 passed=False,
@@ -90,6 +94,8 @@ class SkillEvaluator:
                 requires_user_input=True,
                 details={}
             )
+        
+        skill_def = skill_data['definition']
 
         iron_law = skill_def.get('iron_law', '')
 
@@ -380,12 +386,3 @@ Respond with JSON only, no other text.
                 'issues': [],
                 'error': f"Semantic evaluation error: {str(e)}"
             }
-
-    def _load_skill_definition(self, skill_name: str) -> Optional[Dict[str, Any]]:
-        """Load skill YAML definition"""
-        skill_yaml = self.skills_dir / f"{skill_name}.yaml"
-        if not skill_yaml.exists():
-            return None
-
-        with open(skill_yaml, 'r', encoding='utf-8') as f:
-            return yaml.safe_load(f)

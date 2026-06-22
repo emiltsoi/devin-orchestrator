@@ -42,12 +42,12 @@ class TestManifestLoader(unittest.TestCase):
             'session_init': {
                 'command': 'session-init',
                 'creates_workdir': 'work/<session_id>/',
-                'initial_artefacts': ['request.md', 'status.md']
+                'initial_artifacts': ['request.md', 'status.md']
             },
             'auto_load': [
                 {'path': 'skills/README.md', 'always': True, 'purpose': 'Skill index'}
             ],
-            'required_artefacts': {
+            'required_artifacts': {
                 'step_0': ['request.md', 'status.md'],
                 'step_1': ['requirement.md']
             },
@@ -215,7 +215,7 @@ class TestManifestLoader(unittest.TestCase):
         self.assertEqual(manifest.session_id_format, 'TEST-NNN')
         self.assertEqual(manifest.session_init['command'], 'session-init')
         self.assertEqual(len(manifest.auto_load), 1)
-        self.assertEqual(len(manifest.required_artefacts), 2)
+        self.assertEqual(len(manifest.required_artifacts), 2)
         self.assertEqual(len(manifest.gates), 1)
         self.assertEqual(len(manifest.skills), 1)
         self.assertEqual(manifest.branch['default'], 'feature/<session_id>')

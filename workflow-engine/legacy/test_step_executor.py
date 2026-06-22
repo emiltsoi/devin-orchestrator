@@ -53,10 +53,10 @@ class TestStepExecutor(unittest.TestCase):
             'session_init': {
                 'command': 'session-init',
                 'creates_workdir': 'work/<session_id>/',
-                'initial_artefacts': ['request.md', 'status.md']
+                'initial_artifacts': ['request.md', 'status.md']
             },
             'auto_load': [],
-            'required_artefacts': {
+            'required_artifacts': {
                 'step_0': ['request.md', 'status.md'],
                 'step_1': ['requirement.md'],
                 'step_2': ['baseline.md']
@@ -155,7 +155,7 @@ class TestStepExecutor(unittest.TestCase):
         # Create manifest with step that has no skills
         manifest_dict = self.valid_manifest.copy()
         manifest_dict['skills'] = []  # No skills
-        manifest_dict['required_artefacts']['step_3'] = ['design.md']
+        manifest_dict['required_artifacts']['step_3'] = ['design.md']
         
         manifest_path = self.workflows_dir / 'no_skills.manifest.yaml'
         with open(manifest_path, 'w', encoding='utf-8') as f:
