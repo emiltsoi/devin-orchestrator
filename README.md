@@ -1,6 +1,13 @@
-# Windsurf Harness
+# devin-orchestrator
 
 A generic, harness-agnostic framework for AI-assisted software development, built on top of Windsurf Cascade and inspired by [obra/superpowers](https://github.com/obra/superpowers).
+
+**See Also:**
+- [INSTALL.md](INSTALL.md) - Installation instructions
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment model and workflow updates
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
+- [skills/README.md](skills/README.md) - Skills library documentation
+- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Agent-facing orchestration protocol
 
 ## Vision
 
@@ -47,6 +54,7 @@ Early prototype phase. Design documented in `ARCHITECTURE.md`.
 devin-orchestrator/
 ├── skills/          # Skill definitions (YAML + markdown)
 ├── workflows/       # Workflow definitions (YAML manifests + markdown)
+├── workflow-engine/ # Orchestration engine and tools
 ├── adapters/        # Transport adapter implementations
 ├── contracts/       # Dispatch contract definitions
 ├── templates/       # Prompt templates for dispatches

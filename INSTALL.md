@@ -1,5 +1,10 @@
 # Installation Guide
 
+**See Also:**
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment model and workflow updates
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
+- [AGENT-INSTALL.md](AGENT-INSTALL.md) - Agent-specific installation guide
+
 ## Quick Start
 
 ### Option 1: Automated Installation (Recommended)
@@ -108,32 +113,55 @@ Parameters:
 
 ## Configuration
 
-Edit `~/.devin-orchestrator/config.yaml` to customize:
+Edit `~/.devin-orchestrator/config.yaml` to customize. The config file supports environment variable substitution using `${VAR}` or `${VAR:-default}` syntax.
 
+### Cross-Platform Configuration
+
+**Option 1: Edit config.yaml directly**
 ```yaml
 global_root: ~/.devin-orchestrator
 skills_dir: ~/.devin-orchestrator/skills
 workflows_dir: ~/.devin-orchestrator/workflows
 workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
 
-devin_cli_path: C:/Users/<user>/AppData/Local/devin/cli/bin/devin.exe
+# Windows
+devin_cli_path: C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
+# Linux/macOS
+# devin_cli_path: ~/.local/bin/devin
+
 default_model: swe-1.6
 default_permission_mode: dangerous
 
 session_work_dir: ~/.devin-orchestrator/work
 ```
 
-## Environment Variables
+**Option 2: Use environment variables (recommended for multi-user setups)**
+```yaml
+devin_cli_path: ${DEVIN_CLI_PATH}
+default_model: ${DEVIN_DEFAULT_MODEL:-swe-1.6}
+default_permission_mode: ${DEVIN_DEFAULT_PERMISSION_MODE:-dangerous}
+```
+
+**Option 3: Use config.yaml.template**
+```bash
+cp config.yaml.template config.yaml
+# Edit config.yaml with your specific paths
+```
+
+### Environment Variables
 
 Override config with environment variables:
 
 ```bash
-export DEVIN_ORCHESTRATOR_ROOT=~/.devin-orchestrator
-export DEVIN_ORCHESTRATOR_SKILLS_DIR=~/.devin-orchestrator/skills
-export DEVIN_ORCHESTRATOR_WORKFLOWS_DIR=~/.devin-orchestrator/workflows
-export DEVIN_CLI_PATH=C:/Users/<user>/AppData/Local/devin/cli/bin/devin.exe
-export DEVIN_DEFAULT_MODEL=swe-1.6
-export DEVIN_DEFAULT_PERMISSION_MODE=dangerous
+# Windows (PowerShell)
+$env:DEVIN_CLI_PATH = "C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe"
+$env:DEVIN_DEFAULT_MODEL = "swe-1.6"
+$env:DEVIN_DEFAULT_PERMISSION_MODE = "dangerous"
+
+# Linux/macOS (Bash)
+export DEVIN_CLI_PATH="~/.local/bin/devin"
+export DEVIN_DEFAULT_MODEL="swe-1.6"
+export DEVIN_DEFAULT_PERMISSION_MODE="dangerous"
 ```
 
 ## Architecture

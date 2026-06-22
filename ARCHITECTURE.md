@@ -9,6 +9,7 @@ related:
   - workflows/superpower.runbook.md
   - workflows/use-cases.yaml
   - skills/README.md
+  - DEPLOYMENT.md
 ---
 
 # Generic Windsurf-Based Harness Architecture

@@ -1,30 +1,33 @@
-# Global Configuration for Devin Orchestrator
-# This file defines the global paths for skills, workflows, and workflow engine
-# Environment variables can override these values
+# Global Configuration Template for Devin Orchestrator
+# Copy this file to config.yaml and fill in the placeholders
+# Or set environment variables to override these values
 
+# Global paths (can use ~ for home directory)
 global_root: ~/.devin-orchestrator
 skills_dir: ~/.devin-orchestrator/skills
 workflows_dir: ~/.devin-orchestrator/workflows
 workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
 
 # Devin CLI configuration
-# Set DEVIN_CLI_PATH environment variable or update this path
 # Windows: C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
 # Linux/macOS: ~/.local/bin/devin
+# Or set DEVIN_CLI_PATH environment variable
 devin_cli_path: ${DEVIN_CLI_PATH}
 
 # Model configuration
-# Set DEVIN_DEFAULT_MODEL environment variable or update this value
+# Options: swe-1.6, claude-3-5-sonnet, etc.
+# Or set DEVIN_DEFAULT_MODEL environment variable
 default_model: ${DEVIN_DEFAULT_MODEL:-swe-1.6}
 
 # Permission mode configuration
+# Options: auto, smart, dangerous
 # NOTE: default_permission_mode is set to "dangerous" for automated dispatch workflows.
 # This is intentional because:
 # 1. Automated dispatch (via skill_invoker.py) cannot handle interactive permission prompts
 # 2. The orchestrator-worker pattern requires non-interactive execution
 # 3. Security is maintained through other means: path validation, input sanitization, audit trails
 # For interactive sessions, consider using "smart" or "auto" mode instead.
-# Set DEVIN_DEFAULT_PERMISSION_MODE environment variable or update this value
+# Or set DEVIN_DEFAULT_PERMISSION_MODE environment variable
 default_permission_mode: ${DEVIN_DEFAULT_PERMISSION_MODE:-dangerous}
 
 # Session configuration

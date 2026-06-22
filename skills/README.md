@@ -2,6 +2,12 @@
 
 This directory contains the skills library for devin-orchestrator. Skills are process disciplines that define how specific activities should be performed.
 
+**See Also:**
+- [ARCHITECTURE.md](../ARCHITECTURE.md) - Core abstractions and skill layer
+- [workflows/](../workflows/) - Workflow definitions that reference skills
+- [workflow-engine/](../workflow-engine/) - Engine that loads and executes skills
+- [skills/SCHEMA.md](SCHEMA.md) - Skill schema definition
+
 ## Skill Structure
 
 Each skill is defined in a subdirectory with two files:

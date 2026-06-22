@@ -10,7 +10,7 @@ The workflow engine executes workflow manifests by coordinating skills, gates, a
 
 **Purpose**: Load and validate workflow manifests
 
-**Input**: `workflows/<workflow>.manifest.yaml`
+**Input**: `workflows/<workflow>.manifest.yaml` (canonical) or `.devin/workflows/<workflow>.manifest.yaml` (local override)
 
 **Output**: Parsed manifest object
 
@@ -166,7 +166,7 @@ workflow:
 from workflow_engine import WorkflowEngine
 
 engine = WorkflowEngine()
-engine.load_manifest('workflows/feature.manifest.yaml')
+engine.load_manifest('workflows/feature.manifest.yaml')  # or .devin/workflows/feature.manifest.yaml for local override
 engine.initialize_session('FEATURE-001')
 engine.execute_step('step_0')
 engine.execute_step('step_1')

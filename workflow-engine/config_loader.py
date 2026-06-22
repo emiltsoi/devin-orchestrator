@@ -9,6 +9,7 @@ Supports environment variables and config file.
 
 import yaml
 import os
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
@@ -34,6 +35,31 @@ class ConfigLoader:
     FALLBACK_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
     
     @staticmethod
+    def expand_env_vars(value: str) -> str:
+        """
+        Expand environment variables in a string.
+        Supports ${VAR} and ${VAR:-default} syntax.
+        
+        Args:
+            value: String that may contain environment variable references
+            
+        Returns:
+            String with environment variables expanded
+        """
+        if not isinstance(value, str):
+            return value
+        
+        # Pattern to match ${VAR} or ${VAR:-default}
+        pattern = r'\$\{([^}:]+)(?::-([^}*))?\}'
+        
+        def replace_env_var(match):
+            var_name = match.group(1)
+            default_value = match.group(2) if match.group(2) is not None else ""
+            return os.environ.get(var_name, default_value)
+        
+        return re.sub(pattern, replace_env_var, value)
+    
+    @staticmethod
     def load(config_path: Optional[Path] = None) -> GlobalConfig:
         """
         Load global configuration
@@ -54,6 +80,12 @@ class ConfigLoader:
         if config_path.exists():
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = yaml.safe_load(f)
+            
+            # Expand environment variables in config values
+            if config_data:
+                for key, value in config_data.items():
+                    if isinstance(value, str):
+                        config_data[key] = ConfigLoader.expand_env_vars(value)
         else:
             config_data = {}
         

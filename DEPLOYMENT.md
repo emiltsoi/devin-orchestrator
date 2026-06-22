@@ -2,6 +2,11 @@
 
 **Purpose:** Document the hybrid deployment model for orchestrator–worker workflows.
 
+**See Also:**
+- [INSTALL.md](INSTALL.md) - Installation instructions
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
+- [AGENT-INSTALL.md](AGENT-INSTALL.md) - Agent-specific installation guide
+
 ## Deployment Model
 
 The hybrid deployment model combines global installation with optional per-workspace overrides:
