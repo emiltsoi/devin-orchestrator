@@ -20,7 +20,13 @@ from pathlib import Path
 def run_command(cmd, cwd=None):
     """Run a command and return success status"""
     try:
-        result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+        # Security: Avoid shell=True to prevent command injection
+        # Convert string command to list if needed
+        if isinstance(cmd, str):
+            # For simple commands, split into list (basic approach)
+            # For complex commands, caller should provide list directly
+            cmd = cmd.split()
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
         return False, "", str(e)
@@ -41,14 +47,14 @@ def main():
     if install_dir.exists():
         print(f"  Repository already exists at {install_dir}")
         print("  Pulling latest changes...")
-        success, stdout, stderr = run_command("git pull", cwd=install_dir)
+        success, stdout, stderr = run_command(["git", "pull"], cwd=install_dir)
         if success:
             print("  Repository updated successfully")
         else:
             print(f"  Warning: Could not update repository: {stderr}")
     else:
         print(f"  Cloning repository to {install_dir}...")
-        success, stdout, stderr = run_command(f"git clone {repo_url} {install_dir}")
+        success, stdout, stderr = run_command(["git", "clone", repo_url, str(install_dir)])
         if success:
             print("  Repository cloned successfully")
         else:
@@ -62,7 +68,7 @@ def main():
     install_script = install_dir / "install.py"
     if install_script.exists():
         print(f"  Running install.py...")
-        success, stdout, stderr = run_command(f"python {install_script}", cwd=install_dir)
+        success, stdout, stderr = run_command(["python", str(install_script)], cwd=install_dir)
         if success:
             print("  Global installation successful")
         else:

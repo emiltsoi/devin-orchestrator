@@ -14,7 +14,39 @@ devin-orchestrator has been hardened with several security improvements to prote
 
 ## Security Improvements
 
-### 1. Secrets Management
+### 1. Subprocess Security
+
+**Problem:** Use of `shell=True` in subprocess calls can lead to command injection vulnerabilities.
+
+**Solution:**
+- Removed `shell=True` from subprocess calls in `test_acp_minimal.py` and `install_automated.py`
+- Changed to list-based command execution which is safer and prevents shell injection
+- Added security comments explaining the changes
+
+**Before:**
+```python
+result = subprocess.run(
+    f'cmd /c "{batch_file}"',
+    shell=True,
+    capture_output=True,
+    text=True,
+    timeout=30,
+    cwd=workspace
+)
+```
+
+**After:**
+```python
+result = subprocess.run(
+    ['cmd', '/c', str(batch_file)],
+    capture_output=True,
+    text=True,
+    timeout=30,
+    cwd=workspace
+)
+```
+
+### 2. Secrets Management
 
 **Problem:** Hardcoded paths and credentials in source code.
 
@@ -42,7 +74,7 @@ devin_cli_path = get_secret_from_env("DEVIN_CLI_PATH", default="devin.exe")
 - `DEVIN_DEFAULT_PERMISSION_MODE`: Default permission mode
 - `DEVIN_SESSION_WORK_DIR`: Session work directory
 
-### 2. Input Sanitization
+### 3. Input Sanitization
 
 **Problem:** User input not validated before use.
 
@@ -84,7 +116,7 @@ safe_string = sanitize_string(user_input, max_length=10000)
 - **Filenames:** No path separators, no parent directory references, no control characters
 - **Strings:** No null bytes, configurable length limits, optional character whitelist
 
-### 3. File Permission Checks
+### 4. File Permission Checks
 
 **Problem:** No verification of file/directory permissions before operations.
 
@@ -115,7 +147,7 @@ if check_directory_permissions(dir_path, required_write=True, required_execute=T
 - Returns `False` if file/directory doesn't exist
 - Gracefully handles permission check errors
 
-### 4. Path Traversal Protection
+### 5. Path Traversal Protection
 
 **Problem:** No protection against path traversal attacks (e.g., `../../../etc/passwd`).
 
@@ -143,7 +175,35 @@ except PathTraversalError as e:
 - Optional control over whether absolute paths are allowed
 - Raises `PathTraversalError` if validation fails
 
-### 5. Security Utilities Module
+### 6. Backup and Recovery Security
+
+**Problem:** Backup and recovery scripts accepted user-provided paths without validation, potentially allowing path traversal attacks.
+
+**Solution:**
+- Added `validate_path_safe()` function to both `backup_script.py` and `recovery_script.py`
+- Added `validate_backup_name()` function to sanitize backup names
+- Path validation applied to all user-provided paths (project_root, backup_destination, backup_source)
+- Backup name sanitization prevents directory traversal via backup names
+
+**Usage:**
+```python
+from backup_script import validate_path_safe, validate_backup_name
+
+# Validate paths
+safe_path = validate_path_safe(base_dir, user_path, allow_absolute=True)
+
+# Sanitize backup names
+safe_backup_name = validate_backup_name(user_backup_name)
+```
+
+**Protection Mechanisms:**
+- Resolves all symbolic links and relative path components
+- Validates that resolved paths stay within allowed directories
+- Removes path separators and parent directory references from backup names
+- Removes null bytes and control characters
+- Raises `ValueError` if validation fails
+
+### 8. Security Utilities Module
 
 New `security_utils.py` module provides:
 
@@ -210,6 +270,25 @@ New `security_utils.py` module provides:
    
    # Bad
    safe_filename = user_filename
+   ```
+
+6. **Avoid shell=True in subprocess calls**
+   ```python
+   # Good
+   subprocess.run(['cmd', '/c', str(batch_file)], capture_output=True, text=True)
+   
+   # Bad
+   subprocess.run(f'cmd /c "{batch_file}"', shell=True, capture_output=True, text=True)
+   ```
+
+7. **Validate backup and recovery paths**
+   ```python
+   # Good
+   safe_path = validate_path_safe(base_dir, user_path, allow_absolute=True)
+   safe_backup_name = validate_backup_name(user_backup_name)
+   
+   # Bad
+   backup_path = backup_source / user_backup_name
    ```
 
 ### For Operators
@@ -317,6 +396,33 @@ if check_file_permissions(Path("/etc/passwd"), required_read=True):
     print("PASS: Permission check working")
 else:
     print("INFO: Permission check returned False (expected on some systems)")
+```
+
+### Test Backup and Recovery Path Validation
+```python
+from backup_script import validate_path_safe, validate_backup_name
+from pathlib import Path
+
+# Test path traversal protection
+base = Path("/safe/dir")
+malicious = Path("../../../etc/passwd")
+
+try:
+    validate_path_safe(base, malicious)
+    print("FAIL: Path traversal not detected")
+except ValueError:
+    print("PASS: Path traversal detected")
+
+# Test backup name sanitization
+try:
+    safe_name = validate_backup_name("../../../etc/passwd")
+    print(f"Sanitized name: {safe_name}")
+    if ".." not in safe_name and "/" not in safe_name:
+        print("PASS: Backup name sanitized")
+    else:
+        print("FAIL: Backup name not properly sanitized")
+except ValueError:
+    print("PASS: Invalid backup name rejected")
 ```
 
 ## Incident Response

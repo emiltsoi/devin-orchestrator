@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 import zipfile
 import logging
+import re
 
 # Configure logging
 logging.basicConfig(
@@ -22,18 +23,91 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def validate_path_safe(base_path, target_path, allow_absolute=False):
+    """
+    Validate that a target path is safe and doesn't escape the base path.
+    
+    Args:
+        base_path: The base directory that paths should be contained within
+        target_path: The target path to validate
+        allow_absolute: Whether to allow absolute paths (default: False)
+        
+    Returns:
+        The resolved, validated absolute path
+        
+    Raises:
+        ValueError: If the path attempts to escape the base directory
+    """
+    try:
+        resolved_target = Path(target_path).resolve()
+        
+        # If not allowing absolute paths, check if target is absolute
+        if not allow_absolute and Path(target_path).is_absolute():
+            raise ValueError(f"Absolute paths not allowed: {target_path}")
+        
+        resolved_base = Path(base_path).resolve()
+        
+        # Check if the resolved target is within the base path
+        try:
+            resolved_target.relative_to(resolved_base)
+        except ValueError:
+            raise ValueError(
+                f"Path traversal detected: {target_path} resolves to {resolved_target} "
+                f"which is outside base directory {resolved_base}"
+            )
+        
+        return resolved_target
+        
+    except (OSError, RuntimeError) as e:
+        raise ValueError(f"Invalid path {target_path}: {e}")
+
+
+def validate_backup_name(backup_name):
+    """
+    Validate backup name to prevent directory traversal and injection.
+    
+    Args:
+        backup_name: The backup name to validate
+        
+    Returns:
+        Sanitized backup name
+        
+    Raises:
+        ValueError: If the backup name is invalid
+    """
+    if not backup_name:
+        raise ValueError("Backup name cannot be empty")
+    
+    # Remove path separators and parent directory references
+    sanitized = backup_name.replace('/', '').replace('\\', '').replace('..', '')
+    
+    # Remove null bytes and other dangerous characters
+    sanitized = sanitized.replace('\x00', '')
+    
+    # Remove control characters
+    sanitized = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', sanitized)
+    
+    # Ensure backup name is not empty after sanitization
+    if not sanitized:
+        raise ValueError(f"Backup name is invalid after sanitization: {backup_name}")
+    
+    return sanitized
+
+
 class RecoveryManager:
     def __init__(self, project_root=None, backup_source=None):
         """Initialize recovery manager with paths"""
         if project_root is None:
             self.project_root = Path.cwd()
         else:
-            self.project_root = Path(project_root)
+            # Validate project root path (allow absolute paths)
+            self.project_root = validate_path_safe(Path.cwd(), project_root, allow_absolute=True)
         
         if backup_source is None:
             self.backup_source = self.project_root / "backups"
         else:
-            self.backup_source = Path(backup_source)
+            # Validate backup source path (allow absolute paths)
+            self.backup_source = validate_path_safe(self.project_root, backup_source, allow_absolute=True)
         
         # Define restore paths
         self.session_restore_paths = {
@@ -98,6 +172,8 @@ class RecoveryManager:
     
     def extract_backup(self, backup_name, extract_to=None):
         """Extract a backup archive"""
+        # Sanitize backup name to prevent path traversal
+        backup_name = validate_backup_name(backup_name)
         backup_path = self.backup_source / backup_name
         
         if not backup_path.exists():
@@ -129,6 +205,8 @@ class RecoveryManager:
     
     def validate_backup(self, backup_name):
         """Validate a backup before recovery"""
+        # Sanitize backup name to prevent path traversal
+        backup_name = validate_backup_name(backup_name)
         backup_path = self.backup_source / backup_name
         
         if not backup_path.exists():

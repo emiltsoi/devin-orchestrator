@@ -23,10 +23,9 @@ def test_acp_minimal():
     print(f"Batch file: {batch_file}")
 
     try:
-        # Run the batch file using subprocess
+        # Run the batch file using subprocess without shell=True for security
         result = subprocess.run(
-            f'cmd /c "{batch_file}"',
-            shell=True,
+            ['cmd', '/c', str(batch_file)],
             capture_output=True,
             text=True,
             timeout=30,
