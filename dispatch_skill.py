@@ -23,7 +23,7 @@ from config_loader import ConfigLoader
 def main():
     # Parse command line arguments
     if len(sys.argv) < 4:
-        print("Usage: dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode]")
+        print("Usage: dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]")
         sys.exit(1)
     
     skill_name = sys.argv[1]
@@ -31,6 +31,15 @@ def main():
     workspace = sys.argv[3]
     is_reviewer = len(sys.argv) > 4 and sys.argv[4].lower() == 'true'
     demo_mode = len(sys.argv) > 5 and sys.argv[5].lower() == 'true'
+    config_overrides_json = sys.argv[6] if len(sys.argv) > 6 else None
+    
+    # Parse config overrides if provided
+    config_overrides = {}
+    if config_overrides_json:
+        try:
+            config_overrides = json.loads(config_overrides_json)
+        except json.JSONDecodeError:
+            print(f"Warning: Invalid JSON for config_overrides: {config_overrides_json}")
     
     # Load config
     config = ConfigLoader.load()
@@ -42,7 +51,8 @@ def main():
     context = {
         'session_id': session_id,
         'stage': skill_name,
-        'skill': skill_name
+        'skill': skill_name,
+        'config_overrides': config_overrides
     }
     
     # Invoke skill
@@ -50,7 +60,8 @@ def main():
         skill_name=skill_name,
         context=context,
         workspace=workspace,
-        is_reviewer=is_reviewer
+        is_reviewer=is_reviewer,
+        config_overrides=config_overrides
     )
     
     # Output result as JSON

@@ -55,7 +55,8 @@ class OrchestrationEngine:
         manifest_path: Path,
         session_id: str,
         request_content: str,
-        skip_brainstorming: Optional[bool] = None
+        skip_brainstorming: Optional[bool] = None,
+        config_overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Execute a complete workflow from manifest
@@ -65,6 +66,7 @@ class OrchestrationEngine:
             session_id: Unique session identifier
             request_content: Initial request content
             skip_brainstorming: Override manifest skip_brainstorming setting
+            config_overrides: Optional configuration overrides for skills
             
         Returns:
             Dictionary with execution results
@@ -92,7 +94,8 @@ class OrchestrationEngine:
                 stage=stage,
                 manifest=manifest,
                 session_dir=session_dir,
-                session_id=session_id
+                session_id=session_id,
+                config_overrides=config_overrides
             )
             results['stages'].append(stage_result)
             
@@ -128,7 +131,8 @@ class OrchestrationEngine:
         stage: Dict[str, Any],
         manifest: Dict[str, Any],
         session_dir: Path,
-        session_id: str
+        session_id: str,
+        config_overrides: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Execute a single stage
@@ -138,6 +142,7 @@ class OrchestrationEngine:
             manifest: Full manifest configuration
             session_dir: Session directory
             session_id: Session identifier
+            config_overrides: Optional configuration overrides for skills
             
         Returns:
             Dictionary with stage execution results
@@ -164,7 +169,8 @@ class OrchestrationEngine:
                 'skill': skill_name
             },
             workspace=str(session_dir),
-            is_reviewer=stage.get('skill') == 'requesting-code-review'
+            is_reviewer=stage.get('skill') == 'requesting-code-review',
+            config_overrides=config_overrides
         )
         
         # Validate output artifacts

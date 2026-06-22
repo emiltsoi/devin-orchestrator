@@ -64,7 +64,8 @@ class SkillInvoker:
         custom_prompt: Optional[str] = None,
         focused_context: Optional[list] = None,
         correction_artifact: Optional[str] = None,
-        is_reviewer: bool = False
+        is_reviewer: bool = False,
+        config_overrides: Optional[Dict[str, Any]] = None
     ) -> SkillInvocationResult:
         """
         Invoke a skill using the devin-cli transport adapter
@@ -98,6 +99,12 @@ class SkillInvoker:
                 output=None,
                 error=f"Skill definition not found: {skill_name}"
             )
+
+        # Apply config overrides to skill definition
+        if config_overrides:
+            if 'configuration' not in skill_def:
+                skill_def['configuration'] = {}
+            skill_def['configuration'].update(config_overrides)
 
         # Load skill narrative
         skill_narrative = self.load_skill_narrative(skill_name)
