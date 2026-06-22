@@ -31,7 +31,7 @@ def run_devin_non_interactive(prompt, workspace=None, timeout=120):
     if workspace is None:
         workspace = os.getcwd()
     
-    cmd = [devin_cli_path, '--print', prompt]
+    cmd = [devin_cli_path, '--permission-mode', 'dangerous', '--print', prompt]
     
     try:
         result = subprocess.run(
