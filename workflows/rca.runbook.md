@@ -1,4 +1,4 @@
-# RCA Workflow Runbook
+# Root Cause Analysis Workflow Runbook
 
 **Source manifest:** `workflows/rca.manifest.yaml`
 **Schema version:** 1
@@ -6,97 +6,442 @@
 
 ## 1. Overview
 
-The RCA (Root Cause Analysis) workflow is an investigation-only workflow for analyzing incidents, bugs, or failures. It follows a systematic debugging approach to gather evidence, analyze it, identify the root cause, and propose fixes.
+The root cause analysis workflow is an investigation-only workflow for analyzing incidents, bugs, or failures. It follows a structured sequence from gathering evidence through analysis, root cause identification, fix proposal, and verification. Key invariants:
 
-**Core principle:** Read-only git operations. No implementation or code changes.
-
-**Key invariants:**
-- Root cause must be approved before proposing fixes
-- Fix recommendations must be approved before completion
-- All investigation is read-only (no git write operations)
+- Every stage produces a persistent artifact that survives across sessions
+- User gates (g1, g2) are hard stops requiring explicit approval
+- All skill execution is performed by stateless Devin workers to preserve neutrality
+- All artifact evaluation is performed by a separate neutral reviewer worker
+- The reasoning train is preserved in artifacts, not volatile context
+- **Canonical source deployment:** The canonical source of truth for workflow definitions is the `manifest.yaml` file. Runbooks are agent-facing companions that must maintain parity with the manifest. When deploying workflow changes, update the manifest first, then update the corresponding runbook to match.
 
 ## 2. Stage Sequence
 
 ### Stage 0: Gather Evidence
-- **Skill:** systematic-debugging
-- **Input:** incident_report, logs
-- **Output:** evidence.md
-- **Gate:** none
-- **Triage:** Proceed if evidence is complete and relevant
+
+**Skill:** `systematic-debugging`
+**Phase:** `step_0`
+**Required artifacts (output):** [evidence.md]
+**Gate:** `none`
+**Injected context (worker dispatch):** [incident_report, logs]
+
+#### Dispatch Protocol
+1. Call deterministic tool: `session_init(session_id)` if first stage
+2. Build focused dispatch context:
+   - Load artifacts from: [incident_report, logs]
+   - Include correction artifact if retry: `correction-step_0-{attempt}.md`
+3. Dispatch to stateless Devin worker:
+   - Skill: `systematic-debugging`
+   - Context: incident_report, logs (focused only)
+   - Output: evidence.md
+4. Call deterministic tool: `validate_structural([evidence.md])`
+   - FAIL → proceed to correction loop
+   - PASS → proceed to semantic evaluation
+
+#### Semantic Evaluation
+1. Dispatch neutral reviewer worker (always):
+   - Model: `swe-1-6` (free)
+   - Context: evidence.md + acceptance criteria
+   - Output: `review-step_0-{attempt}.md`
+2. Cascade synthesizes verdict:
+   - Reviewer verdict + deterministic floor result
+   - Cross-step coherence check against prior artifacts
+3. Assign confidence + rationale:
+   - HIGH → proceed to next stage
+   - MEDIUM → proceed with logged caveat (non-gated)
+   - LOW → proceed to correction loop
+
+#### Correction Loop (if floor FAIL or confidence LOW)
+1. Cascade reasons about what's wrong:
+   - Analyze structural failures (if any)
+   - Analyze reviewer feedback
+   - Analyze cross-step coherence issues
+2. Persist correction artifact: `correction-step_0-{attempt}.md`
+3. Re-dispatch with updated context:
+   - Previous output + correction artifact
+4. Bounded retries: max 3 attempts per stage
+5. If still FAIL after retries → ESCALATE to human
+
+#### Gate Protocol
+No gate for this stage → auto-proceed on HIGH/MEDIUM, correct on LOW
+
+#### Audit & State Recording
+1. Call deterministic tool: `append_audit(stage, skill, injected_context, structural_result, reviewer_verdict, confidence, rationale, triage_decision, retry_count, gate_verdict)`
+2. Write `run.jsonl` entry:
+   ```json
+   {
+     "timestamp": "<ISO8601>",
+     "session_id": "<session_id>",
+     "stage": "step_0",
+     "skill": "systematic-debugging",
+     "injected_context": ["incident_report", "logs"],
+     "structural_result": "PASS|FAIL",
+     "reviewer_verdict": "PASS|FAIL|<details>",
+     "confidence": "HIGH|MEDIUM|LOW",
+     "rationale": "<Cascade reasoning>",
+     "triage_decision": "proceed|correct|escalate",
+     "retry_count": <N>,
+     "gate_verdict": "none"
+   }
+   ```
+3. Proceed to next stage
+
+---
 
 ### Stage 1: Analyze Evidence
-- **Skill:** systematic-debugging
-- **Input:** evidence.md
-- **Output:** analysis.md
-- **Gate:** none
-- **Triage:** Proceed if analysis is thorough and identifies potential causes
+
+**Skill:** `systematic-debugging`
+**Phase:** `step_1`
+**Required artifacts (output):** [analysis.md]
+**Gate:** `none`
+**Injected context (worker dispatch):** [evidence.md]
+
+#### Dispatch Protocol
+1. Build focused dispatch context:
+   - Load artifacts from: [evidence.md]
+   - Include correction artifact if retry: `correction-step_1-{attempt}.md`
+2. Dispatch to stateless Devin worker:
+   - Skill: `systematic-debugging`
+   - Context: evidence.md (focused only)
+   - Output: analysis.md
+3. Call deterministic tool: `validate_structural([analysis.md])`
+   - FAIL → proceed to correction loop
+   - PASS → proceed to semantic evaluation
+
+#### Semantic Evaluation
+1. Dispatch neutral reviewer worker (always):
+   - Model: `swe-1-6` (free)
+   - Context: analysis.md + evidence.md
+   - Output: `review-step_1-{attempt}.md`
+2. Cascade synthesizes verdict:
+   - Does analysis.md identify potential causes from evidence?
+   - Is it thorough and well-structured?
+   - Reviewer verdict + floor result
+3. Assign confidence + rationale:
+   - HIGH → proceed to next stage
+   - MEDIUM → proceed with logged caveat (non-gated)
+   - LOW → proceed to correction loop
+
+#### Correction Loop (if floor FAIL or confidence LOW)
+1. Cascade reasons about what's wrong:
+   - Analyze structural failures (if any)
+   - Analyze reviewer feedback
+   - Analyze cross-step coherence issues
+2. Persist correction artifact: `correction-step_1-{attempt}.md`
+3. Re-dispatch with updated context:
+   - Previous output + correction artifact
+4. Bounded retries: max 3 attempts per stage
+5. If still FAIL after retries → ESCALATE to human
+
+#### Gate Protocol
+No gate for this stage → auto-proceed on HIGH/MEDIUM, correct on LOW
+
+#### Audit & State Recording
+1. Call deterministic tool: `append_audit(...)` with full stage details
+2. Write `run.jsonl` entry
+3. Proceed to next stage
+
+---
 
 ### Stage 2: Identify Root Cause
-- **Skill:** systematic-debugging
-- **Input:** analysis.md
-- **Output:** root_cause.md
-- **Gate:** g1_root_cause_approval (human)
-- **Triage:** Wait for human root cause approval before proceeding
+
+**Skill:** `systematic-debugging`
+**Phase:** `step_2`
+**Required artifacts (output):** [root_cause.md]
+**Gate:** `g1_root_cause_approval`
+**Injected context (worker dispatch):** [analysis.md]
+
+#### Dispatch Protocol
+1. Build focused dispatch context:
+   - Load artifacts from: [analysis.md]
+   - Include correction artifact if retry: `correction-step_2-{attempt}.md`
+2. Dispatch to stateless Devin worker:
+   - Skill: `systematic-debugging`
+   - Context: analysis.md (focused only)
+   - Output: root_cause.md
+3. Call deterministic tool: `validate_structural([root_cause.md])`
+   - FAIL → proceed to correction loop
+   - PASS → proceed to semantic evaluation
+
+#### Semantic Evaluation
+1. Dispatch neutral reviewer worker (always):
+   - Model: `swe-1-6` (free)
+   - Context: root_cause.md + analysis.md
+   - Output: `review-step_2-{attempt}.md`
+2. Cascade synthesizes verdict:
+   - Does root_cause.md identify the root cause?
+   - Is it well-supported by evidence and analysis?
+   - Reviewer verdict + floor result
+3. Assign confidence + rationale:
+   - HIGH → proceed to gate
+   - MEDIUM → proceed to gate with logged caveat
+   - LOW → proceed to correction loop
+
+#### Correction Loop (if floor FAIL or confidence LOW)
+1. Cascade reasons about what's wrong:
+   - Analyze structural failures (if any)
+   - Analyze reviewer feedback
+   - Analyze cross-step coherence issues
+2. Persist correction artifact: `correction-step_2-{attempt}.md`
+3. Re-dispatch with updated context:
+   - Previous output + correction artifact
+4. Bounded retries: max 3 attempts per stage
+5. If still FAIL after retries → ESCALATE to human
+
+#### Gate Protocol
+1. HARD STOP at g1_root_cause_approval:
+   - Surface summary: root_cause.md + reviewer verdict + confidence + rationale
+   - Persist decision artifact: `gate-g1_root_cause_approval.md`
+   - Await human verdict (explicit_approval required)
+2. Call deterministic tool: `record_gate(g1_root_cause_approval, verdict)`
+3. If approved → proceed to Stage 3
+4. If rejected → ESCALATE to human for guidance
+
+#### Audit & State Recording
+1. Call deterministic tool: `append_audit(...)` with full stage details
+2. Write `run.jsonl` entry
+3. Proceed to next stage
+
+---
 
 ### Stage 3: Propose Fixes
-- **Skill:** systematic-debugging
-- **Input:** root_cause.md
-- **Output:** fix_recommendations.md
-- **Gate:** none
-- **Triage:** Proceed if fix recommendations are specific and actionable
+
+**Skill:** `systematic-debugging`
+**Phase:** `step_3`
+**Required artifacts (output):** [fix_recommendations.md]
+**Gate:** `none`
+**Injected context (worker dispatch):** [root_cause.md]
+
+#### Dispatch Protocol
+1. Build focused dispatch context:
+   - Load artifacts from: [root_cause.md]
+   - Include correction artifact if retry: `correction-step_3-{attempt}.md`
+2. Dispatch to stateless Devin worker:
+   - Skill: `systematic-debugging`
+   - Context: root_cause.md (focused only)
+   - Output: fix_recommendations.md
+3. Call deterministic tool: `validate_structural([fix_recommendations.md])`
+   - FAIL → proceed to correction loop
+   - PASS → proceed to semantic evaluation
+
+#### Semantic Evaluation
+1. Dispatch neutral reviewer worker (always):
+   - Model: `swe-1-6` (free)
+   - Context: fix_recommendations.md + root_cause.md
+   - Output: `review-step_3-{attempt}.md`
+2. Cascade synthesizes verdict:
+   - Do fix_recommendations.md address the root cause?
+   - Are they comprehensive and actionable?
+   - Reviewer verdict + floor result
+3. Assign confidence + rationale:
+   - HIGH → proceed to next stage
+   - MEDIUM → proceed with logged caveat (non-gated)
+   - LOW → proceed to correction loop
+
+#### Correction Loop (if floor FAIL or confidence LOW)
+1. Cascade reasons about what's wrong:
+   - Analyze structural failures (if any)
+   - Analyze reviewer feedback
+   - Analyze cross-step coherence issues
+2. Persist correction artifact: `correction-step_3-{attempt}.md`
+3. Re-dispatch with updated context:
+   - Previous output + correction artifact
+4. Bounded retries: max 3 attempts per stage
+5. If still FAIL after retries → ESCALATE to human
+
+#### Gate Protocol
+No gate for this stage → auto-proceed on HIGH/MEDIUM, correct on LOW
+
+#### Audit & State Recording
+1. Call deterministic tool: `append_audit(...)` with full stage details
+2. Write `run.jsonl` entry
+3. Proceed to next stage
+
+---
 
 ### Stage 4: Verify Fixes
-- **Skill:** verification-before-completion
-- **Input:** fix_recommendations.md
-- **Output:** verification.md
-- **Gate:** g2_fix_approval (human)
-- **Triage:** Wait for human fix approval before completion
+
+**Skill:** `verification-before-completion`
+**Phase:** `step_4`
+**Required artifacts (output):** [verification.md]
+**Gate:** `g2_fix_approval`
+**Injected context (worker dispatch):** [fix_recommendations.md]
+
+#### Dispatch Protocol
+1. Build focused dispatch context:
+   - Load artifacts from: [fix_recommendations.md]
+   - Include correction artifact if retry: `correction-step_4-{attempt}.md`
+2. Dispatch to stateless Devin worker:
+   - Skill: `verification-before-completion`
+   - Context: fix_recommendations.md (focused only)
+   - Output: verification.md
+3. Call deterministic tool: `validate_structural([verification.md])`
+   - FAIL → proceed to correction loop
+   - PASS → proceed to semantic evaluation
+
+#### Semantic Evaluation
+1. Dispatch neutral reviewer worker (always):
+   - Model: `swe-1-6` (free)
+   - Context: verification.md + fix_recommendations.md
+   - Output: `review-step_4-{attempt}.md`
+2. Cascade synthesizes verdict:
+   - Does verification.md confirm fixes address root cause?
+   - Are verification steps comprehensive?
+   - Reviewer verdict + floor result
+3. Assign confidence + rationale:
+   - HIGH → proceed to gate
+   - MEDIUM → proceed to gate with logged caveat
+   - LOW → proceed to correction loop
+
+#### Correction Loop (if floor FAIL or confidence LOW)
+1. Cascade reasons about what's wrong:
+   - Analyze structural failures (if any)
+   - Analyze reviewer feedback
+   - Analyze cross-step coherence issues
+2. Persist correction artifact: `correction-step_4-{attempt}.md`
+3. Re-dispatch with updated context:
+   - Previous output + correction artifact
+4. Bounded retries: max 3 attempts per stage
+5. If still FAIL after retries → ESCALATE to human
+
+#### Gate Protocol
+1. HARD STOP at g2_fix_approval:
+   - Surface summary: verification.md + reviewer verdict + confidence + rationale
+   - Persist decision artifact: `gate-g2_fix_approval.md`
+   - Await human verdict (explicit_approval required)
+2. Call deterministic tool: `record_gate(g2_fix_approval, verdict)`
+3. If approved → workflow complete
+4. If rejected → ESCALATE to human for guidance
+
+#### Audit & State Recording
+1. Call deterministic tool: `append_audit(...)` with full stage details
+2. Write `run.jsonl` entry
+3. Workflow complete
+
+---
 
 ## 3. Triage Protocol
 
-**After each stage:**
-1. Validate structural floor (file existence, non-emptiness, no placeholders)
-2. Dispatch neutral reviewer (SWE-1.6 with swe-compliance skill)
-3. Cascade triage decision based on:
-   - Structural result (PASS/FAIL)
-   - Reviewer verdict (PASS/BLOCK)
-   - Confidence score (HIGH/MEDIUM/LOW)
-   - Stage-specific criteria
+Applied after every stage dispatch:
 
-**Triage decisions:**
-- **proceed:** Structural PASS + reviewer PASS + confidence HIGH/MEDIUM
-- **retry:** Structural FAIL or reviewer BLOCK + confidence LOW + retry_count < 3
-- **escalate:** Retry exhausted or confidence LOW with critical issues
-- **wait:** At human gate (g1, g2)
+```
+1. Validate structural floor (deterministic tool)
+   └─ FAIL → correction loop (bounded) → still FAIL → ESCALATE
+
+2. Dispatch neutral reviewer (always, separate worker)
+   └─ Reviewer verdict persisted to `review-{stage}-{attempt}.md`
+
+3. Cascade synthesizes verdict:
+   - Does artifact satisfy acceptance criteria?
+   - Does artifact cohere with prior artifacts (cross-step context)?
+   - Reviewer verdict + floor result
+
+4. Assign confidence + rationale:
+   - HIGH   → proceed (all criteria met, no concerns)
+   - MEDIUM → proceed with logged caveat (non-gated stages only)
+   - LOW    → correction loop (bounded) → still FAIL → ESCALATE
+
+5. If stage has user gate → HARD STOP, surface summary, await human
+
+6. Record decision to audit ledger + run.jsonl before advancing
+```
+
+**Confidence guidelines:**
+- **HIGH:** All acceptance criteria met; reviewer passes; structural floor passes; cross-step coherence verified; no concerns.
+- **MEDIUM:** Acceptance criteria met but with minor concerns; reviewer passes with caveats; structural floor passes; cross-step coherence acceptable. Proceed with logged caveat.
+- **LOW:** Acceptance criteria not met; reviewer fails; structural floor fails; cross-step coherence broken; major concerns. Do not proceed — correct or escalate.
+
+---
 
 ## 4. Escalation Policy
 
-**Escalate to human when:**
-- Retry loop exhausted (3 attempts)
-- Confidence LOW with critical security or data loss issues
-- Root cause cannot be identified
-- Fix recommendations are unclear or incomplete
-- Verification fails
+When to stop and ask the human:
+
+1. **Structural floor FAIL after bounded retries** (max 3 attempts per stage)
+   - Cannot proceed without meeting objective floor
+   - ESCALATE to human for guidance
+
+2. **Confidence LOW after bounded retries** (max 3 attempts per stage)
+   - Cascade cannot reason to a satisfactory outcome
+   - ESCALATE to human for guidance
+
+3. **User gate rejection** (g1, g2)
+   - Human explicitly rejects the artifact
+   - ESCALATE to human for correction direction
+
+4. **Tiered model escalation** (later phase):
+   - If producer + reviewer fail > 1 attempt on the same stage
+   - Escalate to higher-quality model (claude-code) as third independent worker
+   - If tiered escalation also fails → ESCALATE to human
+
+**Escalation format:**
+```markdown
+### ESCALATION: Stage N (<Stage Name>)
+
+**Reason:** <why escalation is required>
+**Attempts:** <N> dispatches performed
+**Last structural result:** <PASS|FAIL>
+**Last reviewer verdict:** <details>
+**Last confidence:** <HIGH|MEDIUM|LOW>
+**Last rationale:** <Cascade reasoning>
+
+**Recommendation:** <what the human should do>
+
+Awaiting human guidance...
+```
+
+---
 
 ## 5. Deterministic Tool Calls
 
+Cascade must call these deterministic tools at specific points to ensure reproducibility and auditability:
+
 | Tool | When to Call | Purpose |
 |------|--------------|---------|
-| `session_init(session_id)` | Stage 0 only | Scaffolds workdir, creates request.md, status.md, session-audit.md |
+| `session_init(session_id)` | First stage only | Scaffolds workdir, creates initial artifacts (request.md, status.md, session-audit.md) |
 | `validate_structural(artifacts)` | After every worker dispatch | Checks existence, non-emptiness, no placeholders, Iron-Law rules |
-| `record_gate(gate_id, verdict)` | After every human gate decision | Records gate verdict to audit ledger |
+| `record_gate(gate_id, verdict)` | After every user gate decision | Records gate verdict to audit ledger |
 | `append_audit(...)` | After every stage decision | Appends structured entry to session-audit.md |
 | `write_run_jsonl(entry)` | After every stage decision | Appends machine-readable entry to run.jsonl for resumability |
 
+**Tool signatures (for reference):**
+```python
+# session_init(session_id)
+# Creates: work/<session_id>/request.md, status.md, session-audit.md
+# Returns: workdir path
+
+# validate_structural(artifacts)
+# Input: list of artifact paths
+# Returns: { "result": "PASS|FAIL", "failures": [...] }
+
+# record_gate(gate_id, verdict)
+# Input: gate_id (str), verdict (str: "approved"|"rejected")
+# Appends to: session-audit.md
+
+# append_audit(stage, skill, injected_context, structural_result, reviewer_verdict, confidence, rationale, triage_decision, retry_count, gate_verdict)
+# Appends to: session-audit.md
+
+# write_run_jsonl(entry)
+# Input: dict with keys: timestamp, session_id, stage, skill, injected_context, structural_result, reviewer_verdict, confidence, rationale, triage_decision, retry_count, gate_verdict
+# Appends to: run.jsonl
+```
+
+---
+
 ## 6. Per-Skill Context Manifest
+
+Each skill declares exactly which artifacts are injected into its worker dispatch. This preserves worker neutrality by limiting context to only what's needed.
 
 | Skill | Injected Context (Worker Dispatch Only) |
 |-------|----------------------------------------|
-| systematic-debugging | incident_report, logs, evidence.md, analysis.md |
-| verification-before-completion | fix_recommendations.md, root_cause.md |
+| systematic-debugging | [stage-specific artifacts] |
+| verification-before-completion | [fix_recommendations.md] |
 
 **Correction-loop augmentation:**
 - On retry (attempt > 1), injected context becomes: `[original_context, previous_output, correction-{stage}-{attempt-1}.md]`
+- This ensures the worker sees what it produced before and why it needs correction
+
+---
 
 ## 7. Resumability Protocol
 
@@ -107,7 +452,7 @@ A fresh Cascade session can resume from a previous session using:
    - Load retry counts, gate verdicts, confidence history
 
 2. **Load present artifacts** to reconstruct reasoning train:
-   - All produced artifacts (evidence.md, analysis.md, root_cause.md, etc.)
+   - All produced artifacts (evidence.md, analysis.md, root_cause.md, fix_recommendations.md, verification.md)
    - All correction artifacts (correction-{stage}-{attempt}.md)
    - All review artifacts (review-{stage}-{attempt}.md)
    - All gate decision artifacts (gate-{gate_id}.md)
@@ -122,68 +467,4 @@ A fresh Cascade session can resume from a previous session using:
    - Verify required artifacts exist (structural floor)
    - If mismatch → ESCALATE to human (corrupted state)
 
-## 8. Devin Dispatch Protocol
-
-Cascade dispatches to SWE-1.6 (free tier) via Devin CLI with specific guardrails:
-
-### Skill Loading via Description Matching
-
-**Installed skills:**
-- `swe-compliance` - Ruthless compliance reviewer (triggers on "compliance review task, code verification, artifact audit, and quality check")
-
-**Trigger phrases in prompts:**
-- Reviewer dispatch: "This is a compliance review task, code verification, artifact audit, and quality check."
-
-### Guardrails
-
-**1. Read-only git operations**
-- RCA workflow is investigation-only
-- No git write operations allowed
-- Use `git log`, `git show`, `git diff` for investigation
-- Do not create branches, commits, or tags
-
-**2. Independent verification for reviewer BLOCK verdicts**
-- Compliance reviewers hallucinate ~70% of syntax claims on async code
-- After reviewer BLOCK verdict, call `verify_compliance_block(block_verdict, file_path)`
-- For syntax claims: `py_compile` is ground truth
-
-### When to Use SWE-1.6 vs Higher-Quality Model
-
-| Use SWE-1.6 | Use Higher-Quality Model |
-|---|---|
-| Log analysis and pattern matching | Complex architectural analysis |
-| Code reading and understanding | Cross-system dependency analysis |
-| Evidence gathering | Adversarial thinking for security issues |
-| Compliance review | Security surface analysis |
-
-## 9. Stage-Specific Notes
-
-### Stage 0: Gather Evidence
-- Trigger phrase: "This is a compliance review task, code verification, artifact audit, and quality check." (swe-compliance for reviewer)
-- Gather logs, code, and reproduction steps
-- Document all evidence in evidence.md
-- Ensure evidence is complete and relevant
-
-### Stage 1: Analyze Evidence
-- Trigger phrase: "This is a compliance review task, code verification, artifact audit, and quality check." (swe-compliance for reviewer)
-- Analyze evidence to identify potential causes
-- Document analysis in analysis.md
-- Consider multiple hypotheses
-
-### Stage 2: Identify Root Cause
-- Trigger phrase: "This is a compliance review task, code verification, artifact audit, and quality check." (swe-compliance for reviewer)
-- Identify the root cause from analysis
-- Document root cause in root_cause.md
-- Gate g1: Human must approve root cause before proposing fixes
-
-### Stage 3: Propose Fixes
-- Trigger phrase: "This is a compliance review task, code verification, artifact audit, and quality check." (swe-compliance for reviewer)
-- Propose specific, actionable fixes
-- Document fix recommendations in fix_recommendations.md
-- Include implementation details (but do not implement)
-
-### Stage 4: Verify Fixes
-- Trigger phrase: "This is a compliance review task, code verification, artifact audit, and quality check." (swe-compliance for reviewer)
-- Verify that proposed fixes address the root cause
-- Document verification in verification.md
-- Gate g2: Human must approve fix recommendations before completion
+**Resumability invariant:** The combination of `run.jsonl` + present artifacts must be sufficient to reconstruct the complete reasoning train and continue execution without relying on volatile context.
