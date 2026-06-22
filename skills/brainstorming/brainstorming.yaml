@@ -3,15 +3,18 @@ iron_law: Do NOT invoke any implementation skill, write any code, scaffold any p
 announcement: Using brainstorming skill to explore user intent, requirements and design before implementation.
 checklist:
   - Explore project context — check files, docs, recent commits
-  - Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
+  - Check if interactive mode is enabled
+  - If interactive: Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
+  - If non-interactive: Make reasonable assumptions based on context and request content
   - Propose 2-3 approaches — with trade-offs and your recommendation
-  - Present design — in sections scaled to their complexity, get user approval after each section
+  - Present design — in sections scaled to their complexity
   - Conditional: Adversarial review — auto-trigger if complexity/risk thresholds met
   - Write design doc — save to design.md (include adversarial review findings if conducted)
   - Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
-  - User reviews written spec — ask user to review the spec file before proceeding
-terminal_state: Design approved and saved to design.md, ready to invoke writing-plans skill
+  - Note: Human review happens via gate after brainstorming stage, not during skill execution
+terminal_state: Design saved to design.md, ready for human review via gate
 configuration:
+  interactive_mode: false  # If false, make reasonable assumptions instead of asking questions
   adversarial_review_policy: conditional  # always, never, conditional
   adversarial_review_mode: standard  # fast, standard, deep
   adversarial_review_triggers:
