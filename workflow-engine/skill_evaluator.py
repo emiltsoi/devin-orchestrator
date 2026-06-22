@@ -171,7 +171,7 @@ class SkillEvaluator:
 
         # Look for test result patterns - parse actual pass/fail counts
         # Pattern: "X passed, Y failed, Z errors" or "X/Y tests passed"
-        summary_pattern = r'(\d+)\s+passed,\s*(\d+)\s+failed(?:,\s*(\d+)\s+errors?)?'
+        summary_pattern = r'(\d+)\s+passed,\s*(\d+)\s+failed(?:,\s*(\d+)\s+errors)?'
         ratio_pattern = r'(\d+)/(\d+)\s+tests?\s+passed'
 
         found_tests = False

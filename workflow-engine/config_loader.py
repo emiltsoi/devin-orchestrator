@@ -50,7 +50,7 @@ class ConfigLoader:
             return value
         
         # Pattern to match ${VAR} or ${VAR:-default}
-        pattern = r'\$\{([^}:]+)(?::-([^}*))?\}'
+        pattern = r'\$\{([^}:]+)(?::-([^}]*))?\}'
         
         def replace_env_var(match):
             var_name = match.group(1)
