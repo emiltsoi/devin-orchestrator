@@ -15,12 +15,17 @@ import json
 import time
 import threading
 import logging
+import psutil
+import smtplib
+import requests
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -66,6 +71,19 @@ class Alert:
 
 
 @dataclass
+class SystemResourceMetrics:
+    """System resource usage metrics"""
+    cpu_percent: float
+    memory_percent: float
+    memory_used_gb: float
+    memory_total_gb: float
+    disk_percent: float
+    disk_used_gb: float
+    disk_total_gb: float
+    timestamp: datetime
+
+
+@dataclass
 class SystemHealthSnapshot:
     """Snapshot of system health at a point in time"""
     timestamp: datetime
@@ -74,6 +92,7 @@ class SystemHealthSnapshot:
     performance_metrics: Dict[str, float]
     active_workflows: int
     recent_failures: int
+    resource_metrics: Optional[SystemResourceMetrics] = None
 
 
 @dataclass
@@ -92,6 +111,26 @@ class MonitoringConfig:
         'failure_rate_warning': 0.1,  # 10%
         'failure_rate_critical': 0.25,  # 25%
     })
+    resource_thresholds: Dict[str, float] = field(default_factory=lambda: {
+        'cpu_warning': 80.0,  # 80%
+        'cpu_critical': 90.0,  # 90%
+        'memory_warning': 80.0,  # 80%
+        'memory_critical': 90.0,  # 90%
+        'disk_warning': 80.0,  # 80%
+        'disk_critical': 90.0,  # 90%
+    })
+    # Email notification configuration
+    email_enabled: bool = False
+    email_smtp_server: str = "smtp.gmail.com"
+    email_smtp_port: int = 587
+    email_username: str = ""
+    email_password: str = ""
+    email_from: str = ""
+    email_to: List[str] = field(default_factory=list)
+    # Webhook notification configuration
+    webhook_enabled: bool = False
+    webhook_url: str = ""
+    webhook_headers: Dict[str, str] = field(default_factory=dict)
 
 
 class AlertManager:
@@ -120,6 +159,108 @@ class AlertManager:
         with self._lock:
             self._alert_handlers.append(handler)
     
+    def send_email_notification(self, alert: Alert, config: MonitoringConfig) -> bool:
+        """
+        Send email notification for an alert
+        
+        Args:
+            alert: Alert to send notification for
+            config: Monitoring configuration with email settings
+            
+        Returns:
+            True if email sent successfully, False otherwise
+        """
+        if not config.email_enabled:
+            return False
+        
+        try:
+            # Create email message
+            msg = MIMEMultipart()
+            msg['From'] = config.email_from
+            msg['To'] = ', '.join(config.email_to)
+            msg['Subject'] = f"[{alert.severity.value.upper()}] {alert.title}"
+            
+            # Email body
+            body = f"""
+Alert Notification
+=================
+
+Alert ID: {alert.alert_id}
+Severity: {alert.severity.value.upper()}
+Type: {alert.alert_type.value}
+Title: {alert.title}
+Source: {alert.source}
+Timestamp: {alert.timestamp.isoformat()}
+
+Message:
+{alert.message}
+
+Metadata:
+{json.dumps(alert.metadata, indent=2)}
+"""
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Send email
+            with smtplib.SMTP(config.email_smtp_server, config.email_smtp_port) as server:
+                server.starttls()
+                server.login(config.email_username, config.email_password)
+                server.send_message(msg)
+            
+            logger.info(f"Email notification sent for alert {alert.alert_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send email notification: {e}")
+            return False
+    
+    def send_webhook_notification(self, alert: Alert, config: MonitoringConfig) -> bool:
+        """
+        Send webhook notification for an alert
+        
+        Args:
+            alert: Alert to send notification for
+            config: Monitoring configuration with webhook settings
+            
+        Returns:
+            True if webhook sent successfully, False otherwise
+        """
+        if not config.webhook_enabled or not config.webhook_url:
+            return False
+        
+        try:
+            # Prepare webhook payload
+            payload = {
+                'alert_id': alert.alert_id,
+                'alert_type': alert.alert_type.value,
+                'severity': alert.severity.value,
+                'title': alert.title,
+                'message': alert.message,
+                'timestamp': alert.timestamp.isoformat(),
+                'source': alert.source,
+                'metadata': alert.metadata,
+                'resolved': alert.resolved
+            }
+            
+            # Send webhook
+            headers = {'Content-Type': 'application/json'}
+            headers.update(config.webhook_headers)
+            
+            response = requests.post(
+                config.webhook_url,
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
+            
+            response.raise_for_status()
+            logger.info(f"Webhook notification sent for alert {alert.alert_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send webhook notification: {e}")
+            return False
+    
     def create_alert(
         self,
         alert_type: AlertType,
@@ -127,7 +268,8 @@ class AlertManager:
         title: str,
         message: str,
         source: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        config: Optional[MonitoringConfig] = None
     ) -> Alert:
         """
         Create and store a new alert
@@ -139,6 +281,7 @@ class AlertManager:
             message: Alert message
             source: Source of the alert
             metadata: Additional metadata
+            config: Optional monitoring configuration for notifications
             
         Returns:
             Created Alert object
@@ -164,6 +307,11 @@ class AlertManager:
                     handler(alert)
                 except Exception as e:
                     logger.error(f"Error in alert handler: {e}")
+            
+            # Send notifications if configured
+            if config:
+                self.send_email_notification(alert, config)
+                self.send_webhook_notification(alert, config)
             
             logger.warning(f"Alert created: {alert.alert_id} - {title}")
             return alert
@@ -352,13 +500,17 @@ class SystemHealthMonitor:
             if workflow.final_status in ['failed', 'escalated', 'blocked']:
                 recent_failures += 1
         
+        # Collect system resource metrics
+        resource_metrics = self._collect_resource_metrics()
+        
         snapshot = SystemHealthSnapshot(
             timestamp=datetime.now(),
             overall_status=report['overall_status'],
             component_status=component_status,
             performance_metrics=performance_metrics,
             active_workflows=len(all_metrics),
-            recent_failures=recent_failures
+            recent_failures=recent_failures,
+            resource_metrics=resource_metrics
         )
         
         # Store snapshot
@@ -368,7 +520,158 @@ class SystemHealthMonitor:
         # Generate alerts for health issues
         self._generate_health_alerts(snapshot, report)
         
+        # Generate alerts for resource issues
+        self._generate_resource_alerts(resource_metrics)
+        
         return snapshot
+    
+    def _collect_resource_metrics(self) -> SystemResourceMetrics:
+        """
+        Collect system resource usage metrics
+        
+        Returns:
+            SystemResourceMetrics with current resource usage
+        """
+        try:
+            # CPU usage
+            cpu_percent = psutil.cpu_percent(interval=1)
+            
+            # Memory usage
+            memory = psutil.virtual_memory()
+            memory_percent = memory.percent
+            memory_used_gb = memory.used / (1024**3)
+            memory_total_gb = memory.total / (1024**3)
+            
+            # Disk usage
+            disk = psutil.disk_usage('/')
+            disk_percent = disk.percent
+            disk_used_gb = disk.used / (1024**3)
+            disk_total_gb = disk.total / (1024**3)
+            
+            return SystemResourceMetrics(
+                cpu_percent=cpu_percent,
+                memory_percent=memory_percent,
+                memory_used_gb=memory_used_gb,
+                memory_total_gb=memory_total_gb,
+                disk_percent=disk_percent,
+                disk_used_gb=disk_used_gb,
+                disk_total_gb=disk_total_gb,
+                timestamp=datetime.now()
+            )
+        except Exception as e:
+            logger.error(f"Error collecting resource metrics: {e}")
+            # Return default metrics on error
+            return SystemResourceMetrics(
+                cpu_percent=0.0,
+                memory_percent=0.0,
+                memory_used_gb=0.0,
+                memory_total_gb=0.0,
+                disk_percent=0.0,
+                disk_used_gb=0.0,
+                disk_total_gb=0.0,
+                timestamp=datetime.now()
+            )
+    
+    def _generate_resource_alerts(self, resource_metrics: SystemResourceMetrics) -> None:
+        """
+        Generate alerts based on resource usage
+        
+        Args:
+            resource_metrics: Current resource metrics
+        """
+        thresholds = self.config.resource_thresholds
+        
+        # CPU alerts
+        if resource_metrics.cpu_percent >= thresholds['cpu_critical']:
+            self.alert_manager.create_alert(
+                alert_type=AlertType.RESOURCE_EXHAUSTION,
+                severity=AlertSeverity.CRITICAL,
+                title="CPU Usage Critical",
+                message=f"CPU usage is at {resource_metrics.cpu_percent:.1f}%, exceeding critical threshold",
+                source="SystemHealthMonitor",
+                config=self.config,
+                metadata={
+                    'cpu_percent': resource_metrics.cpu_percent,
+                    'threshold': thresholds['cpu_critical']
+                }
+            )
+        elif resource_metrics.cpu_percent >= thresholds['cpu_warning']:
+            self.alert_manager.create_alert(
+                alert_type=AlertType.RESOURCE_EXHAUSTION,
+                severity=AlertSeverity.WARNING,
+                title="CPU Usage Warning",
+                message=f"CPU usage is at {resource_metrics.cpu_percent:.1f}%, exceeding warning threshold",
+                source="SystemHealthMonitor",
+                config=self.config,
+                metadata={
+                    'cpu_percent': resource_metrics.cpu_percent,
+                    'threshold': thresholds['cpu_warning']
+                }
+            )
+        
+        # Memory alerts
+        if resource_metrics.memory_percent >= thresholds['memory_critical']:
+            self.alert_manager.create_alert(
+                alert_type=AlertType.RESOURCE_EXHAUSTION,
+                severity=AlertSeverity.CRITICAL,
+                title="Memory Usage Critical",
+                message=f"Memory usage is at {resource_metrics.memory_percent:.1f}%, exceeding critical threshold",
+                source="SystemHealthMonitor",
+                config=self.config,
+                metadata={
+                    'memory_percent': resource_metrics.memory_percent,
+                    'memory_used_gb': resource_metrics.memory_used_gb,
+                    'memory_total_gb': resource_metrics.memory_total_gb,
+                    'threshold': thresholds['memory_critical']
+                }
+            )
+        elif resource_metrics.memory_percent >= thresholds['memory_warning']:
+            self.alert_manager.create_alert(
+                alert_type=AlertType.RESOURCE_EXHAUSTION,
+                severity=AlertSeverity.WARNING,
+                title="Memory Usage Warning",
+                message=f"Memory usage is at {resource_metrics.memory_percent:.1f}%, exceeding warning threshold",
+                source="SystemHealthMonitor",
+                config=self.config,
+                metadata={
+                    'memory_percent': resource_metrics.memory_percent,
+                    'memory_used_gb': resource_metrics.memory_used_gb,
+                    'memory_total_gb': resource_metrics.memory_total_gb,
+                    'threshold': thresholds['memory_warning']
+                }
+            )
+        
+        # Disk alerts
+        if resource_metrics.disk_percent >= thresholds['disk_critical']:
+            self.alert_manager.create_alert(
+                alert_type=AlertType.RESOURCE_EXHAUSTION,
+                severity=AlertSeverity.CRITICAL,
+                title="Disk Usage Critical",
+                message=f"Disk usage is at {resource_metrics.disk_percent:.1f}%, exceeding critical threshold",
+                source="SystemHealthMonitor",
+                config=self.config,
+                metadata={
+                    'disk_percent': resource_metrics.disk_percent,
+                    'disk_used_gb': resource_metrics.disk_used_gb,
+                    'disk_total_gb': resource_metrics.disk_total_gb,
+                    'threshold': thresholds['disk_critical']
+                }
+            )
+        elif resource_metrics.disk_percent >= thresholds['disk_warning']:
+            self.alert_manager.create_alert(
+                alert_type=AlertType.RESOURCE_EXHAUSTION,
+                severity=AlertSeverity.WARNING,
+                title="Disk Usage Warning",
+                message=f"Disk usage is at {resource_metrics.disk_percent:.1f}%, exceeding warning threshold",
+                source="SystemHealthMonitor",
+                config=self.config,
+                metadata={
+                    'disk_percent': resource_metrics.disk_percent,
+                    'disk_used_gb': resource_metrics.disk_used_gb,
+                    'disk_total_gb': resource_metrics.disk_total_gb,
+                    'threshold': thresholds['disk_warning']
+                }
+            )
     
     def _generate_health_alerts(self, snapshot: SystemHealthSnapshot, report: Dict[str, Any]) -> None:
         """
@@ -386,6 +689,7 @@ class SystemHealthMonitor:
                 title="System Health Critical",
                 message=f"System health check failed with overall status: error",
                 source="SystemHealthMonitor",
+                config=self.config,
                 metadata={'health_report': report}
             )
         elif snapshot.overall_status == "warning":
@@ -395,6 +699,7 @@ class SystemHealthMonitor:
                 title="System Health Warning",
                 message=f"System health check reported warnings",
                 source="SystemHealthMonitor",
+                config=self.config,
                 metadata={'health_report': report}
             )
         
@@ -407,6 +712,7 @@ class SystemHealthMonitor:
                     title=f"Component Error: {check['component']}",
                     message=check['message'],
                     source="SystemHealthMonitor",
+                    config=self.config,
                     metadata={'component': check['component'], 'details': check['details']}
                 )
     
@@ -478,6 +784,7 @@ class WorkflowExecutionMonitor:
                     title="Workflow Duration Critical",
                     message=f"Workflow {session_id} took {workflow_metrics.total_duration:.2f}s, exceeding critical threshold",
                     source="WorkflowExecutionMonitor",
+                    config=self.config,
                     metadata={
                         'session_id': session_id,
                         'duration': workflow_metrics.total_duration,
@@ -491,6 +798,7 @@ class WorkflowExecutionMonitor:
                     title="Workflow Duration Warning",
                     message=f"Workflow {session_id} took {workflow_metrics.total_duration:.2f}s, exceeding warning threshold",
                     source="WorkflowExecutionMonitor",
+                    config=self.config,
                     metadata={
                         'session_id': session_id,
                         'duration': workflow_metrics.total_duration,
@@ -506,6 +814,7 @@ class WorkflowExecutionMonitor:
                 title=f"Workflow {workflow_metrics.final_status}",
                 message=f"Workflow {session_id} completed with status: {workflow_metrics.final_status}",
                 source="WorkflowExecutionMonitor",
+                config=self.config,
                 metadata={
                     'session_id': session_id,
                     'manifest': workflow_metrics.manifest_name,
@@ -524,6 +833,7 @@ class WorkflowExecutionMonitor:
                     title="Stage Duration Critical",
                     message=f"Stage {stage_metric.stage_name} took {stage_metric.duration:.2f}s, exceeding critical threshold",
                     source="WorkflowExecutionMonitor",
+                    config=self.config,
                     metadata={
                         'session_id': session_id,
                         'stage': stage_metric.stage_name,
@@ -539,6 +849,7 @@ class WorkflowExecutionMonitor:
                     title="Stage Duration Warning",
                     message=f"Stage {stage_metric.stage_name} took {stage_metric.duration:.2f}s, exceeding warning threshold",
                     source="WorkflowExecutionMonitor",
+                    config=self.config,
                     metadata={
                         'session_id': session_id,
                         'stage': stage_metric.stage_name,
@@ -584,6 +895,7 @@ class WorkflowExecutionMonitor:
                 title="Critical Failure Rate",
                 message=f"Failure rate {failure_rate:.1%} exceeds critical threshold in last {time_window_hours}h",
                 source="WorkflowExecutionMonitor",
+                config=self.config,
                 metadata={
                     'failure_rate': failure_rate,
                     'threshold': thresholds['failure_rate_critical'],
@@ -599,6 +911,7 @@ class WorkflowExecutionMonitor:
                 title="Elevated Failure Rate",
                 message=f"Failure rate {failure_rate:.1%} exceeds warning threshold in last {time_window_hours}h",
                 source="WorkflowExecutionMonitor",
+                config=self.config,
                 metadata={
                     'failure_rate': failure_rate,
                     'threshold': thresholds['failure_rate_warning'],
@@ -727,7 +1040,16 @@ class MonitoringSystem:
                 'overall_status': health_snapshot.overall_status if health_snapshot else 'unknown',
                 'component_status': health_snapshot.component_status if health_snapshot else {},
                 'active_workflows': health_snapshot.active_workflows if health_snapshot else 0,
-                'recent_failures': health_snapshot.recent_failures if health_snapshot else 0
+                'recent_failures': health_snapshot.recent_failures if health_snapshot else 0,
+                'resource_metrics': {
+                    'cpu_percent': health_snapshot.resource_metrics.cpu_percent if health_snapshot and health_snapshot.resource_metrics else 0,
+                    'memory_percent': health_snapshot.resource_metrics.memory_percent if health_snapshot and health_snapshot.resource_metrics else 0,
+                    'memory_used_gb': health_snapshot.resource_metrics.memory_used_gb if health_snapshot and health_snapshot.resource_metrics else 0,
+                    'memory_total_gb': health_snapshot.resource_metrics.memory_total_gb if health_snapshot and health_snapshot.resource_metrics else 0,
+                    'disk_percent': health_snapshot.resource_metrics.disk_percent if health_snapshot and health_snapshot.resource_metrics else 0,
+                    'disk_used_gb': health_snapshot.resource_metrics.disk_used_gb if health_snapshot and health_snapshot.resource_metrics else 0,
+                    'disk_total_gb': health_snapshot.resource_metrics.disk_total_gb if health_snapshot and health_snapshot.resource_metrics else 0,
+                } if health_snapshot and health_snapshot.resource_metrics else None
             } if health_snapshot else None,
             'alerts': {
                 'statistics': alert_stats,
@@ -747,7 +1069,10 @@ class MonitoringSystem:
             'configuration': {
                 'health_check_interval': self.config.health_check_interval,
                 'continuous_monitoring': self.config.enable_continuous_monitoring,
-                'performance_thresholds': self.config.performance_thresholds
+                'performance_thresholds': self.config.performance_thresholds,
+                'resource_thresholds': self.config.resource_thresholds,
+                'email_enabled': self.config.email_enabled,
+                'webhook_enabled': self.config.webhook_enabled
             }
         }
     
@@ -772,7 +1097,16 @@ class MonitoringSystem:
                     'component_status': h.component_status,
                     'performance_metrics': h.performance_metrics,
                     'active_workflows': h.active_workflows,
-                    'recent_failures': h.recent_failures
+                    'recent_failures': h.recent_failures,
+                    'resource_metrics': {
+                        'cpu_percent': h.resource_metrics.cpu_percent if h.resource_metrics else 0,
+                        'memory_percent': h.resource_metrics.memory_percent if h.resource_metrics else 0,
+                        'memory_used_gb': h.resource_metrics.memory_used_gb if h.resource_metrics else 0,
+                        'memory_total_gb': h.resource_metrics.memory_total_gb if h.resource_metrics else 0,
+                        'disk_percent': h.resource_metrics.disk_percent if h.resource_metrics else 0,
+                        'disk_used_gb': h.resource_metrics.disk_used_gb if h.resource_metrics else 0,
+                        'disk_total_gb': h.resource_metrics.disk_total_gb if h.resource_metrics else 0,
+                    } if h.resource_metrics else None
                 }
                 for h in self.get_health_history()
             ]

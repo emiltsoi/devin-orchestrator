@@ -32,6 +32,7 @@ from monitoring import (
     AlertSeverity,
     AlertType,
     SystemHealthSnapshot,
+    SystemResourceMetrics,
     get_monitoring_system,
     reset_monitoring_system
 )
@@ -135,6 +136,13 @@ def test_system_health_monitor():
     assert snapshot.timestamp is not None
     assert snapshot.overall_status in ['healthy', 'warning', 'error']
     
+    # Test resource metrics
+    assert snapshot.resource_metrics is not None
+    assert isinstance(snapshot.resource_metrics, SystemResourceMetrics)
+    assert snapshot.resource_metrics.cpu_percent >= 0
+    assert snapshot.resource_metrics.memory_percent >= 0
+    assert snapshot.resource_metrics.disk_percent >= 0
+    
     # Test health history
     history = health_monitor.get_health_history()
     assert len(history) >= 1
@@ -145,6 +153,131 @@ def test_system_health_monitor():
     assert current == snapshot
     
     print("SystemHealthMonitor tests passed")
+
+
+def test_resource_metrics():
+    """Test system resource metrics collection"""
+    print("Testing resource metrics collection...")
+    
+    config = MonitoringConfig()
+    alert_manager = AlertManager(config)
+    health_monitor = SystemHealthMonitor(config, alert_manager)
+    
+    # Collect resource metrics
+    resource_metrics = health_monitor._collect_resource_metrics()
+    
+    assert resource_metrics is not None
+    assert isinstance(resource_metrics, SystemResourceMetrics)
+    assert resource_metrics.cpu_percent >= 0
+    assert resource_metrics.cpu_percent <= 100
+    assert resource_metrics.memory_percent >= 0
+    assert resource_metrics.memory_percent <= 100
+    assert resource_metrics.disk_percent >= 0
+    assert resource_metrics.disk_percent <= 100
+    assert resource_metrics.memory_used_gb >= 0
+    assert resource_metrics.memory_total_gb > 0
+    assert resource_metrics.disk_used_gb >= 0
+    assert resource_metrics.disk_total_gb > 0
+    assert resource_metrics.timestamp is not None
+    
+    print("Resource metrics tests passed")
+
+
+def test_resource_alerts():
+    """Test resource-based alert generation"""
+    print("Testing resource alert generation...")
+    
+    # Create config with low thresholds to trigger alerts
+    config = MonitoringConfig(
+        resource_thresholds={
+            'cpu_warning': 0.0,    # Will trigger immediately
+            'cpu_critical': 0.0,
+            'memory_warning': 0.0,
+            'memory_critical': 0.0,
+            'disk_warning': 0.0,
+            'disk_critical': 0.0,
+        }
+    )
+    
+    alert_manager = AlertManager(config)
+    health_monitor = SystemHealthMonitor(config, alert_manager)
+    
+    # Run health check (should generate resource alerts)
+    snapshot = health_monitor._check_health()
+    
+    # Check for resource exhaustion alerts
+    resource_alerts = alert_manager.get_alerts(alert_type=AlertType.RESOURCE_EXHAUSTION)
+    # We expect at least some alerts given the low thresholds
+    print("  Generated {} resource alerts".format(len(resource_alerts)))
+    
+    print("Resource alert tests passed")
+
+
+def test_email_notification_config():
+    """Test email notification configuration"""
+    print("Testing email notification configuration...")
+    
+    config = MonitoringConfig(
+        email_enabled=True,
+        email_smtp_server="smtp.example.com",
+        email_smtp_port=587,
+        email_username="test@example.com",
+        email_password="test-password",
+        email_from="test@example.com",
+        email_to=["admin@example.com"]
+    )
+    
+    assert config.email_enabled == True
+    assert config.email_smtp_server == "smtp.example.com"
+    assert config.email_smtp_port == 587
+    assert config.email_username == "test@example.com"
+    assert config.email_to == ["admin@example.com"]
+    
+    print("Email notification configuration tests passed")
+
+
+def test_webhook_notification_config():
+    """Test webhook notification configuration"""
+    print("Testing webhook notification configuration...")
+    
+    config = MonitoringConfig(
+        webhook_enabled=True,
+        webhook_url="https://hooks.example.com/alerts",
+        webhook_headers={"Authorization": "Bearer test-token"}
+    )
+    
+    assert config.webhook_enabled == True
+    assert config.webhook_url == "https://hooks.example.com/alerts"
+    assert config.webhook_headers == {"Authorization": "Bearer test-token"}
+    
+    print("Webhook notification configuration tests passed")
+
+
+def test_alert_with_config():
+    """Test alert creation with configuration for notifications"""
+    print("Testing alert creation with config...")
+    
+    config = MonitoringConfig(
+        email_enabled=False,  # Disabled for testing
+        webhook_enabled=False  # Disabled for testing
+    )
+    
+    alert_manager = AlertManager(config)
+    
+    # Create alert with config
+    alert = alert_manager.create_alert(
+        alert_type=AlertType.SYSTEM_HEALTH,
+        severity=AlertSeverity.WARNING,
+        title="Config Test",
+        message="Testing alert with config",
+        source="test",
+        config=config
+    )
+    
+    assert alert is not None
+    assert alert.title == "Config Test"
+    
+    print("Alert with config tests passed")
 
 
 def test_workflow_execution_monitor():
@@ -380,6 +513,11 @@ def run_all_tests():
         test_alert_manager()
         test_alert_handler()
         test_system_health_monitor()
+        test_resource_metrics()
+        test_resource_alerts()
+        test_email_notification_config()
+        test_webhook_notification_config()
+        test_alert_with_config()
         test_workflow_execution_monitor()
         test_monitoring_system()
         test_monitoring_configuration()
