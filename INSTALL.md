@@ -15,7 +15,35 @@ This will:
 2. Install globally to `~/.devin-orchestrator/`
 3. Set up the current workspace with workflow manifests
 
-### Option 2: Manual Installation
+### Option 2: Deployment Scripts (New)
+
+Use the platform-specific deployment scripts in the `scripts/` directory:
+
+#### Windows
+```powershell
+# Install devin-orchestrator
+.\scripts\install.ps1
+
+# Set up environment variables
+.\scripts\setup_env.ps1 -Persist
+
+# Install dependencies
+.\scripts\install_deps.ps1
+```
+
+#### Linux/Mac
+```bash
+# Install devin-orchestrator
+./scripts/install.sh
+
+# Set up environment variables
+./scripts/setup_env.sh --persist
+
+# Install dependencies
+./scripts/install_deps.sh
+```
+
+### Option 3: Manual Installation
 
 #### 1. Clone the Repository
 ```bash
@@ -119,6 +147,102 @@ export DEVIN_DEFAULT_PERMISSION_MODE=dangerous
 - Cascade dispatches to Devin via subprocess calls
 - Cascade reasons through results and makes triage decisions
 
+## Deployment Scripts
+
+The `scripts/` directory contains platform-specific deployment automation scripts:
+
+### Install Scripts (`install.ps1` / `install.sh`)
+
+Main installation script that:
+- Checks prerequisites (Python, Git, pip)
+- Installs Python dependencies
+- Copies core directories to global installation path
+- Sets up workspace with workflow manifests
+- Updates configuration files
+
+**Windows Usage:**
+```powershell
+.\scripts\install.ps1
+.\scripts\install.ps1 -GlobalInstallPath "C:\custom\path" -WorkspacePath "C:\my-project"
+.\scripts\install.ps1 -SkipWorkspaceSetup  # Skip workspace setup
+```
+
+**Linux/Mac Usage:**
+```bash
+./scripts/install.sh
+./scripts/install.sh --global-path /custom/path --workspace-path /my-project
+./scripts/install.sh --skip-workspace-setup  # Skip workspace setup
+```
+
+### Environment Setup Scripts (`setup_env.ps1` / `setup_env.sh`)
+
+Configures environment variables for devin-orchestrator:
+- Sets `DEVIN_ORCHESTRATOR_ROOT` and related paths
+- Configures Devin CLI path
+- Sets default model and permission mode
+- Optionally persists to user profile
+
+**Windows Usage:**
+```powershell
+# Current session only
+.\scripts\setup_env.ps1
+
+# Persist to user profile
+.\scripts\setup_env.ps1 -Persist
+
+# With custom Devin CLI path
+.\scripts\setup_env.ps1 -Persist -DevinCliPath "C:\Users\user\AppData\Local\devin\cli\bin\devin.exe"
+```
+
+**Linux/Mac Usage:**
+```bash
+# Current session only
+./scripts/setup_env.sh
+
+# Persist to shell config
+./scripts/setup_env.sh --persist
+
+# With custom Devin CLI path
+./scripts/setup_env.sh --persist --devin-cli-path /usr/local/bin/devin
+```
+
+### Dependency Installation Scripts (`install_deps.ps1` / `install_deps.sh`)
+
+Installs Python dependencies:
+- Installs from requirements.txt by default
+- Can install development dependencies
+- Supports upgrade and user installation options
+
+**Windows Usage:**
+```powershell
+# Install from requirements.txt
+.\scripts\install_deps.ps1
+
+# Install development dependencies
+.\scripts\install_deps.ps1 -Dev
+
+# Upgrade existing packages
+.\scripts\install_deps.ps1 -Upgrade
+
+# Install to user directory
+.\scripts\install_deps.ps1 -User
+```
+
+**Linux/Mac Usage:**
+```bash
+# Install from requirements.txt
+./scripts/install_deps.sh
+
+# Install development dependencies
+./scripts/install_deps.sh --dev
+
+# Upgrade existing packages
+./scripts/install_deps.sh --upgrade
+
+# Install to user directory
+./scripts/install_deps.sh --user
+```
+
 ## Updating
 
 To update to the latest version:
@@ -127,6 +251,22 @@ To update to the latest version:
 cd devin-orchestrator
 git pull
 python install.py
+```
+
+Or use the deployment scripts:
+
+**Windows:**
+```powershell
+cd devin-orchestrator
+git pull
+.\scripts\install.ps1
+```
+
+**Linux/Mac:**
+```bash
+cd devin-orchestrator
+git pull
+./scripts/install.sh
 ```
 
 This will overwrite the global installation with the latest skills, workflows, and workflow engine.
