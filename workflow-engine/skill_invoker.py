@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
 from devin_cli_adapter import DevinCliAdapter
+from metrics import get_metrics_collector
 
 
 @dataclass
@@ -51,6 +52,7 @@ class SkillInvoker:
         self.model = model or config.default_model
         self.permission_mode = permission_mode or config.default_permission_mode
         self.demo_mode = demo_mode
+        self.metrics = get_metrics_collector()
 
     def invoke_skill(
         self,
