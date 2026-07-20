@@ -313,6 +313,55 @@ class TestGlobalConfig:
         assert cfg.devin_cli_path == "/usr/bin/devin"
 
 
+class TestWorkspaceConfig:
+    """Tests for workspace-local config merging."""
+
+    def test_workspace_config_overrides_global(self, tmp_path):
+        # Global config
+        global_config = tmp_path / "config.yaml"
+        global_config.write_text(
+            yaml.safe_dump(
+                {
+                    "default_model": "swe-1.6",
+                    "session_work_dir": "~/.devin-orchestrator/work",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        # Workspace-local config
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        ws_dir = workspace / ".devin-orchestrator"
+        ws_dir.mkdir()
+        ws_config = ws_dir / "config.yaml"
+        ws_config.write_text(
+            yaml.safe_dump(
+                {
+                    "default_model": "glm-5-2",
+                    "session_work_dir": str(workspace.as_posix()),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        config = ConfigLoader.load(config_path=global_config, workspace=workspace)
+        assert config.default_model == "glm-5-2"
+        assert config.session_work_dir == workspace
+
+    def test_missing_workspace_config_uses_global(self, tmp_path):
+        global_config = tmp_path / "config.yaml"
+        global_config.write_text(
+            yaml.safe_dump({"default_model": "swe-1.6"}), encoding="utf-8"
+        )
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        config = ConfigLoader.load(config_path=global_config, workspace=workspace)
+        assert config.default_model == "swe-1.6"
+
+
 class TestAllowedPermissionModes:
     """Sanity checks on the allowlist constant"""
 

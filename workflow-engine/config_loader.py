@@ -76,34 +76,54 @@ class ConfigLoader:
         return re.sub(pattern, replace_env_var, value)
 
     @staticmethod
-    def load(config_path: Path | None = None) -> GlobalConfig:
+    def _load_yaml_config(path: Path) -> dict:
+        """Load a YAML config file and expand environment variables in scalars."""
+        if not path.exists():
+            return {}
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        for key, value in list(data.items()):
+            if isinstance(value, str):
+                data[key] = ConfigLoader.expand_env_vars(value)
+        return data
+
+    @staticmethod
+    def load(
+        config_path: Path | None = None,
+        workspace: Path | str | None = None,
+    ) -> GlobalConfig:
         """
-        Load global configuration
+        Load global configuration, optionally merged with a workspace-local config.
 
         Args:
-            config_path: Optional path to config file
+            config_path: Optional explicit path to the global config file.
+            workspace: Optional workspace path. If a `.devin-orchestrator/config.yaml`
+                exists inside the workspace, its values are merged on top of the
+                global config, allowing per-workspace overrides of
+                `session_work_dir`, `devin_cli_path`, model routing, etc.
 
         Returns:
             GlobalConfig object
         """
-        # Determine config file path
+        # Determine global config file path
         if config_path is None:
             config_path = ConfigLoader.DEFAULT_CONFIG_PATH
             if not config_path.exists():
                 config_path = ConfigLoader.FALLBACK_CONFIG_PATH
 
-        # Load config file
-        if config_path.exists():
-            with open(config_path, encoding="utf-8") as f:
-                config_data = yaml.safe_load(f)
+        config_data = ConfigLoader._load_yaml_config(config_path)
 
-            # Expand environment variables in config values
-            if config_data:
-                for key, value in config_data.items():
-                    if isinstance(value, str):
-                        config_data[key] = ConfigLoader.expand_env_vars(value)
-        else:
-            config_data = {}
+        # If a workspace is specified and contains a local config, merge it over
+        # the global config so workspaces can override session-specific settings.
+        if workspace is not None:
+            workspace_path = Path(workspace)
+            workspace_config = workspace_path / ".devin-orchestrator" / "config.yaml"
+            workspace_data = ConfigLoader._load_yaml_config(workspace_config)
+            if workspace_data:
+                config_data = {**config_data, **workspace_data}
+                # The workspace config is authoritative for session_work_dir if
+                # it was not explicitly provided; otherwise path expansion below
+                # will use the merged value as-is.
 
         # Expand paths (support ~ for home directory)
         def expand_path(path_str: str) -> Path:

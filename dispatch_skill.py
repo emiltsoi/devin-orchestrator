@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Dispatch skill to Devin via skill_invoker
 
@@ -10,38 +9,40 @@ The wrapper is necessary because Cascade cannot import Python modules directly, 
 the bash tool to execute scripts.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
 # Add global orchestrator to Python path
 sys.path.insert(0, str(Path.home() / ".devin-orchestrator" / "workflow-engine"))
 
-from skill_invoker import SkillInvoker
 from config_loader import ConfigLoader
 from security_utils import (
+    InvalidInputError,
     validate_session_id,
     validate_skill_name,
     validate_workspace_path,
-    InvalidInputError
 )
+from skill_invoker import SkillInvoker
+
 
 def main():
     # Parse command line arguments
     if len(sys.argv) < 4:
         print("Usage: dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]")
         sys.exit(1)
-    
+
     skill_name = sys.argv[1]
     session_id = sys.argv[2]
     workspace = sys.argv[3]
     is_reviewer = len(sys.argv) > 4 and sys.argv[4].lower() == 'true'
     demo_mode = len(sys.argv) > 5 and sys.argv[5].lower() == 'true'
     config_overrides_json = sys.argv[6] if len(sys.argv) > 6 else None
-    
+
     # Load config first so we can constrain workspace validation to the
-    # configured session work directory.
-    config = ConfigLoader.load()
+    # configured session work directory. Workspace-local config overrides
+    # global settings when available.
+    config = ConfigLoader.load(workspace=workspace)
 
     # Validate and sanitize inputs
     try:
@@ -66,7 +67,7 @@ def main():
 
     # Create skill invoker
     skill_invoker = SkillInvoker(demo_mode=demo_mode)
-    
+
     # Prepare context
     context = {
         'session_id': session_id,
@@ -74,7 +75,7 @@ def main():
         'skill': skill_name,
         'config_overrides': config_overrides
     }
-    
+
     # Invoke skill
     result = skill_invoker.invoke_skill(
         skill_name=skill_name,
@@ -83,7 +84,7 @@ def main():
         is_reviewer=is_reviewer,
         config_overrides=config_overrides
     )
-    
+
     # Output result as JSON
     output = {
         'success': result.success,
@@ -91,9 +92,9 @@ def main():
         'output': result.output,
         'error': result.error
     }
-    
+
     print(json.dumps(output, indent=2))
-    
+
     # Exit with appropriate code
     sys.exit(0 if result.success else 1)
 

@@ -136,7 +136,7 @@ def main() -> int:
 
     prompt = build_prompt(role_file, prompt_file)
 
-    config = ConfigLoader.load()
+    config = ConfigLoader.load(workspace=args.work_dir)
     devin_cli_path = config.devin_cli_path
     work_dir = args.work_dir or str(Path.cwd())
     permission_mode = args.permission_mode or config.default_permission_mode
