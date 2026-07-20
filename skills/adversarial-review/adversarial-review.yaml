@@ -1,11 +1,27 @@
+schema_version: 1
 name: adversarial-review
-iron_law: Multiple perspectives must be synthesized into a structured verdict before proceeding
-announcement: Using adversarial-review skill to conduct multi-perspective review
+description: "Use when a proposal or design needs multi-perspective adversarial review before proceeding."
+iron_law: "Multiple perspectives must be synthesized into a structured verdict before proceeding"
+triggers:
+  - proposal_review
+  - design_review
+  - risk_assessment
 checklist:
-  - Dispatch Advocate persona - steel-man the proposal
-  - Dispatch Skeptic persona - find falsifiers and failure modes
-  - Dispatch Oracle persona - base rates and empirical grounding
-  - Dispatch Contrarian persona - challenge the framing
-  - Synthesize results - produce structured verdict
-  - Generate verdict - allow/allow_with_conditions/deny with risks, checks, actions
+  - id: dispatch_advocate
+    description: Dispatch Advocate persona - steel-man the proposal
+  - id: dispatch_skeptic
+    description: Dispatch Skeptic persona - find falsifiers and failure modes
+  - id: dispatch_oracle
+    description: Dispatch Oracle persona - base rates and empirical grounding
+  - id: dispatch_contrarian
+    description: Dispatch Contrarian persona - challenge the framing
+  - id: synthesize_results
+    description: Synthesize results - produce structured verdict
+  - id: generate_verdict
+    description: Generate verdict - allow/allow_with_conditions/deny with risks, checks, actions
 terminal_state: Structured verdict produced with top_risks, required_checks, missing_evidence, next_actions
+announcement: "Using the adversarial-review skill to conduct multi-perspective review."
+red_flags:
+  - Proceeding without synthesizing all perspectives
+  - Issuing a subjective verdict without structured evidence
+  - Skipping personas to save time

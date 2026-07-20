@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Multi-perspective adversarial review using parallel Devin dispatch with different persona prompts
+description: "Use when a proposal or design needs multi-perspective adversarial review before proceeding."
 ---
 
 # Adversarial Review

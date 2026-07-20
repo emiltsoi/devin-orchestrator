@@ -1,3 +1,8 @@
+---
+name: code-review
+description: "Use when reviewing code for spec compliance and code quality with objective, evidence-based findings before merging."
+---
+
 # Code Review
 
 ## Overview

@@ -1,9 +1,24 @@
+schema_version: 1
 name: requesting-code-review
-iron_law: Review early, review often. Never skip review because "it's simple".
-announcement: Using requesting-code-review skill to dispatch code reviewer subagent.
+description: "Use when completing tasks, implementing major features, or before merging to verify work meets requirements via a dispatched code reviewer subagent."
+iron_law: "Review early, review often. Never skip review because \"it's simple\"."
+triggers:
+  - task_complete
+  - major_feature_implemented
+  - pre_merge
 checklist:
-  - Get git SHAs — BASE_SHA and HEAD_SHA
-  - Dispatch code reviewer subagent — with precise context
-  - Act on feedback — fix Critical immediately, fix Important before proceeding
-  - Push back if reviewer wrong — with technical reasoning
+  - id: get_git_shas
+    description: Get git SHAs — BASE_SHA and HEAD_SHA
+  - id: dispatch_reviewer
+    description: Dispatch code reviewer subagent with precise context
+  - id: act_on_feedback
+    description: Act on feedback — fix Critical immediately, fix Important before proceeding
+  - id: push_back_if_wrong
+    description: Push back if reviewer wrong — with technical reasoning
 terminal_state: Code review complete, findings addressed, ready to invoke finishing-a-development-branch skill
+announcement: "Using the requesting-code-review skill to dispatch a code reviewer subagent."
+red_flags:
+  - Skipping review because the change seems simple
+  - Dispatching reviewer with session history instead of crafted context
+  - Ignoring Critical findings
+  - Accepting reviewer feedback without technical reasoning when wrong

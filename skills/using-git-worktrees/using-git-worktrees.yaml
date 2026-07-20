@@ -1,11 +1,28 @@
+schema_version: 1
 name: using-git-worktrees
-iron_law: Detect existing isolation first. Then use native tools. Then fall back to git. Never fight the harness.
-announcement: Using using-git-worktrees skill to set up an isolated workspace.
+description: "Use when starting feature work that needs isolation from the current workspace or before executing implementation plans."
+iron_law: "Detect existing isolation first. Then use native tools. Then fall back to git. Never fight the harness."
+triggers:
+  - feature_work_starting
+  - needs_isolation
+  - pre_plan_execution
 checklist:
-  - Detect existing isolation — check if already in a worktree
-  - Ask for consent — if not already isolated, ask before creating worktree
-  - Create isolated workspace — use native tools or git worktree fallback
-  - Project setup — auto-detect and run appropriate setup (npm install, cargo build, etc.)
-  - Verify clean baseline — run tests to ensure workspace starts clean
-  - Report status — report worktree location and branch state
+  - id: detect_isolation
+    description: Detect existing isolation — check if already in a worktree
+  - id: ask_consent
+    description: Ask for consent — if not already isolated, ask before creating worktree
+  - id: create_workspace
+    description: Create isolated workspace — use native tools or git worktree fallback
+  - id: project_setup
+    description: Project setup — auto-detect and run appropriate setup (npm install, cargo build, etc.)
+  - id: verify_clean_baseline
+    description: Verify clean baseline — run tests to ensure workspace starts clean
+  - id: report_status
+    description: Report status — report worktree location and branch state
 terminal_state: Isolated workspace ready with clean test baseline, ready to invoke writing-plans skill
+announcement: "Using the using-git-worktrees skill to set up an isolated workspace."
+red_flags:
+  - Creating a worktree when already isolated
+  - Fighting the harness instead of using native tools
+  - Skipping project setup
+  - Starting work without a clean test baseline

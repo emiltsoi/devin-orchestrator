@@ -1,33 +1,36 @@
+schema_version: 1
 name: brainstorming
-iron_law: Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it.
-announcement: Using brainstorming skill to explore user intent, requirements and design before implementation.
+description: "Use when starting non-trivial creative work — new features, components, or behavior changes — to refine intent, requirements, and design before implementation."
+iron_law: "Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it."
+triggers:
+  - new_feature
+  - behavior_change
+  - refactor
 checklist:
-  - Explore project context — check files, docs, recent commits
-  - Check if interactive mode is enabled
-  - If interactive: Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
-  - If non-interactive: Make reasonable assumptions based on context and request content
-  - Propose 2-3 approaches — with trade-offs and your recommendation
-  - Present design — in sections scaled to their complexity
-  - Conditional: Adversarial review — auto-trigger if complexity/risk thresholds met
-  - Write design doc — save to design.md (include adversarial review findings if conducted)
-  - Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
-  - Note: Human review happens via gate after brainstorming stage, not during skill execution
+  - id: explore_context
+    description: Explore project context — check files, docs, recent commits
+  - id: check_interactive_mode
+    description: Check if interactive mode is enabled
+  - id: ask_clarifying_questions
+    description: If interactive, ask clarifying questions one at a time to understand purpose/constraints/success criteria
+  - id: make_assumptions
+    description: If non-interactive, make reasonable assumptions based on context and request content
+  - id: propose_approaches
+    description: Propose 2-3 approaches with trade-offs and your recommendation
+  - id: present_design
+    description: Present design in sections scaled to their complexity
+  - id: adversarial_review
+    description: Conditional — adversarial review auto-triggered if complexity/risk thresholds met
+  - id: write_design_doc
+    description: Write design doc to design.md (include adversarial review findings if conducted)
+  - id: spec_self_review
+    description: Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
+  - id: note_human_review
+    description: Note that human review happens via gate after brainstorming stage, not during skill execution
 terminal_state: Design saved to design.md, ready for human review via gate
-configuration:
-  interactive_mode: false  # If false, make reasonable assumptions instead of asking questions
-  adversarial_review_policy: conditional  # always, never, conditional
-  adversarial_review_mode: standard  # fast, standard, deep
-  adversarial_review_triggers:
-    complexity:
-      sections_threshold: 10  # auto-trigger if design has > 10 sections
-      files_threshold: 5  # auto-trigger if design affects > 5 files
-      size_threshold: 500  # auto-trigger if design document > 500 lines
-    risk_keywords:
-      - security
-      - data_loss
-      - breaking
-      - performance
-      - critical
-      - production
-      - deployment
-    user_override: true  # allow manual override via flag
+announcement: "Using the brainstorming skill to refine <topic> before writing design.md."
+red_flags:
+  - Writing design.md before design approval
+  - Jumping to implementation without approval gate
+  - Asking batch questions instead of one at a time
+  - Presenting only one approach

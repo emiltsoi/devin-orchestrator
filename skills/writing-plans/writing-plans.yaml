@@ -1,12 +1,30 @@
+schema_version: 1
 name: writing-plans
+description: "Use when you have a spec or requirements for a multi-step task, before touching code, to write a comprehensive implementation plan."
 iron_law: "Write comprehensive implementation plans assuming the engineer has zero context for our codebase. Document everything they need to know: which files to touch for each task, code, testing, docs, how to test it."
-announcement: Using writing-plans skill to create the implementation plan.
+triggers:
+  - spec_ready
+  - multi_step_task
+  - pre_implementation
 checklist:
-  - Scope check — ensure spec covers single subsystem
-  - File structure — map out which files will be created or modified
-  - Task right-sizing — each task carries its own test cycle
-  - Bite-sized task granularity — each step is one action (2-5 minutes)
-  - Plan document header — include required header with goal, architecture, tech stack, global constraints
-  - Task definition — each task has exact file paths, complete code, verification steps
-  - Self-review — check for placeholders, ambiguity, missing steps
+  - id: scope_check
+    description: Scope check — ensure spec covers single subsystem
+  - id: file_structure
+    description: File structure — map out which files will be created or modified
+  - id: task_right_sizing
+    description: Task right-sizing — each task carries its own test cycle
+  - id: bite_sized_granularity
+    description: Bite-sized task granularity — each step is one action (2-5 minutes)
+  - id: plan_header
+    description: Plan document header — include required header with goal, architecture, tech stack, global constraints
+  - id: task_definition
+    description: Task definition — each task has exact file paths, complete code, verification steps
+  - id: self_review
+    description: Self-review — check for placeholders, ambiguity, missing steps
 terminal_state: Plan saved to plan.md, ready to invoke subagent-driven-development or executing-plans skill
+announcement: "Using the writing-plans skill to create the implementation plan."
+red_flags:
+  - Writing a plan with placeholders or ambiguity
+  - Tasks without their own test cycle
+  - Missing exact file paths or code in task definitions
+  - Skipping the self-review step

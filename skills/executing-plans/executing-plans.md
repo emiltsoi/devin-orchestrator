@@ -1,3 +1,8 @@
+---
+name: executing-plans
+description: "Use when executing an approved plan task-by-task in the current context with human checkpoints between tasks."
+---
+
 # Executing Plans
 
 ## Overview

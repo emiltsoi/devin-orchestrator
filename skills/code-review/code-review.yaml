@@ -1,0 +1,31 @@
+schema_version: 1
+name: code-review
+description: "Use when reviewing code for spec compliance and code quality with objective, evidence-based findings before merging."
+iron_law: "REVIEW MUST BE OBJECTIVE AND EVIDENCE-BASED"
+triggers:
+  - pre_merge
+  - implementation_complete
+  - verification_passed
+checklist:
+  - id: review_spec_compliance
+    description: Review spec compliance — read spec, design, and implementation; check acceptance criteria and deviations
+  - id: document_spec_findings
+    description: Document spec compliance findings in review-spec.md with evidence
+  - id: review_code_quality
+    description: Review code quality — readability, error handling, security, performance, duplication, tests
+  - id: document_quality_findings
+    description: Document code quality findings in review-quality.md with specific code locations
+  - id: provide_verdict
+    description: Provide human verdict in human-verdict.md with APPROVE/REQUEST CHANGES/REJECT
+  - id: confirm_complete
+    description: Confirm review complete with all three artifacts created
+terminal_state: workflow complete
+announcement: "Using the code-review skill for spec-compliance and code-quality review."
+red_flags:
+  - Making subjective claims without evidence
+  - Not citing specific code locations
+  - Not checking all acceptance criteria
+  - Skipping the code quality review
+  - Not providing a clear verdict
+  - Missing required artifacts
+  - Approving code that doesn't meet the spec

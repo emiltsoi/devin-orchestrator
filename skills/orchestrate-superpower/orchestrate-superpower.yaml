@@ -1,22 +1,37 @@
+schema_version: 1
 name: orchestrate-superpower
-iron_law: "You MUST use dispatch_skill.py script via bash tool to dispatch Devin for each stage. Do NOT execute skills yourself - dispatch them to Devin. Load manifest, dispatch each stage using dispatch_skill.py, reason through results, handle gates, and make triage decisions. Skip brainstorming if spec is clear."
-announcement: Orchestrating superpower workflow using dispatch_skill.py to dispatch Devin
+description: "Use when orchestrating a multi-stage superpower workflow that dispatches each stage skill to Devin via dispatch_skill.py."
+iron_law: "You MUST use dispatch_skill.py via bash tool to dispatch Devin for each stage. Do NOT execute skills yourself - dispatch them to Devin."
+triggers:
+  - superpower_workflow
+  - multi_stage_orchestration
 checklist:
-  - Load superpower manifest from workflows/superpower.manifest.yaml
-  - Check configuration for interactive_mode setting
-  - Check if skip_brainstorming is true in manifest
-  - For each stage in manifest: check if stage should be skipped
-  - If skip_brainstorming and stage is brainstorming: create placeholder design.md and skip
-  - Otherwise: dispatch skill via bash tool calling dispatch_skill.py
-  - Use: python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> <is_reviewer> <demo_mode> [config_overrides]
-  - Pass config_overrides for brainstorming if interactive_mode is true: '{"interactive_mode": true}'
-  - Read and validate output artifacts (structural floor)
-  - Reason about results and make triage decision (proceed/retry/escalate)
-  - Handle gate if present (wait for human decision in production, simulate for demo)
-  - Continue to next stage if triage decision is proceed
-  - Stop workflow if triage decision is escalate or gate blocks
+  - id: load_manifest
+    description: Load superpower manifest from workflows/superpower.manifest.yaml
+  - id: check_interactive_mode
+    description: Check configuration for interactive_mode setting
+  - id: check_skip_brainstorming
+    description: Check if skip_brainstorming is true in manifest
+  - id: evaluate_stage_skip
+    description: For each stage in manifest, check if stage should be skipped
+  - id: skip_brainstorming_placeholder
+    description: If skip_brainstorming and stage is brainstorming, create placeholder design.md and skip
+  - id: dispatch_skill
+    description: Otherwise dispatch skill via bash tool calling dispatch_skill.py
+  - id: pass_config_overrides
+    description: Pass config_overrides for brainstorming if interactive_mode is true
+  - id: validate_artifacts
+    description: Read and validate output artifacts (structural floor)
+  - id: triage_decision
+    description: Reason about results and make triage decision (proceed/retry/escalate)
+  - id: handle_gate
+    description: Handle gate if present (wait for human decision in production, simulate for demo)
+  - id: continue_or_stop
+    description: Continue to next stage if triage decision is proceed; stop if escalate or gate blocks
 terminal_state: Superpower workflow orchestrated and executed, all stages completed or blocked
-configuration:
-  demo_mode: true  # Set to false for production with real Devin dispatches
-  skip_brainstorming: false  # Set to true to skip brainstorming when spec is clear
-  interactive_mode: false  # Set to true to enable interactive brainstorming (asks questions)
+announcement: "Using the orchestrate-superpower skill to orchestrate the superpower workflow via dispatch_skill.py."
+red_flags:
+  - Executing stage skills yourself instead of dispatching to Devin
+  - Skipping structural floor validation
+  - Proceeding after a failed stage without triage
+  - Ignoring gates

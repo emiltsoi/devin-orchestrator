@@ -1,0 +1,29 @@
+schema_version: 1
+name: executing-plans
+description: "Use when executing an approved plan task-by-task in the current context with human checkpoints between tasks."
+iron_law: "EXECUTE TASKS IN ORDER WITH VERIFICATION AFTER EACH"
+triggers:
+  - approved_plan_ready
+  - inline_execution
+checklist:
+  - id: read_plan
+    description: Read and understand the plan, overall goal, task dependencies, and required artifacts
+  - id: execute_task
+    description: Execute the current task following the exact steps, file paths, and code specified
+  - id: verify_task
+    description: Verify task completion against acceptance criteria and run specified verification steps
+  - id: human_checkpoint
+    description: Request human checkpoint if configured, present status, and adjust based on feedback
+  - id: proceed_next_task
+    description: Proceed to the next task in order, tracking progress with checkboxes
+  - id: document_results
+    description: Document execution results in execution-results.md with summary, deviations, and final state
+terminal_state: plan execution complete
+announcement: "Using the executing-plans skill to execute the plan task-by-task."
+red_flags:
+  - Skipping tasks without approval
+  - Executing tasks out of order
+  - Not verifying task completion
+  - Ignoring acceptance criteria
+  - Deviating from the plan without documentation
+  - Not requesting checkpoints when configured

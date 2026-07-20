@@ -1,11 +1,28 @@
+schema_version: 1
 name: test-driven-development
-iron_law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
-announcement: Using test-driven-development skill to enforce RED-GREEN-REFACTOR cycle.
+description: "Use when implementing any feature or bugfix, before writing implementation code, to enforce the RED-GREEN-REFACTOR cycle."
+iron_law: "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST"
+triggers:
+  - feature_implementation
+  - bugfix
+  - production_code_change
 checklist:
-  - RED - Write failing test
-  - Verify RED - Watch it fail correctly
-  - GREEN - Write minimal code to pass
-  - Verify GREEN - Watch it pass
-  - REFACTOR - Clean up while staying green
-  - Repeat for next feature
+  - id: red_write_test
+    description: RED - Write failing test
+  - id: verify_red
+    description: Verify RED - Watch it fail correctly
+  - id: green_write_code
+    description: GREEN - Write minimal code to pass
+  - id: verify_green
+    description: Verify GREEN - Watch it pass
+  - id: refactor
+    description: REFACTOR - Clean up while staying green
+  - id: repeat
+    description: Repeat for next feature
 terminal_state: All features implemented with TDD, ready to invoke requesting-code-review skill
+announcement: "Using the test-driven-development skill to enforce the RED-GREEN-REFACTOR cycle."
+red_flags:
+  - Writing production code before a failing test
+  - Not watching the test fail
+  - Writing more than minimal code to pass
+  - Refactoring without staying green

@@ -1,13 +1,32 @@
+schema_version: 1
 name: subagent-driven-development
-iron_law: Fresh subagent per task + task review (spec + quality) + broad final review = high quality, fast iteration
-announcement: Using subagent-driven-development skill to execute implementation plan task-by-task.
+description: "Use when executing an implementation plan with independent tasks by dispatching a fresh implementer subagent per task with reviews."
+iron_law: "Fresh subagent per task + task review (spec + quality) + broad final review = high quality, fast iteration"
+triggers:
+  - plan_execution
+  - independent_tasks
+  - parallel_or_isolated_execution
 checklist:
-  - Pre-flight plan review — verify plan is complete and unambiguous
-  - Model selection — choose appropriate model for each task
-  - Dispatch implementer subagent per task — fresh subagent with isolated context
-  - Task review — spec compliance + code quality review after each task
-  - Handle reviewer items — address ⚠️ items from review
-  - File handoffs — pass files between subagents as needed
-  - Durable progress — track completed tasks
-  - Broad final review — whole-branch review at the end
+  - id: preflight_plan_review
+    description: Pre-flight plan review — verify plan is complete and unambiguous
+  - id: model_selection
+    description: Model selection — choose appropriate model for each task
+  - id: dispatch_implementer
+    description: Dispatch implementer subagent per task with isolated context
+  - id: task_review
+    description: Task review — spec compliance + code quality review after each task
+  - id: handle_reviewer_items
+    description: Handle reviewer items — address ⚠️ items from review
+  - id: file_handoffs
+    description: File handoffs — pass files between subagents as needed
+  - id: durable_progress
+    description: Durable progress — track completed tasks
+  - id: broad_final_review
+    description: Broad final review — whole-branch review at the end
 terminal_state: All tasks completed with reviews, ready to invoke test-driven-development skill
+announcement: "Using the subagent-driven-development skill to execute the implementation plan task-by-task."
+red_flags:
+  - Reusing a subagent context across tasks
+  - Skipping task review between tasks
+  - Skipping the broad whole-branch final review
+  - Letting subagents inherit the orchestrator's session context

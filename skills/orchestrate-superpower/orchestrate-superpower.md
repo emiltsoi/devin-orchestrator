@@ -1,3 +1,8 @@
+---
+name: orchestrate-superpower
+description: "Use when orchestrating a multi-stage superpower workflow that dispatches each stage skill to Devin via dispatch_skill.py."
+---
+
 # Orchestrate Superpower Workflow
 
 You are the orchestrator. Your job is to load the superpower manifest and execute each stage using dispatch_skill.py to dispatch Devin, reasoning through results and making triage decisions.

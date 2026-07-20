@@ -1,11 +1,28 @@
+schema_version: 1
 name: finishing-a-development-branch
-iron_law: Verify tests → Detect environment → Present options → Execute choice → Clean up
-announcement: Using finishing-a-development-branch skill to complete this work.
+description: "Use when implementation is complete, all tests pass, and you need to decide how to integrate the work via merge, PR, or cleanup."
+iron_law: "Verify tests → Detect environment → Present options → Execute choice → Clean up"
+triggers:
+  - implementation_complete
+  - tests_passing
+  - ready_to_integrate
 checklist:
-  - Verify tests — run project's test suite
-  - Detect environment — determine workspace state
-  - Determine base branch — find merge base
-  - Present options — merge locally, push and create PR, keep as-is, discard
-  - Execute choice — perform selected action
-  - Cleanup workspace — remove worktree if appropriate
+  - id: verify_tests
+    description: Verify tests — run project's test suite
+  - id: detect_environment
+    description: Detect environment — determine workspace state
+  - id: determine_base_branch
+    description: Determine base branch — find merge base
+  - id: present_options
+    description: Present options — merge locally, push and create PR, keep as-is, discard
+  - id: execute_choice
+    description: Execute choice — perform selected action
+  - id: cleanup_workspace
+    description: Cleanup workspace — remove worktree if appropriate
 terminal_state: Work completed and integrated (or discarded), workspace cleaned up
+announcement: "Using the finishing-a-development-branch skill to complete this work."
+red_flags:
+  - Integrating without verifying tests pass
+  - Presenting only one integration option
+  - Skipping workspace cleanup
+  - Discarding work without explicit confirmation
