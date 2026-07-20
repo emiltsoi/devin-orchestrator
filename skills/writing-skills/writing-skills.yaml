@@ -1,0 +1,28 @@
+schema_version: 1
+name: writing-skills
+description: "Use when creating or editing a skill to ensure it is tested and discoverable."
+iron_law: "NO SKILL WITHOUT A FAILING TEST FIRST"
+triggers:
+  - new_skill_needed
+  - skill_update
+  - skill_not_working
+checklist:
+  - id: run_baseline
+    description: Run a pressure scenario without the skill and document violations
+  - id: write_minimal_skill
+    description: Write a minimal skill addressing the observed violations
+  - id: verify_compliance
+    description: Re-run the scenario with the skill and confirm compliance
+  - id: close_loopholes
+    description: Find new rationalizations and plug them
+  - id: optimize_discovery
+    description: Tune the description for Skill Discovery Optimization (SDO)
+  - id: create_yaml_and_md
+    description: Produce both <skill>.yaml and <skill>.md per skills/SCHEMA.md
+terminal_state: complete
+announcement: "Using the writing-skills discipline to author a tested, discoverable skill."
+red_flags:
+  - Writing a skill before testing it
+  - Editing a skill without re-testing
+  - Summarizing the process in the description
+  - Leaving rationalization loopholes open

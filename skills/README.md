@@ -38,6 +38,11 @@ Each skill is defined in a subdirectory with two files:
 
 - **requesting-code-review** - Reviews against plan, reports issues by severity. Critical issues block progress
 - **adversarial-review** - Multi-perspective adversarial review using parallel Devin dispatch with different persona prompts
+- **receiving-code-review** - Evaluates and addresses code review feedback: read, verify against codebase, push back or acknowledge, then implement one item at a time
+
+### Skill Authoring
+
+- **writing-skills** - Test-driven authoring of new skills: write a failing pressure scenario first, then a minimal skill that makes it pass, then close rationalization loopholes
 
 ### Investigation Skills
 
@@ -46,6 +51,7 @@ Each skill is defined in a subdirectory with two files:
 ### Orchestration Skills
 
 - **orchestrate-superpower** - Orchestrates the superpower workflow using skill_invoker
+- **using-devin-orchestrator** - Meta-skill invoked at the start of any orchestrated task to decide whether a devin-orchestrator skill should be invoked before acting
 
 ## Skill Schema
 
@@ -93,6 +99,15 @@ When creating a new skill:
 4. Follow the skill schema defined in `SCHEMA.md`
 5. Include iron law, triggers, checklist, terminal state, announcement, and red flags
 6. Reference the skill in workflow manifests as needed
+
+### Skill Discovery Optimization (SDO)
+
+A skill that cannot be found will not be invoked. Optimize the `name` and `description`
+fields for discovery: `name` is kebab-case with letters, numbers, and hyphens only;
+`description` starts with "Use when..." and describes triggering conditions, symptoms,
+or context — it does **not** summarize the skill's workflow and stays under 500
+characters. See `SCHEMA.md` and `writing-skills/writing-skills.md` for the full SDO
+guidance and the test-first authoring discipline.
 
 ## Skill Loading
 

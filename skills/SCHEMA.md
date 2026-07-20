@@ -54,8 +54,8 @@ red_flags:
 | Field | Type | Required | Description |
 |-------|------|---------:|-------------|
 | `schema_version` | int | yes | Schema version (currently 1) |
-| `name` | string | yes | Skill identifier (kebab-case) |
-| `description` | string | yes | One-sentence summary |
+| `name` | string | yes | Skill identifier (kebab-case, letters/numbers/hyphens only, no special characters) |
+| `description` | string | yes | One-sentence summary. Start with "Use when...". Describe triggering conditions, symptoms, or context. Do NOT summarize the skill's workflow or process. Keep under 500 characters when possible. |
 | `iron_law` | string | yes | Non-negotiable rule in a code block |
 | `triggers` | list[string] | yes | When this skill should be invoked |
 | `checklist` | list[object] | yes | Ordered checklist items |
@@ -83,6 +83,27 @@ The markdown file should contain:
 - **Checklist execution**: Walk checklist literally via todo_list
 - **Announcement protocol**: Always announce skill before acting (Rule 38)
 - **Terminal state**: Only invoke the specified next skill; don't jump to other skills
+
+## Skill Discovery Optimization (SDO)
+
+A skill that cannot be found will not be invoked. The discovery surface for a skill is
+its `name` and `description` — those are what an agent scans when deciding which skill
+applies to the current request. Optimize them as follows:
+
+- **`name`**: kebab-case, letters/numbers/hyphens only, no special characters. Choose a
+  name that names the activity, not the artifact (e.g. `writing-skills`, not
+  `skill-docs`).
+- **`description`**: must start with "Use when..." and describe the triggering
+  conditions, symptoms, or context that should make an agent think of this skill. Do
+  NOT summarize the skill's workflow or process — the checklist does that. Keep the
+  description under 500 characters when possible; long descriptions get truncated and
+  skimmed.
+
+A good description answers "when should I reach for this skill?" A bad description
+answers "what does this skill do?" The former aids discovery; the latter buries it.
+
+See `skills/writing-skills/writing-skills.md` for the full authoring discipline,
+including how to test that a description is discoverable.
 
 ## Versioning
 
