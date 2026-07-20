@@ -242,6 +242,44 @@ class TestModelRoutingFields:
         config = ConfigLoader.load(config_path=config_path)
         assert config.agent_skills == {"coder": ["writing-plans"]}
 
+    def test_env_vars_expanded_in_models_and_overrides(self, tmp_path):
+        # models and model_overrides values should have env vars expanded,
+        # consistent with model_profile. default_model is expanded too via
+        # the existing scalar expansion path.
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "models": {"verify": "${VERIFY_MODEL}", "execute": "${EXEC_MODEL:-swe-1.6}"},
+                    "model_overrides": {"coder": "${CODER_MODEL}"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ, {"VERIFY_MODEL": "glm-5-2", "CODER_MODEL": "claude-opus-4.6"}
+        ):
+            config = ConfigLoader.load(config_path=config_path)
+        assert config.models == {"verify": "glm-5-2", "execute": "swe-1.6"}
+        assert config.model_overrides == {"coder": "claude-opus-4.6"}
+
+    def test_non_string_model_values_dropped(self, tmp_path):
+        # Non-string values in models/model_overrides are dropped (not expanded)
+        # so the resulting dicts only contain string model IDs.
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "models": {"verify": 123, "execute": "swe-1.6"},
+                    "model_overrides": {"coder": None},
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = ConfigLoader.load(config_path=config_path)
+        assert config.models == {"execute": "swe-1.6"}
+        assert config.model_overrides == {}
+
 
 class TestGlobalConfig:
     """Tests for the GlobalConfig dataclass"""

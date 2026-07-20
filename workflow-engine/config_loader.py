@@ -199,11 +199,25 @@ class ConfigLoader:
         raw_model_profile = ConfigLoader.expand_env_vars(raw_model_profile)
 
         raw_models = config_data.get("models", {})
-        models = dict(raw_models) if isinstance(raw_models, dict) else {}
+        models = (
+            {
+                str(k): ConfigLoader.expand_env_vars(v)
+                for k, v in raw_models.items()
+                if isinstance(v, str)
+            }
+            if isinstance(raw_models, dict)
+            else {}
+        )
 
         raw_model_overrides = config_data.get("model_overrides", {})
         model_overrides = (
-            dict(raw_model_overrides) if isinstance(raw_model_overrides, dict) else {}
+            {
+                str(k): ConfigLoader.expand_env_vars(v)
+                for k, v in raw_model_overrides.items()
+                if isinstance(v, str)
+            }
+            if isinstance(raw_model_overrides, dict)
+            else {}
         )
 
         raw_agent_skills = config_data.get("agent_skills", {})

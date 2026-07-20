@@ -145,6 +145,18 @@ class TestLoadEdgeCases:
         with pytest.raises(ValueError):
             load_state(path)
 
+    def test_load_crlf_frontmatter(self, tmp_path):
+        # A STATE.md written with CRLF line endings must still parse.
+        path = tmp_path / "STATE.md"
+        body = "milestone: M\r\nphase: P\r\nstatus: blocked\r\n"
+        path.write_bytes(b"---\r\n" + body.encode("utf-8") + b"---\r\n")
+        loaded = load_state(path)
+        assert loaded["milestone"] == "M"
+        assert loaded["phase"] == "P"
+        assert loaded["status"] == "blocked"
+        # Required fields filled in.
+        assert loaded["decisions"] == []
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-q"])

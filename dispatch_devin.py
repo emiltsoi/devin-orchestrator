@@ -27,9 +27,9 @@ from pathlib import Path
 WORKFLOW_ENGINE_DIR = Path(__file__).parent / "workflow-engine"
 sys.path.insert(0, str(WORKFLOW_ENGINE_DIR))
 
-from config_loader import ConfigLoader
-from devin_cli_adapter import DevinCliAdapter
-from model_resolver import resolve_model
+from config_loader import ConfigLoader  # noqa: E402
+from devin_cli_adapter import DevinCliAdapter  # noqa: E402
+from model_resolver import resolve_model  # noqa: E402
 
 
 def resolve_role_file(role: str) -> Path:
@@ -142,10 +142,7 @@ def main() -> int:
     permission_mode = args.permission_mode or config.default_permission_mode
 
     # Model resolution: explicit --model wins; otherwise route via config.
-    if args.model:
-        model = args.model
-    else:
-        model = resolve_model(args.agent, args.phase, config)
+    model = args.model or resolve_model(args.agent, args.phase, config)
 
     # Warn on likely configuration typos when routing config is populated.
     if args.phase and config.models and args.phase not in config.models:

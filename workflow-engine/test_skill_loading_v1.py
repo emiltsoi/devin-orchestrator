@@ -152,23 +152,33 @@ class TestSkillFilter:
     def test_inject_skills_respects_filter(self, adapter):
         # skill_filter selects the eligible skill set. When a filter is provided,
         # those skills are injected unconditionally (this is the agent_skills
-        # contract). Without a filter, legacy trigger-phrase matching applies.
+        # contract). Without a filter, auto-trigger matching uses the
+        # ``triggers`` list from each skill's YAML sidecar/frontmatter.
         prompt = "coding dispatch and implementation task"
 
         # With no filter, no skill matches (foo/bar/baz have no trigger phrases).
         out_no_filter = adapter._inject_skills(prompt)
         assert out_no_filter == prompt
 
-        # Add a legacy-style ponytail skill that triggers on the prompt.
+        # Add a ponytail skill whose triggers list matches the prompt.
         adapter.skills["ponytail"] = {
             "description": "",
             "content": "PONYTAIL-BODY",
+            "triggers": ["coding dispatch", "implementation task"],
         }
         # No filter -> ponytail triggers on the prompt.
         out_all = adapter._inject_skills(prompt)
         assert "PONYTAIL-BODY" in out_all
         assert "# Foo" not in out_all
         assert "# Bar" not in out_all
+
+        # A skill without a triggers field is not auto-triggered unfiltered.
+        adapter.skills["notrigger"] = {
+            "description": "",
+            "content": "NOTRIGGER-BODY",
+        }
+        out_notrigger = adapter._inject_skills(prompt)
+        assert "NOTRIGGER-BODY" not in out_notrigger
 
         # Filter excludes ponytail and includes foo/bar -> only foo/bar injected.
         out_filtered = adapter._inject_skills(prompt, skill_filter=["foo", "bar"])
@@ -228,3 +238,68 @@ class TestSkillsDirMissing:
             skills_dir=str(tmp_path / "does-not-exist"),
         )
         assert adapter.skills == {}
+
+
+class TestTriggersAutoInjection:
+    """Auto-trigger matching reads the ``triggers:`` list from the YAML sidecar
+    (or frontmatter) instead of hardcoding skill names."""
+
+    def _build(self, tmp_path):
+        skills = tmp_path / "skills"
+        skills.mkdir()
+        triggered = skills / "triggered-skill"
+        triggered.mkdir()
+        (triggered / "triggered-skill.md").write_text(
+            "---\n"
+            'name: triggered-skill\n'
+            'description: "Use when something happens."\n'
+            "---\n\n# Triggered\n\nBody.\n",
+            encoding="utf-8",
+        )
+        (triggered / "triggered-skill.yaml").write_text(
+            "schema_version: 1\n"
+            "name: triggered-skill\n"
+            'description: "Use when something happens."\n'
+            "triggers:\n"
+            "  - coding dispatch\n"
+            "  - implementation task\n",
+            encoding="utf-8",
+        )
+        plain = skills / "plain-skill"
+        plain.mkdir()
+        (plain / "plain-skill.md").write_text(
+            "---\n"
+            'name: plain-skill\n'
+            'description: "Use when plain."\n'
+            "---\n\n# Plain\n\nBody.\n",
+            encoding="utf-8",
+        )
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        return DevinCliAdapter(
+            devin_cli_path=str(tmp_path / "devin.exe"),
+            workspace=str(workspace),
+            skills_dir=str(skills),
+        )
+
+    def test_triggers_loaded_from_sidecar(self, tmp_path):
+        adapter = self._build(tmp_path)
+        assert adapter.skills["triggered-skill"]["triggers"] == [
+            "coding dispatch",
+            "implementation task",
+        ]
+        # Skills without a triggers field get an empty list.
+        assert adapter.skills["plain-skill"]["triggers"] == []
+
+    def test_auto_trigger_matches_prompt_phrase(self, tmp_path):
+        adapter = self._build(tmp_path)
+        prompt = "This is a coding dispatch for the new feature."
+        out = adapter._inject_skills(prompt)
+        assert "# Triggered" in out
+        assert "# Plain" not in out
+
+    def test_no_trigger_no_injection(self, tmp_path):
+        adapter = self._build(tmp_path)
+        prompt = "Write a hello world program."
+        out = adapter._inject_skills(prompt)
+        assert out == prompt

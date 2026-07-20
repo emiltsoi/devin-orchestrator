@@ -43,7 +43,7 @@ DEFAULT_STATE: dict[str, Any] = {
 
 REQUIRED_FIELDS = tuple(DEFAULT_STATE.keys())
 
-_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
+_FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 
 
 def _normalize(state: dict[str, Any]) -> dict[str, Any]:

@@ -146,6 +146,7 @@ class DevinCliAdapter(TransportAdapter):
                         skills[skill_dir.name] = {
                             "description": description_match.group(1),
                             "content": content,
+                            "triggers": [],
                         }
                 except Exception:
                     # Skip skills that fail to load
@@ -194,9 +195,22 @@ class DevinCliAdapter(TransportAdapter):
                 if not isinstance(description, str):
                     description = ""
 
+                # Optional ``triggers`` list (a list of strings) drives
+                # auto-injection in unfiltered mode. Read from the frontmatter
+                # first, then the .yaml sidecar. Skills without a triggers
+                # field are not auto-triggered (they must be selected via
+                # skill_filter to be injected).
+                raw_triggers = frontmatter.get("triggers")
+                if raw_triggers is None:
+                    raw_triggers = sidecar.get("triggers")
+                triggers: list[str] = []
+                if isinstance(raw_triggers, list):
+                    triggers = [t for t in raw_triggers if isinstance(t, str)]
+
                 skills[name] = {
                     "description": description,
                     "content": md_content,
+                    "triggers": triggers,
                 }
             except Exception:
                 # Skip skills that fail to load
@@ -214,8 +228,9 @@ class DevinCliAdapter(TransportAdapter):
         """
         if not md_content.startswith("---"):
             return {}
-        # Find the closing delimiter on its own line.
-        match = re.match(r"^---\n(.*?)\n---\n", md_content, re.DOTALL)
+        # Find the closing delimiter on its own line. Tolerate both \n and
+        # \r\n line endings so CRLF-formatted files parse correctly.
+        match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", md_content, re.DOTALL)
         if not match:
             return {}
         try:
@@ -250,7 +265,9 @@ class DevinCliAdapter(TransportAdapter):
 
         # When a skill_filter is provided, the caller explicitly selected skills
         # for this agent/phase; inject them unconditionally. Without a filter,
-        # fall back to legacy trigger-phrase matching for the pre-v1 skill set.
+        # auto-trigger skills whose YAML sidecar ``triggers:`` list contains a
+        # phrase found in the prompt. Skills without a ``triggers`` field are
+        # not auto-triggered (they must be selected via skill_filter).
         for skill_name, skill_data in self.skills.items():
             if skill_name not in eligible_names:
                 continue
@@ -259,18 +276,8 @@ class DevinCliAdapter(TransportAdapter):
                 injected_skills.append(skill_data["content"])
                 continue
 
-            # Legacy auto-trigger matching (only for unfiltered invocation)
-            if skill_name == "ponytail":
-                if (
-                    "coding dispatch" in prompt_lower
-                    or "implementation task" in prompt_lower
-                ):
-                    injected_skills.append(skill_data["content"])
-            elif skill_name == "swe-compliance" and (
-                "compliance review" in prompt_lower
-                or "code verification" in prompt_lower
-                or "artifact audit" in prompt_lower
-            ):
+            triggers = skill_data.get("triggers") or []
+            if any(t and t.lower() in prompt_lower for t in triggers):
                 injected_skills.append(skill_data["content"])
 
         if injected_skills:
