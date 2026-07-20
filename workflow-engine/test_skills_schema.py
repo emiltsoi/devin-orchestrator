@@ -121,6 +121,20 @@ def test_skill_schema(skill_dir: Path, skill_name: str) -> None:
         f"{yaml_path} checklist ids are not unique: {ids}"
     )
 
+    # terminal_state is a string and either "complete" or an existing skill name
+    terminal_state = definition["terminal_state"]
+    assert isinstance(terminal_state, str), (
+        f"{yaml_path} terminal_state must be a string, got {type(terminal_state).__name__}"
+    )
+    if terminal_state != "complete":
+        target_skill_dir = SKILLS_DIR / terminal_state
+        target_yaml = target_skill_dir / f"{terminal_state}.yaml"
+        target_md = target_skill_dir / f"{terminal_state}.md"
+        assert target_skill_dir.is_dir() and target_yaml.is_file() and target_md.is_file(), (
+            f"{yaml_path} terminal_state {terminal_state!r} must be 'complete' "
+            f"or a valid subdirectory skill name"
+        )
+
     # Markdown frontmatter matches YAML name/description
     md_content = md_path.read_text(encoding="utf-8")
     frontmatter_match = re.match(r"^---\n(.*?)\n---\n", md_content, re.DOTALL)

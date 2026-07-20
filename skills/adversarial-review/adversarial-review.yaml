@@ -19,7 +19,7 @@ checklist:
     description: Synthesize results - produce structured verdict
   - id: generate_verdict
     description: Generate verdict - allow/allow_with_conditions/deny with risks, checks, actions
-terminal_state: Structured verdict produced with top_risks, required_checks, missing_evidence, next_actions
+terminal_state: complete
 announcement: "Using the adversarial-review skill to conduct multi-perspective review."
 red_flags:
   - Proceeding without synthesizing all perspectives

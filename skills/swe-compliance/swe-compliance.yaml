@@ -19,7 +19,7 @@ checklist:
     description: Check documentation and comments
   - id: document_findings
     description: Document findings in quality_review.md
-terminal_state: null
+terminal_state: complete
 announcement: "Using the swe-compliance skill for code quality and standards compliance review"
 red_flags:
   - Inconsistent coding style

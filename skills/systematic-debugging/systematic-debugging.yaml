@@ -18,7 +18,7 @@ checklist:
     description: Propose fixes for the identified root cause
   - id: document_findings
     description: Document findings and recommendations
-terminal_state: null
+terminal_state: complete
 announcement: "Using the systematic-debugging skill for structured incident investigation"
 red_flags:
   - Jumping to conclusions without evidence

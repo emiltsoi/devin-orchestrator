@@ -15,7 +15,7 @@ checklist:
     description: Act on feedback — fix Critical immediately, fix Important before proceeding
   - id: push_back_if_wrong
     description: Push back if reviewer wrong — with technical reasoning
-terminal_state: Code review complete, findings addressed, ready to invoke finishing-a-development-branch skill
+terminal_state: finishing-a-development-branch
 announcement: "Using the requesting-code-review skill to dispatch a code reviewer subagent."
 red_flags:
   - Skipping review because the change seems simple

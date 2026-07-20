@@ -19,7 +19,7 @@ checklist:
     description: Execute choice — perform selected action
   - id: cleanup_workspace
     description: Cleanup workspace — remove worktree if appropriate
-terminal_state: Work completed and integrated (or discarded), workspace cleaned up
+terminal_state: complete
 announcement: "Using the finishing-a-development-branch skill to complete this work."
 red_flags:
   - Integrating without verifying tests pass

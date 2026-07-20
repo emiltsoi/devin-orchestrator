@@ -23,7 +23,7 @@ checklist:
     description: Durable progress — track completed tasks
   - id: broad_final_review
     description: Broad final review — whole-branch review at the end
-terminal_state: All tasks completed with reviews, ready to invoke test-driven-development skill
+terminal_state: test-driven-development
 announcement: "Using the subagent-driven-development skill to execute the implementation plan task-by-task."
 red_flags:
   - Reusing a subagent context across tasks

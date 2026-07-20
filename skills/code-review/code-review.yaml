@@ -19,7 +19,7 @@ checklist:
     description: Provide human verdict in human-verdict.md with APPROVE/REQUEST CHANGES/REJECT
   - id: confirm_complete
     description: Confirm review complete with all three artifacts created
-terminal_state: workflow complete
+terminal_state: complete
 announcement: "Using the code-review skill for spec-compliance and code-quality review."
 red_flags:
   - Making subjective claims without evidence

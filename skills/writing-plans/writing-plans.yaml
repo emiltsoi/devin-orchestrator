@@ -21,7 +21,7 @@ checklist:
     description: Task definition — each task has exact file paths, complete code, verification steps
   - id: self_review
     description: Self-review — check for placeholders, ambiguity, missing steps
-terminal_state: Plan saved to plan.md, ready to invoke subagent-driven-development or executing-plans skill
+terminal_state: subagent-driven-development
 announcement: "Using the writing-plans skill to create the implementation plan."
 red_flags:
   - Writing a plan with placeholders or ambiguity

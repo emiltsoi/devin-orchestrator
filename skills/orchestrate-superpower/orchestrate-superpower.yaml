@@ -28,7 +28,7 @@ checklist:
     description: Handle gate if present (wait for human decision in production, simulate for demo)
   - id: continue_or_stop
     description: Continue to next stage if triage decision is proceed; stop if escalate or gate blocks
-terminal_state: Superpower workflow orchestrated and executed, all stages completed or blocked
+terminal_state: complete
 announcement: "Using the orchestrate-superpower skill to orchestrate the superpower workflow via dispatch_skill.py."
 red_flags:
   - Executing stage skills yourself instead of dispatching to Devin

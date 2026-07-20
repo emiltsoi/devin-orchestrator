@@ -27,7 +27,7 @@ checklist:
     description: Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
   - id: note_human_review
     description: Note that human review happens via gate after brainstorming stage, not during skill execution
-terminal_state: Design saved to design.md, ready for human review via gate
+terminal_state: writing-plans
 announcement: "Using the brainstorming skill to refine <topic> before writing design.md."
 red_flags:
   - Writing design.md before design approval

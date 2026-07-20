@@ -147,6 +147,20 @@ def main() -> int:
     else:
         model = resolve_model(args.agent, args.phase, config)
 
+    # Warn on likely configuration typos when routing config is populated.
+    if args.phase and config.models and args.phase not in config.models:
+        print(
+            f"Warning: phase {args.phase!r} not found in config.models; "
+            "falling back to model_profile/default_model",
+            file=sys.stderr,
+        )
+    if args.agent and config.model_overrides and args.agent not in config.model_overrides:
+        print(
+            f"Warning: agent {args.agent!r} not found in config.model_overrides; "
+            "falling back to models/model_profile/default_model",
+            file=sys.stderr,
+        )
+
     # Agent skill injection: if the agent is configured in agent_skills,
     # point the adapter at the configured skills_dir and pass the skill list
     # as a skill_filter so only the configured skills are eligible.
@@ -166,6 +180,22 @@ def main() -> int:
         permission_mode=permission_mode,
         skills_dir=skills_dir,
     )
+
+    # Warn if the agent is configured for skills but some selected skills are missing.
+    if selected_skills and args.agent:
+        missing = [s for s in selected_skills if s not in adapter.skills]
+        if missing:
+            print(
+                f"Warning: agent_skills for {args.agent!r} references missing skills: "
+                f"{missing}",
+                file=sys.stderr,
+            )
+    if args.agent and agent_skills_map and args.agent not in agent_skills_map:
+        print(
+            f"Warning: agent {args.agent!r} not found in config.agent_skills; "
+            "no skills will be injected",
+            file=sys.stderr,
+        )
 
     result = adapter.invoke(
         prompt,

@@ -18,7 +18,7 @@ checklist:
     description: Proceed to the next task in order, tracking progress with checkboxes
   - id: document_results
     description: Document execution results in execution-results.md with summary, deviations, and final state
-terminal_state: plan execution complete
+terminal_state: complete
 announcement: "Using the executing-plans skill to execute the plan task-by-task."
 red_flags:
   - Skipping tasks without approval

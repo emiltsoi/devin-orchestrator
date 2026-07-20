@@ -19,7 +19,7 @@ checklist:
     description: REFACTOR - Clean up while staying green
   - id: repeat
     description: Repeat for next feature
-terminal_state: All features implemented with TDD, ready to invoke requesting-code-review skill
+terminal_state: requesting-code-review
 announcement: "Using the test-driven-development skill to enforce the RED-GREEN-REFACTOR cycle."
 red_flags:
   - Writing production code before a failing test

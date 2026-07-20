@@ -19,7 +19,7 @@ checklist:
     description: Verify clean baseline — run tests to ensure workspace starts clean
   - id: report_status
     description: Report status — report worktree location and branch state
-terminal_state: Isolated workspace ready with clean test baseline, ready to invoke writing-plans skill
+terminal_state: writing-plans
 announcement: "Using the using-git-worktrees skill to set up an isolated workspace."
 red_flags:
   - Creating a worktree when already isolated
