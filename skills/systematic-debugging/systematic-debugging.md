@@ -1,3 +1,8 @@
+---
+name: systematic-debugging
+description: "Use when investigating incidents, bugs, or failures through systematic evidence gathering and analysis"
+---
+
 # Systematic Debugging
 
 ## Overview

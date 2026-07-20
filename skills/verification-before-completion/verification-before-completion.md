@@ -1,3 +1,8 @@
+---
+name: verification-before-completion
+description: "Use when verifying build and tests before claiming completion"
+---
+
 # Verification Before Completion
 
 ## Overview

@@ -1,3 +1,8 @@
+---
+name: swe-compliance
+description: "Use when reviewing code for software engineering best practices, coding standards, and compliance"
+---
+
 # SWE Compliance
 
 ## Overview
