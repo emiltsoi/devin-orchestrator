@@ -365,7 +365,7 @@ A fresh Cascade session can resume from a previous session using:
 ```markdown
 # Feature Workflow Runbook
 
-**Source manifest:** `workflows/feature.manifest.yaml`
+**Source manifest:** `workflows/superpower.manifest.yaml`
 **Schema version:** 1
 **Session shape:** feature
 

@@ -57,7 +57,7 @@ devin-orchestrator/
 ├── workflow-engine/ # Orchestration engine and tools
 ├── adapters/        # Transport adapter implementations
 ├── contracts/       # Dispatch contract definitions
-├── templates/       # Prompt templates for dispatches
+├── archive/         # Archived work and reference artifacts
 └── .windsurf/
     └── workflows/   # Windsurf slash command stubs
 ```

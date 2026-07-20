@@ -37,6 +37,7 @@ Each skill is defined in a subdirectory with two files:
 ### Review Skills
 
 - **requesting-code-review** - Reviews against plan, reports issues by severity. Critical issues block progress
+- **code-review** - Reviews code for spec compliance and code quality with objective, evidence-based findings before merging
 - **adversarial-review** - Multi-perspective adversarial review using parallel Devin dispatch with different persona prompts
 - **receiving-code-review** - Evaluates and addresses code review feedback: read, verify against codebase, push back or acknowledge, then implement one item at a time
 

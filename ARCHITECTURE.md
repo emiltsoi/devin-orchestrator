@@ -592,7 +592,7 @@ Deployed to workspace per DEPLOYMENT.md protocol.
 ## References
 
 - [obra/superpowers](https://github.com/obra/superpowers) - Original skills framework
-- `orchestrator/skills/README.md` - Current skills library
-- `orchestrator/workflows/MANIFEST-SCHEMA.md` - Workflow manifest schema
-- `orchestrator/multi-agent-orchestration.md` - Multi-agent dispatch contracts
-- `orchestrator/workflows/gated-change.md` - Example workflow implementation
+- [skills/README.md](skills/README.md) - Current skills library
+- [workflow-engine/MANIFEST-SCHEMA.md](workflow-engine/MANIFEST-SCHEMA.md) - Workflow manifest schema
+- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Multi-agent dispatch runbook
+- [workflows/superpower.runbook.md](workflows/superpower.runbook.md) - Example workflow implementation

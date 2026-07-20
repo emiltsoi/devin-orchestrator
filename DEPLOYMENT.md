@@ -60,17 +60,17 @@ vim .devin/workflows/superpower.manifest.yaml
 cd /path/to/devin-orchestrator
 
 # 1. Update manifest
-vim workflows/feature.manifest.yaml
+vim workflows/superpower.manifest.yaml
 
 # 2. Update runbook
-vim workflows/feature.runbook.md
+vim workflows/superpower.runbook.md
 
 # 3. Validate parity
-python -m workflow_engine.parity_test workflows/feature.manifest.yaml workflows/feature.runbook.md
+python -m pytest workflow-engine/test_parity_tool.py -q
 
 # 4. Commit changes
-git add workflows/feature.manifest.yaml workflows/feature.runbook.md
-git commit -m "Update feature workflow: <description>"
+git add workflows/superpower.manifest.yaml workflows/superpower.runbook.md
+git commit -m "Update superpower workflow: <description>"
 
 # 5. Reinstall globally
 python install.py
