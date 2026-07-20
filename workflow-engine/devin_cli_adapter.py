@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import yaml
 from transport_adapter import InvocationResult, TransportAdapter
 
 # Allowlist of valid devin-cli permission modes. The CLI only accepts these
@@ -107,12 +108,25 @@ class DevinCliAdapter(TransportAdapter):
 
     def _load_skills(self) -> dict[str, dict[str, str]]:
         """
-        Load skills from skills directory
+        Load skills from skills directory.
+
+        Supports two layouts:
+
+        - **Legacy** (used by ``workflow-engine/skills/`` and the existing
+          ``test_skill_loading.py`` fixtures): ``<skill_dir>/SKILL.md`` with a
+          YAML frontmatter block. The description is extracted with a regex
+          for backward compatibility.
+        - **v1** (canonical ``skills/`` layout): ``<skill_dir>/<name>.md``
+          with YAML frontmatter, optionally accompanied by
+          ``<skill_dir>/<name>.yaml``. The ``name`` and ``description`` are
+          read from the YAML frontmatter, falling back to the ``.yaml`` sidecar
+          if the frontmatter is missing those fields. The stored ``content`` is
+          the full ``.md`` file text.
 
         Returns:
             Dict mapping skill name to {description, content}
         """
-        skills = {}
+        skills: dict[str, dict[str, str]] = {}
         if not self.skills_dir.exists():
             return skills
 
@@ -120,45 +134,133 @@ class DevinCliAdapter(TransportAdapter):
             if not skill_dir.is_dir():
                 continue
 
-            skill_file = skill_dir / "SKILL.md"
-            if not skill_file.exists():
+            # Legacy layout: <skill_dir>/SKILL.md
+            legacy_file = skill_dir / "SKILL.md"
+            if legacy_file.exists():
+                try:
+                    content = legacy_file.read_text(encoding="utf-8")
+                    description_match = re.search(
+                        r'description:\s*"([^"]+)"', content
+                    )
+                    if description_match:
+                        skills[skill_dir.name] = {
+                            "description": description_match.group(1),
+                            "content": content,
+                        }
+                except Exception:
+                    # Skip skills that fail to load
+                    continue
+                # Legacy layout is mutually exclusive with v1 for the same dir;
+                # continue to the next directory.
+                continue
+
+            # v1 layout: <skill_dir>/<name>.md (+ optional <name>.yaml)
+            md_candidate = skill_dir / f"{skill_dir.name}.md"
+            yaml_candidate = skill_dir / f"{skill_dir.name}.yaml"
+            if not md_candidate.exists():
                 continue
 
             try:
-                content = skill_file.read_text(encoding="utf-8")
-                # Extract description from YAML frontmatter
-                description_match = re.search(r'description:\s*"([^"]+)"', content)
-                if description_match:
-                    description = description_match.group(1)
-                    skills[skill_dir.name] = {
-                        "description": description,
-                        "content": content,
-                    }
+                md_content = md_candidate.read_text(encoding="utf-8")
+                frontmatter = self._parse_frontmatter(md_content)
+
+                # Prefer frontmatter; fall back to the .yaml sidecar for any
+                # missing name/description fields.
+                sidecar: dict[str, Any] = {}
+                if yaml_candidate.exists():
+                    try:
+                        loaded = yaml.safe_load(
+                            yaml_candidate.read_text(encoding="utf-8")
+                        )
+                        if isinstance(loaded, dict):
+                            sidecar = loaded
+                    except Exception:
+                        # A malformed sidecar should not break skill loading.
+                        sidecar = {}
+
+                name = (
+                    frontmatter.get("name")
+                    or sidecar.get("name")
+                    or skill_dir.name
+                )
+                description = (
+                    frontmatter.get("description")
+                    or sidecar.get("description")
+                    or ""
+                )
+
+                if not isinstance(name, str) or not name:
+                    name = skill_dir.name
+                if not isinstance(description, str):
+                    description = ""
+
+                skills[name] = {
+                    "description": description,
+                    "content": md_content,
+                }
             except Exception:
                 # Skip skills that fail to load
                 continue
 
         return skills
 
-    def _inject_skills(self, prompt: str) -> str:
+    @staticmethod
+    def _parse_frontmatter(md_content: str) -> dict[str, Any]:
+        """Parse a leading YAML frontmatter block from a markdown string.
+
+        Returns an empty dict if no frontmatter is present or it fails to
+        parse. Only the first ``---``-delimited block at the start of the
+        file is considered.
         """
-        Inject skills into prompt based on description matching
+        if not md_content.startswith("---"):
+            return {}
+        # Find the closing delimiter on its own line.
+        match = re.match(r"^---\n(.*?)\n---\n", md_content, re.DOTALL)
+        if not match:
+            return {}
+        try:
+            loaded = yaml.safe_load(match.group(1))
+        except Exception:
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
+
+    def _inject_skills(
+        self, prompt: str, skill_filter: list[str] | None = None
+    ) -> str:
+        """
+        Inject skills into prompt based on description matching.
 
         Args:
-            prompt: Original prompt
+            prompt: Original prompt.
+            skill_filter: Optional list of skill names; when provided, only
+                those skills are eligible for injection. When ``None`` (the
+                default), all loaded skills are eligible.
 
         Returns:
-            Prompt with skill content injected if description matches
+            Prompt with skill content injected if description matches.
         """
         prompt_lower = prompt.lower()
         injected_skills = []
 
+        eligible_names = (
+            set(skill_filter)
+            if skill_filter is not None
+            else set(self.skills.keys())
+        )
+
+        # When a skill_filter is provided, the caller explicitly selected skills
+        # for this agent/phase; inject them unconditionally. Without a filter,
+        # fall back to legacy trigger-phrase matching for the pre-v1 skill set.
         for skill_name, skill_data in self.skills.items():
-            # Match on specific trigger phrases to avoid false positives
-            # ponytail: "coding dispatch and implementation task"
-            # swe-compliance: "compliance review task, code verification, artifact audit, and quality check"
+            if skill_name not in eligible_names:
+                continue
+
+            if skill_filter is not None:
+                injected_skills.append(skill_data["content"])
+                continue
+
+            # Legacy auto-trigger matching (only for unfiltered invocation)
             if skill_name == "ponytail":
-                # Trigger on "coding dispatch" or "implementation task"
                 if (
                     "coding dispatch" in prompt_lower
                     or "implementation task" in prompt_lower
@@ -169,7 +271,6 @@ class DevinCliAdapter(TransportAdapter):
                 or "code verification" in prompt_lower
                 or "artifact audit" in prompt_lower
             ):
-                # Trigger on "compliance review" or "code verification" or "artifact audit"
                 injected_skills.append(skill_data["content"])
 
         if injected_skills:
@@ -186,6 +287,7 @@ class DevinCliAdapter(TransportAdapter):
         focused_context: list | None = None,
         correction_artifact: str | None = None,
         enable_skills: bool = True,
+        skill_filter: list[str] | None = None,
     ) -> InvocationResult:
         """
         Invoke devin-cli with a prompt in non-interactive mode
@@ -196,13 +298,17 @@ class DevinCliAdapter(TransportAdapter):
             focused_context: Optional list of artifact paths to inject into worker dispatch
             correction_artifact: Optional path to correction artifact for retry loops
             enable_skills: Whether to inject skills via description matching (default: True)
+            skill_filter: Optional list of skill names eligible for injection.
+                When provided, only those skills are eligible (subject to the
+                existing trigger-phrase matching). When ``None`` and
+                ``enable_skills`` is True, all loaded skills are eligible.
 
         Returns:
             InvocationResult with success status, output, and error
         """
         # Inject skills if enabled
         if enable_skills:
-            prompt = self._inject_skills(prompt)
+            prompt = self._inject_skills(prompt, skill_filter=skill_filter)
 
         # Add focused context artifacts if provided
         # Note: Devin CLI doesn't support --context, so we inject into prompt instead

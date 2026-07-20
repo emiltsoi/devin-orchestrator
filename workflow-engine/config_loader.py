@@ -34,6 +34,14 @@ class GlobalConfig:
     default_model: str
     default_permission_mode: str
     session_work_dir: Path
+    # Optional model routing fields. Empty dicts/strings mean "unset" and
+    # resolve_model() falls back to default_model. These are populated from
+    # config.yaml by ConfigLoader.load() with {} / "" defaults.
+    model_profile: str = ""
+    models: dict[str, str] | None = None
+    model_overrides: dict[str, str] | None = None
+    # Optional agent skill injection: maps agent name -> list of skill names.
+    agent_skills: dict[str, list[str]] | None = None
 
 
 class ConfigLoader:
@@ -180,6 +188,34 @@ class ConfigLoader:
         if not session_work_dir.exists():
             session_work_dir = Path(__file__).parent / "work"
 
+        # Optional model routing + agent skill injection fields. Defaults are
+        # empty so resolve_model() falls back to default_model and dispatch
+        # skips skill injection when nothing is configured.
+        raw_model_profile = config_data.get("model_profile", "")
+        if not isinstance(raw_model_profile, str):
+            raw_model_profile = ""
+        # Expand env vars in the profile string for consistency with other
+        # scalar config values.
+        raw_model_profile = ConfigLoader.expand_env_vars(raw_model_profile)
+
+        raw_models = config_data.get("models", {})
+        models = dict(raw_models) if isinstance(raw_models, dict) else {}
+
+        raw_model_overrides = config_data.get("model_overrides", {})
+        model_overrides = (
+            dict(raw_model_overrides) if isinstance(raw_model_overrides, dict) else {}
+        )
+
+        raw_agent_skills = config_data.get("agent_skills", {})
+        agent_skills = (
+            {
+                str(k): list(v) if isinstance(v, list) else [v]
+                for k, v in raw_agent_skills.items()
+            }
+            if isinstance(raw_agent_skills, dict)
+            else {}
+        )
+
         return GlobalConfig(
             global_root=global_root,
             skills_dir=skills_dir,
@@ -189,6 +225,10 @@ class ConfigLoader:
             default_model=default_model,
             default_permission_mode=default_permission_mode,
             session_work_dir=session_work_dir,
+            model_profile=raw_model_profile,
+            models=models,
+            model_overrides=model_overrides,
+            agent_skills=agent_skills,
         )
 
 

@@ -17,6 +17,22 @@ devin_cli_path: ${DEVIN_CLI_PATH:-~/AppData/Local/devin/cli/bin/devin.exe}
 # Set DEVIN_DEFAULT_MODEL environment variable or update this value
 default_model: ${DEVIN_DEFAULT_MODEL:-swe-1.6}
 
+# Model routing (optional; empty by default)
+# Resolution precedence for resolve_model(agent, phase_type, config):
+#   1. model_overrides[agent]
+#   2. models[phase_type]
+#   3. model_profile
+#   4. default_model
+# Valid values are model IDs like "swe-1.6", "glm-5-2", or "claude-sonnet-4".
+model_profile: ""
+models: {}
+model_overrides: {}
+
+# Agent skill injection (optional; maps agent names to lists of skill names)
+# When dispatch_devin.py runs with --agent <name>, the listed skills become
+# eligible for injection via DevinCliAdapter.invoke(..., skill_filter=[...]).
+agent_skills: {}
+
 # Permission mode configuration
 # Allowed values: "dangerous", "smart", "auto"
 # - "dangerous": non-interactive; required for automated orchestrator dispatch

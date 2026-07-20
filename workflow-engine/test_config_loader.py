@@ -188,6 +188,61 @@ class TestLoadConfig:
         assert isinstance(config, GlobalConfig)
 
 
+class TestModelRoutingFields:
+    """Tests for the optional model routing + agent_skills config fields."""
+
+    def test_defaults_when_absent(self, tmp_path):
+        config = ConfigLoader.load(config_path=tmp_path / "missing.yaml")
+        assert config.model_profile == ""
+        assert config.models == {}
+        assert config.model_overrides == {}
+        assert config.agent_skills == {}
+
+    def test_reads_model_routing_fields(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "model_profile": "claude-sonnet-4",
+                    "models": {"verify": "glm-5-2", "execute": "swe-1.6"},
+                    "model_overrides": {"coder": "claude-opus-4.6"},
+                    "agent_skills": {
+                        "coder": ["using-devin-orchestrator", "writing-plans"],
+                        "reviewer": ["receiving-code-review"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        config = ConfigLoader.load(config_path=config_path)
+        assert config.model_profile == "claude-sonnet-4"
+        assert config.models == {"verify": "glm-5-2", "execute": "swe-1.6"}
+        assert config.model_overrides == {"coder": "claude-opus-4.6"}
+        assert config.agent_skills == {
+            "coder": ["using-devin-orchestrator", "writing-plans"],
+            "reviewer": ["receiving-code-review"],
+        }
+
+    def test_non_dict_models_falls_back_to_empty(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump({"models": "not-a-dict", "model_overrides": 42}),
+            encoding="utf-8",
+        )
+        config = ConfigLoader.load(config_path=config_path)
+        assert config.models == {}
+        assert config.model_overrides == {}
+
+    def test_scalar_agent_skill_value_wrapped_in_list(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump({"agent_skills": {"coder": "writing-plans"}}),
+            encoding="utf-8",
+        )
+        config = ConfigLoader.load(config_path=config_path)
+        assert config.agent_skills == {"coder": ["writing-plans"]}
+
+
 class TestGlobalConfig:
     """Tests for the GlobalConfig dataclass"""
 

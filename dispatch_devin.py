@@ -29,6 +29,7 @@ sys.path.insert(0, str(WORKFLOW_ENGINE_DIR))
 
 from config_loader import ConfigLoader
 from devin_cli_adapter import DevinCliAdapter
+from model_resolver import resolve_model
 
 
 def resolve_role_file(role: str) -> Path:
@@ -62,7 +63,31 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generic Devin dispatcher with role and prompt files."
     )
-    parser.add_argument("--model", required=True, help="Devin model to use")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "Devin model to use. If omitted, the model is resolved via "
+            "resolve_model(agent, phase, config) using the new model routing "
+            "config (model_overrides -> models -> model_profile -> default_model)."
+        ),
+    )
+    parser.add_argument(
+        "--agent",
+        default=None,
+        help=(
+            "Agent name (e.g. 'coder', 'reviewer'). Used for model routing "
+            "and to look up agent_skills in config.yaml."
+        ),
+    )
+    parser.add_argument(
+        "--phase",
+        default=None,
+        help=(
+            "Phase type (e.g. 'plan', 'execute', 'verify'). Used for model "
+            "routing via models.<phase_type> in config.yaml."
+        ),
+    )
     parser.add_argument(
         "--role",
         required=True,
@@ -116,19 +141,38 @@ def main() -> int:
     work_dir = args.work_dir or str(Path.cwd())
     permission_mode = args.permission_mode or config.default_permission_mode
 
+    # Model resolution: explicit --model wins; otherwise route via config.
+    if args.model:
+        model = args.model
+    else:
+        model = resolve_model(args.agent, args.phase, config)
+
+    # Agent skill injection: if the agent is configured in agent_skills,
+    # point the adapter at the configured skills_dir and pass the skill list
+    # as a skill_filter so only the configured skills are eligible.
+    agent_skills_map = config.agent_skills or {}
+    selected_skills: list[str] | None = None
+    skills_dir: str | None = None
+    enable_skills = False
+    if args.agent and args.agent in agent_skills_map:
+        selected_skills = list(agent_skills_map[args.agent])
+        skills_dir = str(config.skills_dir)
+        enable_skills = True
+
     adapter = DevinCliAdapter(
         devin_cli_path=devin_cli_path,
         workspace=work_dir,
-        model=args.model,
+        model=model,
         permission_mode=permission_mode,
-        skills_dir=None,
+        skills_dir=skills_dir,
     )
 
     result = adapter.invoke(
         prompt,
         timeout=args.timeout,
         focused_context=args.focused_context or None,
-        enable_skills=False,
+        enable_skills=enable_skills,
+        skill_filter=selected_skills,
     )
 
     if args.output_file:
