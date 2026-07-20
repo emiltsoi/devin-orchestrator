@@ -5,6 +5,16 @@ description: "Use when receiving code review feedback that must be evaluated and
 
 # Receiving Code Review
 
+## When to Use
+
+Use `receiving-code-review` when one of the following triggers fires (mirrors `receiving-code-review.yaml`):
+
+- `code_review_received` — a reviewer (human or agent) has returned feedback on a change you authored.
+- `pr_feedback` — a pull request you own has review comments or change requests that must be evaluated and addressed.
+- `human_review_comments` — a human reviewer left inline comments that require verification before implementation.
+
+Work through every item with VERIFY before IMPLEMENTING; do not batch, do not sycophantically agree.
+
 ## Overview
 
 Code review is technical evaluation, not emotional performance. Your job when receiving

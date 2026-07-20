@@ -7,10 +7,10 @@ description: "Use when starting non-trivial creative work — new features, comp
 
 Help turn ideas into fully formed designs and specs through natural collaborative dialogue.
 
-**IMPORTANT:** Check the `interactive_mode` configuration flag before starting.
+**IMPORTANT:** Check the `interactive_mode` flag before starting. `interactive_mode` is a prompt-time / per-invocation flag (passed via `config_overrides` on the dispatch, or set in the prompt) — it is not a key in `config.yaml`. Default is `false` when unset.
 
-- **If interactive_mode is true:** Ask questions one at a time to refine the idea. Wait for user responses before proceeding.
-- **If interactive_mode is false (default):** Make reasonable assumptions based on the request content and project context. Do NOT ask questions that require human input. Proceed autonomously to produce a design.
+- **If `interactive_mode` is true** (set in the prompt or in `config_overrides`): Ask questions one at a time to refine the idea. Wait for user responses before proceeding.
+- **If `interactive_mode` is false (default):** Make reasonable assumptions based on the request content and project context. Do NOT ask questions that require human input. Proceed autonomously to produce a design.
 
 Start by understanding the current project context, then either ask questions (interactive) or make assumptions (non-interactive) to refine the idea. Once you understand what you're building, present the design.
 
@@ -27,9 +27,9 @@ Every project goes through this process. A todo list, a single-function utility,
 You MUST create a task for each of these items and complete them in order:
 
 1. **Explore project context** — check files, docs, recent commits
-2. **Check interactive_mode configuration** — determine if you should ask questions or make assumptions
-3. **If interactive_mode is true:** Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
-4. **If interactive_mode is false:** Make reasonable assumptions based on request content and project context
+2. **Check `interactive_mode` flag** — determine if you should ask questions (interactive) or make assumptions (non-interactive). This is a prompt-time / `config_overrides` flag, not a `config.yaml` key; default is `false` when unset.
+3. **If `interactive_mode` is true:** Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
+4. **If `interactive_mode` is false:** Make reasonable assumptions based on request content and project context
 5. **Propose 2-3 approaches** — with trade-offs and your recommendation
 6. **Present design** — in sections scaled to their complexity
 7. **Optional: Adversarial review** — if enabled, conduct multi-perspective review before final approval
@@ -45,16 +45,16 @@ You MUST create a task for each of these items and complete them in order:
    - Identify relevant dependencies and constraints
 
 2. **Determine interaction mode**
-   - Check `interactive_mode` configuration
+   - Check the `interactive_mode` flag (prompt-time / `config_overrides`; not a `config.yaml` key)
    - If true: Proceed with interactive question-asking
-   - If false: Proceed with autonomous assumption-making
+   - If false (default when unset): Proceed with autonomous assumption-making
 
-3. **If interactive_mode is true: Ask clarifying questions**
+3. **If `interactive_mode` is true: Ask clarifying questions**
    - Ask one question at a time
    - Understand purpose, constraints, success criteria
    - Confirm understanding before proceeding
 
-4. **If interactive_mode is false: Make reasonable assumptions**
+4. **If `interactive_mode` is false: Make reasonable assumptions**
    - Analyze request content for explicit requirements
    - Infer constraints from project context
    - Document assumptions in the design

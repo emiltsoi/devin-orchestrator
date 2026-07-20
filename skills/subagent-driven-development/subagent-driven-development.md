@@ -42,7 +42,7 @@ Choose the appropriate model for each task:
 - **SWE-1.6 (free tier):** Leaf modules, mechanical tasks, tight specs
 - **Higher-quality model:** Architecture, cross-cutting work, judgment tasks
 
-Use the decision matrix from the Devin dispatch protocol.
+Use the decision matrix encoded in `dispatch_devin.py` / `dispatch_skill.py` and the model routing configured in `config.yaml` (`model_overrides` → `models` → `model_profile` → `default_model`, resolved by `resolve_model(agent, phase, config)`).
 
 ### Handling Implementer Status
 

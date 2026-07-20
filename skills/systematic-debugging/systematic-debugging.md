@@ -5,6 +5,8 @@ description: "Use when investigating incidents, bugs, or failures through system
 
 # Systematic Debugging
 
+**TL;DR:** Use when investigating incidents, bugs, or failures through systematic evidence gathering and analysis.
+
 ## Overview
 
 Systematically investigate incidents, bugs, or failures through evidence gathering, analysis, root cause identification, and fix proposal. This skill follows a structured debugging methodology to ensure thorough investigation.

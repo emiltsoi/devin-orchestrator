@@ -11,6 +11,16 @@ Conduct adversarial multi-perspective review by dispatching 4 Devin workers with
 
 **Announce at start:** "I'm using the adversarial-review skill to conduct multi-perspective review."
 
+## When to Use
+
+Use `adversarial-review` when one of the following triggers fires (mirrors `adversarial-review.yaml`):
+
+- `proposal_review` — a proposal needs multi-perspective scrutiny before proceeding.
+- `design_review` — a design decision carries enough risk or ambiguity to warrant adversarial synthesis.
+- `risk_assessment` — a change requires structured identification of failure modes, missing evidence, and required checks before approval.
+
+Dispatch one Advocate, Skeptic, Oracle, and Contrarian per proposal, then synthesize their outputs into a structured verdict (`allow` / `allow_with_conditions` / `deny`).
+
 ## Persona Prompts
 
 ### Advocate Persona
@@ -109,13 +119,27 @@ Output format:
 
 ### Step 1: Dispatch All Personas
 
-Dispatch 4 Devin workers in parallel (or sequentially if parallel not available):
+Dispatch 4 Devin workers in parallel (or sequentially if parallel not available).
+
+The example below assumes the caller has already resolved `skills_dir` (the directory containing this skill), `session_dir` (the workspace to dispatch into), and `proposal` (the text under review). The `devin_cli_path` and `model` are pulled from `ConfigLoader` so the example is portable — set `DEVIN_CLI_PATH` / `DEVIN_DEFAULT_MODEL` in the environment or `config.yaml` rather than hardcoding them.
 
 ```python
+from pathlib import Path
+
+from config_loader import ConfigLoader
 from skill_invoker import SkillInvoker
 
-devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
-skill_invoker = SkillInvoker(harness_root, devin_cli_path=devin_cli_path, model="swe-1.6")
+config = ConfigLoader.load()
+
+# SkillInvoker(skills_dir, devin_cli_path, model, permission_mode, demo_mode)
+# — see workflow-engine/skill_invoker.py. skills_dir is the directory that
+# contains adversarial-review/ (and sibling skill subdirs).
+skill_invoker = SkillInvoker(
+    Path("skills"),
+    devin_cli_path=config.devin_cli_path,  # from ${DEVIN_CLI_PATH} or config.yaml
+    model=config.default_model,            # from ${DEVIN_DEFAULT_MODEL} or config.yaml
+    permission_mode=config.default_permission_mode,
+)
 
 # Dispatch Advocate
 advocate_result = skill_invoker.invoke_skill(
@@ -123,7 +147,7 @@ advocate_result = skill_invoker.invoke_skill(
     context={"persona": "advocate", "proposal": proposal},
     workspace=str(session_dir),
     focused_context=[],
-    is_reviewer=False
+    is_reviewer=False,
 )
 
 # Dispatch Skeptic
@@ -132,7 +156,7 @@ skeptic_result = skill_invoker.invoke_skill(
     context={"persona": "skeptic", "proposal": proposal},
     workspace=str(session_dir),
     focused_context=[],
-    is_reviewer=False
+    is_reviewer=False,
 )
 
 # Dispatch Oracle
@@ -141,7 +165,7 @@ oracle_result = skill_invoker.invoke_skill(
     context={"persona": "oracle", "proposal": proposal},
     workspace=str(session_dir),
     focused_context=[],
-    is_reviewer=False
+    is_reviewer=False,
 )
 
 # Dispatch Contrarian
@@ -150,46 +174,54 @@ contrarian_result = skill_invoker.invoke_skill(
     context={"persona": "contrarian", "proposal": proposal},
     workspace=str(session_dir),
     focused_context=[],
-    is_reviewer=False
+    is_reviewer=False,
 )
 ```
 
 ### Step 2: Synthesize Results
 
-Arbiter synthesizes the 4 persona outputs into a structured verdict:
+Arbiter synthesizes the 4 persona outputs into a structured verdict.
+
+The following is an **illustrative pseudocode sketch** — not a runnable implementation — showing how persona outputs map onto the verdict schema (`top_risks`, `required_checks`, `missing_evidence`, `verified_sources`, `next_actions`). A real implementation parses each persona's structured output and projects the relevant fields into the verdict.
 
 ```python
 def synthesize_verdict(advocate_result, skeptic_result, oracle_result, contrarian_result):
-    """Synthesize persona outputs into structured verdict"""
-    
+    """Pseudocode sketch — maps persona outputs onto the verdict schema.
+
+    The verdict schema (see Step 3) is:
+      verdict:            "allow" | "allow_with_conditions" | "deny"
+      top_risks:          list[str]   # from Skeptic failure modes + Oracle base rates
+      required_checks:    list[str]   # from Skeptic/Contrarian framing challenges
+      missing_evidence:   list[str]   # from Oracle/Skeptic unverified claims
+      verified_sources:   list[str]   # from Oracle empirical evidence
+      next_actions:       list[str]   # from Contrarian alternatives + Advocate next steps
+    """
+
     verdict = {
         "verdict": "allow",  # allow, allow_with_conditions, deny
         "top_risks": [],
         "required_checks": [],
         "missing_evidence": [],
         "verified_sources": [],
-        "next_actions": []
+        "next_actions": [],
     }
-    
+
     # Analyze Advocate output
     # Extract strongest arguments, supporting evidence
-    
     # Analyze Skeptic output
     # Extract failure modes, falsifying evidence → top_risks
-    
     # Analyze Oracle output
     # Extract empirical evidence → verified_sources
     # Extract base rates → risk assessment
-    
     # Analyze Contrarian output
     # Extract framing challenges → required_checks
     # Extract alternative approaches → next_actions
-    
+
     # Determine verdict based on synthesis
     # If critical failure modes → deny
     # If significant risks → allow_with_conditions
     # If minimal risks → allow
-    
+
     return verdict
 ```
 

@@ -5,6 +5,8 @@ description: "Use when creating or editing a skill to ensure it is tested and di
 
 # Writing Skills
 
+**TL;DR:** Use when creating or editing a skill to ensure it is tested and discoverable.
+
 ## Overview
 
 Writing skills is test-driven development applied to process documentation. A skill is
