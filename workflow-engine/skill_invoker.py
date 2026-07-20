@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 Skill Invoker - Invokes skills using transport adapters
 """
 
-from pathlib import Path
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from devin_cli_adapter import DevinCliAdapter
 from metrics import get_metrics_collector
@@ -14,10 +13,11 @@ from metrics import get_metrics_collector
 @dataclass
 class SkillInvocationResult:
     """Result of skill invocation"""
+
     success: bool
-    session_id: Optional[str]
-    output: Optional[str]
-    error: Optional[str]
+    session_id: str | None
+    output: str | None
+    error: str | None
 
 
 class SkillInvoker:
@@ -32,7 +32,14 @@ class SkillInvoker:
     and can be cleared via clear_skill_cache() if needed.
     """
 
-    def __init__(self, skills_dir: Optional[Path] = None, devin_cli_path: Optional[str] = None, model: Optional[str] = None, permission_mode: str = "dangerous", demo_mode: bool = False):
+    def __init__(
+        self,
+        skills_dir: Path | None = None,
+        devin_cli_path: str | None = None,
+        model: str | None = None,
+        permission_mode: str = "dangerous",
+        demo_mode: bool = False,
+    ):
         """
         Initialize skill invoker
 
@@ -44,26 +51,35 @@ class SkillInvoker:
             demo_mode: If True, skip real Devin dispatches and simulate (for testing)
         """
         from config_loader import ConfigLoader
-        
+
         config = ConfigLoader.load()
-        
-        self.skills_dir = skills_dir or config.skills_dir
-        self.devin_cli_path = devin_cli_path or config.devin_cli_path
-        self.model = model or config.default_model
-        self.permission_mode = permission_mode or config.default_permission_mode
+
+        self.skills_dir = skills_dir if skills_dir is not None else config.skills_dir
+        self.devin_cli_path = (
+            devin_cli_path if devin_cli_path is not None else config.devin_cli_path
+        )
+        # If configured path does not exist, treat as unconfigured
+        if self.devin_cli_path and not Path(self.devin_cli_path).exists():
+            self.devin_cli_path = None
+        self.model = model if model is not None else config.default_model
+        self.permission_mode = (
+            permission_mode
+            if permission_mode is not None
+            else config.default_permission_mode
+        )
         self.demo_mode = demo_mode
         self.metrics = get_metrics_collector()
 
     def invoke_skill(
         self,
         skill_name: str,
-        context: Dict[str, Any],
-        workspace: Optional[str] = None,
-        custom_prompt: Optional[str] = None,
-        focused_context: Optional[list] = None,
-        correction_artifact: Optional[str] = None,
+        context: dict[str, Any],
+        workspace: str | None = None,
+        custom_prompt: str | None = None,
+        focused_context: list | None = None,
+        correction_artifact: str | None = None,
         is_reviewer: bool = False,
-        config_overrides: Optional[Dict[str, Any]] = None
+        config_overrides: dict[str, Any] | None = None,
     ) -> SkillInvocationResult:
         """
         Invoke a skill using the devin-cli transport adapter
@@ -85,34 +101,60 @@ class SkillInvoker:
                 success=False,
                 session_id=None,
                 output=None,
-                error="Devin CLI path not configured"
+                error="Devin CLI path not configured",
             )
 
         # Load skill definition and narrative using deterministic_tools
         from deterministic_tools import load_skill
-        skill_data = load_skill(self.skills_dir, skill_name)
+
+        try:
+            skill_data = load_skill(self.skills_dir, skill_name)
+        except FileNotFoundError as e:
+            error_msg = str(e)
+            if "markdown not found" in error_msg:
+                return SkillInvocationResult(
+                    success=False,
+                    session_id=None,
+                    output=None,
+                    error=f"Skill narrative not found: {skill_name}",
+                )
+            return SkillInvocationResult(
+                success=False,
+                session_id=None,
+                output=None,
+                error=f"Skill definition not found: {skill_name}",
+            )
+
         if not skill_data:
             return SkillInvocationResult(
                 success=False,
                 session_id=None,
                 output=None,
-                error=f"Skill not found: {skill_name}"
+                error=f"Skill not found: {skill_name}",
             )
-        
-        skill_def = skill_data['definition']
-        skill_narrative = skill_data['narrative']
+
+        skill_def = skill_data["definition"]
+        skill_narrative = skill_data["narrative"]
 
         # Apply config overrides to skill definition
         if config_overrides:
-            if 'configuration' not in skill_def:
-                skill_def['configuration'] = {}
-            skill_def['configuration'].update(config_overrides)
+            if "configuration" not in skill_def:
+                skill_def["configuration"] = {}
+            skill_def["configuration"].update(config_overrides)
 
         # Use custom prompt if provided (for retry), otherwise build standard prompt
         if custom_prompt:
             prompt = custom_prompt
         else:
-            prompt = self.build_skill_prompt(skill_name, skill_def, skill_narrative, context, focused_context, correction_artifact, is_reviewer)
+            prompt = self.build_skill_prompt(
+                skill_name,
+                skill_def,
+                skill_narrative,
+                context,
+                focused_context,
+                correction_artifact,
+                is_reviewer,
+            )
 
         # Generate session ID for tracking
         session_id = f"{skill_name}-{context.get('session_id', 'unknown')}"
@@ -123,39 +165,44 @@ class SkillInvoker:
                 success=True,
                 session_id=session_id,
                 output=f"Simulated output for {skill_name} skill (demo mode)",
-                error=None
+                error=None,
             )
 
         try:
             # Use simple adapter with --print mode
             # Disable skill injection since we load skills directly via skill_invoker
-            adapter = DevinCliAdapter(self.devin_cli_path, workspace, self.model, self.permission_mode)
-            result = adapter.invoke(prompt, timeout=300, focused_context=focused_context, correction_artifact=correction_artifact, enable_skills=False)  # 5 minute timeout for skills
+            adapter = DevinCliAdapter(
+                self.devin_cli_path, workspace, self.model, self.permission_mode
+            )
+            result = adapter.invoke(
+                prompt,
+                timeout=300,
+                focused_context=focused_context,
+                correction_artifact=correction_artifact,
+                enable_skills=False,
+            )  # 5 minute timeout for skills
 
             return SkillInvocationResult(
                 success=result.success,
                 session_id=session_id,
                 output=result.output,
-                error=result.error
+                error=result.error,
             )
 
         except Exception as e:
             return SkillInvocationResult(
-                success=False,
-                session_id=None,
-                output=None,
-                error=str(e)
+                success=False, session_id=None, output=None, error=str(e)
             )
 
     def build_skill_prompt(
         self,
         skill_name: str,
-        skill_def: Dict[str, Any],
+        skill_def: dict[str, Any],
         skill_narrative: str,
-        context: Dict[str, Any],
-        focused_context: Optional[list] = None,
-        correction_artifact: Optional[str] = None,
-        is_reviewer: bool = False
+        context: dict[str, Any],
+        focused_context: list | None = None,
+        correction_artifact: str | None = None,
+        is_reviewer: bool = False,
     ) -> str:
         """
         Build prompt for skill invocation
@@ -202,8 +249,8 @@ class SkillInvoker:
 
         prompt += f"""
 ## Skill Definition
-**Iron Law:** {skill_def.get('iron_law', 'N/A')}
-**Announcement:** {skill_def.get('announcement', f'Using {skill_name} skill')}
+**Iron Law:** {skill_def.get("iron_law", "N/A")}
+**Announcement:** {skill_def.get("announcement", f"Using {skill_name} skill")}
 
 ## Skill Narrative
 {skill_narrative}

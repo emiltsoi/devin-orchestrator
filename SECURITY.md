@@ -101,7 +101,9 @@ session_id = validate_session_id("SESSION-001")
 skill_name = validate_skill_name("brainstorming")
 
 # Validate workspace path
-workspace = validate_workspace_path("/path/to/workspace")
+workspace = validate_workspace_path(
+    "/path/to/workspace", base_allowed_dir=Path("/allowed/workdir")
+)
 
 # Sanitize filename
 safe_filename = sanitize_filename(user_input, max_length=255)

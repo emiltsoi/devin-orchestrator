@@ -1,19 +1,18 @@
-# -*- coding: utf-8 -*-
 """
 Unit Tests for Orchestration Engine
 Tests follow TDD principles - comprehensive coverage of critical functionality
 """
 
-import unittest
-import tempfile
-import shutil
 import json
-import time
+import shutil
+import sys
+import tempfile
+import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import yaml
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from orchestration_engine import OrchestrationEngine, TriageDecision
@@ -26,110 +25,112 @@ class TestOrchestrationEngine(unittest.TestCase):
         """Set up test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
-        self.work_dir = self.temp_path / 'work'
+        self.work_dir = self.temp_path / "work"
         self.work_dir.mkdir()
-        self.skills_dir = self.temp_path / 'skills'
+        self.skills_dir = self.temp_path / "skills"
         self.skills_dir.mkdir()
-        self.workflows_dir = self.temp_path / 'workflows'
+        self.workflows_dir = self.temp_path / "workflows"
         self.workflows_dir.mkdir()
-        
+
         # Create a valid manifest
         self.valid_manifest = {
-            'name': 'test-workflow',
-            'description': 'Test workflow for orchestration engine',
-            'skip_brainstorming': False,
-            'stages': [
+            "name": "test-workflow",
+            "description": "Test workflow for orchestration engine",
+            "skip_brainstorming": False,
+            "stages": [
                 {
-                    'name': 'brainstorming',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "brainstorming",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 },
                 {
-                    'name': 'implementation',
-                    'skill': 'implementation',
-                    'output_artifacts': ['code.py'],
-                    'gate': 'g1_approval'
-                }
-            ]
+                    "name": "implementation",
+                    "skill": "implementation",
+                    "output_artifacts": ["code.py"],
+                    "gate": "g1_approval",
+                },
+            ],
         }
-        
+
         # Create manifest file
-        self.manifest_path = self.workflows_dir / 'test-manifest.yaml'
-        with open(self.manifest_path, 'w', encoding='utf-8') as f:
+        self.manifest_path = self.workflows_dir / "test-manifest.yaml"
+        with open(self.manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(self.valid_manifest, f)
-        
+
         # Create skill files
-        (self.skills_dir / 'brainstorming.yaml').write_text(
-            'schema_version: 1\n'
-            'name: brainstorming\n'
-            'description: Brainstorming skill\n'
+        (self.skills_dir / "brainstorming.yaml").write_text(
+            "schema_version: 1\n"
+            "name: brainstorming\n"
+            "description: Brainstorming skill\n"
             'iron_law: "NO IMPLEMENTATION UNTIL DESIGN APPROVED"\n'
-            'triggers: [new_feature]\n'
-            'checklist: []\n'
-            'terminal_state: writing-plans\n'
+            "triggers: [new_feature]\n"
+            "checklist: []\n"
+            "terminal_state: writing-plans\n"
             'announcement: "Using the brainstorming skill"\n'
-            'red_flags: []\n'
+            "red_flags: []\n"
         )
-        
-        (self.skills_dir / 'brainstorming.md').write_text(
-            '# Brainstorming Skill\n\n'
-            '## Overview\n'
-            'Brainstorming skill for generating ideas.\n\n'
-            '## The Iron Law\n'
-            'NO IMPLEMENTATION UNTIL DESIGN APPROVED\n'
+
+        (self.skills_dir / "brainstorming.md").write_text(
+            "# Brainstorming Skill\n\n"
+            "## Overview\n"
+            "Brainstorming skill for generating ideas.\n\n"
+            "## The Iron Law\n"
+            "NO IMPLEMENTATION UNTIL DESIGN APPROVED\n"
         )
-        
-        (self.skills_dir / 'implementation.yaml').write_text(
-            'schema_version: 1\n'
-            'name: implementation\n'
-            'description: Implementation skill\n'
+
+        (self.skills_dir / "implementation.yaml").write_text(
+            "schema_version: 1\n"
+            "name: implementation\n"
+            "description: Implementation skill\n"
             'iron_law: "IMPLEMENTATION ONLY AFTER DESIGN APPROVAL"\n'
-            'triggers: [implementation]\n'
-            'checklist: []\n'
-            'terminal_state: completed\n'
+            "triggers: [implementation]\n"
+            "checklist: []\n"
+            "terminal_state: completed\n"
             'announcement: "Using the implementation skill"\n'
-            'red_flags: []\n'
+            "red_flags: []\n"
         )
-        
-        (self.skills_dir / 'implementation.md').write_text(
-            '# Implementation Skill\n\n'
-            '## Overview\n'
-            'Implementation skill for coding.\n\n'
-            '## The Iron Law\n'
-            'IMPLEMENTATION ONLY AFTER DESIGN APPROVAL\n'
+
+        (self.skills_dir / "implementation.md").write_text(
+            "# Implementation Skill\n\n"
+            "## Overview\n"
+            "Implementation skill for coding.\n\n"
+            "## The Iron Law\n"
+            "IMPLEMENTATION ONLY AFTER DESIGN APPROVAL\n"
         )
-        
+
         # Mock config
         self.config = {
-            'demo_mode': True,
-            'skills_dir': self.skills_dir,
-            'session_work_dir': str(self.work_dir)
+            "demo_mode": True,
+            "skills_dir": self.skills_dir,
+            "session_work_dir": str(self.work_dir),
         }
-        
+
         self.engine = OrchestrationEngine(self.work_dir, self.config)
-        
+
         # Mock skill data for avoiding encoding issues
         self.mock_skill_data = {
-            'definition': {
-                'schema_version': 1,
-                'name': 'brainstorming',
-                'description': 'Brainstorming skill',
-                'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                'triggers': ['new_feature'],
-                'checklist': [],
-                'terminal_state': 'writing-plans',
-                'announcement': 'Using the brainstorming skill',
-                'red_flags': []
+            "definition": {
+                "schema_version": 1,
+                "name": "brainstorming",
+                "description": "Brainstorming skill",
+                "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                "triggers": ["new_feature"],
+                "checklist": [],
+                "terminal_state": "writing-plans",
+                "announcement": "Using the brainstorming skill",
+                "red_flags": [],
             },
-            'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-            'format': 'separate'
+            "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+            "format": "separate",
         }
-    
-    def mock_load_skill(self, skill_name='brainstorming'):
+
+    def mock_load_skill(self, skill_name="brainstorming"):
         """Helper to create mock skill data"""
         skill_data = self.mock_skill_data.copy()
-        skill_data['definition']['name'] = skill_name
-        skill_data['narrative'] = f'# {skill_name} Skill\n\n## Overview\n{skill_name} skill.'
+        skill_data["definition"]["name"] = skill_name
+        skill_data["narrative"] = (
+            f"# {skill_name} Skill\n\n## Overview\n{skill_name} skill."
+        )
         return skill_data
 
     def tearDown(self):
@@ -144,1743 +145,1881 @@ class TestOrchestrationEngine(unittest.TestCase):
 
     def test_execute_workflow_basic(self):
         """Should execute a basic workflow successfully"""
-        session_id = 'TEST-001'
-        request_content = 'Test request'
-        
+        session_id = "TEST-001"
+        request_content = "Test request"
+
         # Mock _execute_stage to avoid encoding issues with global skills
-        with patch('orchestration_engine.validate_path_safe') as mock_validate:
+        with patch("orchestration_engine.validate_path_safe") as mock_validate:
             mock_validate.return_value = self.manifest_path
-            
-            with patch.object(self.engine, '_execute_stage') as mock_execute:
+
+            with patch.object(self.engine, "_execute_stage") as mock_execute:
                 mock_execute.return_value = {
-                    'stage': 'brainstorming',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Success',
-                    'error': None,
-                    'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.PROCEED
+                    "stage": "brainstorming",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Success",
+                    "error": None,
+                    "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                    "triage_decision": TriageDecision.PROCEED,
                 }
-                
+
                 # Mock _handle_gate to avoid waiting for gate decision
-                with patch.object(self.engine, '_handle_gate') as mock_handle_gate:
+                with patch.object(self.engine, "_handle_gate") as mock_handle_gate:
                     mock_handle_gate.return_value = {
-                        'gate_id': 'g1_approval',
-                        'verdict': 'approve',
-                        'blocked': False
+                        "gate_id": "g1_approval",
+                        "verdict": "approve",
+                        "blocked": False,
                     }
-                    
+
                     results = self.engine.execute_workflow(
-                        self.manifest_path,
-                        session_id,
-                        request_content
+                        self.manifest_path, session_id, request_content
                     )
-            
-            self.assertEqual(results['session_id'], session_id)
-            self.assertEqual(results['manifest'], 'test-workflow')
-            self.assertEqual(results['final_status'], 'completed')
-            self.assertEqual(len(results['stages']), 2)
+
+            self.assertEqual(results["session_id"], session_id)
+            self.assertEqual(results["manifest"], "test-workflow")
+            self.assertEqual(results["final_status"], "completed")
+            self.assertEqual(len(results["stages"]), 2)
 
     def test_execute_workflow_with_skip_brainstorming(self):
         """Should skip brainstorming stage when configured"""
-        session_id = 'TEST-002'
-        request_content = 'Test request'
-        
+        session_id = "TEST-002"
+        request_content = "Test request"
+
         # Mock _execute_stage to avoid encoding issues
-        with patch('orchestration_engine.validate_path_safe') as mock_validate:
+        with patch("orchestration_engine.validate_path_safe") as mock_validate:
             mock_validate.return_value = self.manifest_path
-            
+
             # Mock different results for different stages
             call_count = [0]
-            
+
             def mock_execute_stage(*args, **kwargs):
                 call_count[0] += 1
                 if call_count[0] == 1:
                     # First stage (brainstorming) should be skipped
                     return {
-                        'stage': 'brainstorming',
-                        'skill': 'brainstorming',
-                        'success': True,
-                        'output': 'Stage skipped - spec is clear',
-                        'error': None,
-                        'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                        'triage_decision': TriageDecision.PROCEED
+                        "stage": "brainstorming",
+                        "skill": "brainstorming",
+                        "success": True,
+                        "output": "Stage skipped - spec is clear",
+                        "error": None,
+                        "validation": {
+                            "valid": True,
+                            "errors": [],
+                            "artifact_results": {},
+                        },
+                        "triage_decision": TriageDecision.PROCEED,
                     }
                 else:
                     # Second stage (implementation) executes normally
                     return {
-                        'stage': 'implementation',
-                        'skill': 'implementation',
-                        'success': True,
-                        'output': 'Success',
-                        'error': None,
-                        'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                        'triage_decision': TriageDecision.PROCEED
+                        "stage": "implementation",
+                        "skill": "implementation",
+                        "success": True,
+                        "output": "Success",
+                        "error": None,
+                        "validation": {
+                            "valid": True,
+                            "errors": [],
+                            "artifact_results": {},
+                        },
+                        "triage_decision": TriageDecision.PROCEED,
                     }
-            
-            with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
+
+            with patch.object(
+                self.engine, "_execute_stage", side_effect=mock_execute_stage
+            ):
                 # Mock _handle_gate to avoid waiting for gate decision
-                with patch.object(self.engine, '_handle_gate') as mock_handle_gate:
+                with patch.object(self.engine, "_handle_gate") as mock_handle_gate:
                     mock_handle_gate.return_value = {
-                        'gate_id': 'g1_approval',
-                        'verdict': 'approve',
-                        'blocked': False
+                        "gate_id": "g1_approval",
+                        "verdict": "approve",
+                        "blocked": False,
                     }
-                    
+
                     results = self.engine.execute_workflow(
                         self.manifest_path,
                         session_id,
                         request_content,
-                        skip_brainstorming=True
+                        skip_brainstorming=True,
                     )
-            
-            self.assertEqual(results['session_id'], session_id)
-            self.assertEqual(results['final_status'], 'completed')
+
+            self.assertEqual(results["session_id"], session_id)
+            self.assertEqual(results["final_status"], "completed")
             # First stage should be skipped
-            self.assertEqual(results['stages'][0]['stage'], 'brainstorming')
-            self.assertEqual(results['stages'][0]['output'], 'Stage skipped - spec is clear')
+            self.assertEqual(results["stages"][0]["stage"], "brainstorming")
+            self.assertEqual(
+                results["stages"][0]["output"], "Stage skipped - spec is clear"
+            )
 
     def test_execute_workflow_with_config_overrides(self):
         """Should apply config overrides to skill dispatch"""
-        session_id = 'TEST-003'
-        request_content = 'Test request'
-        config_overrides = {'interactive_mode': True}
-        
+        session_id = "TEST-003"
+        request_content = "Test request"
+        config_overrides = {"interactive_mode": True}
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = self.manifest_path
-                
-                with patch.object(self.engine, '_execute_stage') as mock_execute:
+
+                with patch.object(self.engine, "_execute_stage") as mock_execute:
                     mock_execute.return_value = {
-                        'stage': 'brainstorming',
-                        'skill': 'brainstorming',
-                        'success': True,
-                        'output': 'Success',
-                        'error': None,
-                        'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                        'triage_decision': TriageDecision.PROCEED
+                        "stage": "brainstorming",
+                        "skill": "brainstorming",
+                        "success": True,
+                        "output": "Success",
+                        "error": None,
+                        "validation": {
+                            "valid": True,
+                            "errors": [],
+                            "artifact_results": {},
+                        },
+                        "triage_decision": TriageDecision.PROCEED,
                     }
-                    
+
                     # Mock _handle_gate to avoid waiting for gate decision
-                    with patch.object(self.engine, '_handle_gate') as mock_handle_gate:
+                    with patch.object(self.engine, "_handle_gate") as mock_handle_gate:
                         mock_handle_gate.return_value = {
-                            'gate_id': 'g1_approval',
-                            'verdict': 'approve',
-                            'blocked': False
+                            "gate_id": "g1_approval",
+                            "verdict": "approve",
+                            "blocked": False,
                         }
-                        
+
                         results = self.engine.execute_workflow(
                             self.manifest_path,
                             session_id,
                             request_content,
-                            config_overrides=config_overrides
+                            config_overrides=config_overrides,
                         )
-                
+
                 # Verify config_overrides passed to _execute_stage
                 mock_execute.assert_called()
                 call_kwargs = mock_execute.call_args[1]
-                self.assertEqual(call_kwargs['config_overrides'], config_overrides)
+                self.assertEqual(call_kwargs["config_overrides"], config_overrides)
 
     def test_retry_logic_with_exponential_backoff(self):
         """Should implement retry logic with exponential backoff"""
-        session_id = 'TEST-004'
-        request_content = 'Test request'
-        
+        session_id = "TEST-004"
+        request_content = "Test request"
+
         # Create a manifest with a single stage that will fail validation
         retry_manifest = {
-            'name': 'retry-test',
-            'description': 'Test retry logic',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "retry-test",
+            "description": "Test retry logic",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "failing_stage",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 }
-            ]
+            ],
         }
-        
-        retry_manifest_path = self.workflows_dir / 'retry-manifest.yaml'
-        with open(retry_manifest_path, 'w', encoding='utf-8') as f:
+
+        retry_manifest_path = self.workflows_dir / "retry-manifest.yaml"
+        with open(retry_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(retry_manifest, f)
-        
+
         # Mock _execute_stage to return validation failure first, then success
         call_count = [0]
-        
+
         def mock_execute_stage(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 # First call fails validation
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Output',
-                    'error': 'Validation failed',
-                    'validation': {'valid': False, 'errors': ['File is empty'], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.RETRY
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Output",
+                    "error": "Validation failed",
+                    "validation": {
+                        "valid": False,
+                        "errors": ["File is empty"],
+                        "artifact_results": {},
+                    },
+                    "triage_decision": TriageDecision.RETRY,
                 }
             else:
                 # Subsequent calls succeed
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Success',
-                    'error': None,
-                    'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.PROCEED
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Success",
+                    "error": None,
+                    "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                    "triage_decision": TriageDecision.PROCEED,
                 }
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = retry_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch('time.sleep') as mock_sleep:
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch("time.sleep") as mock_sleep:
                         results = self.engine.execute_workflow(
-                            retry_manifest_path,
-                            session_id,
-                            request_content
+                            retry_manifest_path, session_id, request_content
                         )
-                    
+
                     # Should have retried once (initial call + 1 retry = 2 calls)
                     self.assertEqual(call_count[0], 2)
-                    self.assertEqual(results['final_status'], 'completed')
-                    
+                    self.assertEqual(results["final_status"], "completed")
+
                     # Verify exponential backoff was called (2^1 = 2 seconds)
                     mock_sleep.assert_called_with(2)
 
     def test_retry_logic_max_retries_exceeded(self):
         """Should escalate when max retries exceeded"""
-        session_id = 'TEST-005'
-        request_content = 'Test request'
-        
+        session_id = "TEST-005"
+        request_content = "Test request"
+
         retry_manifest = {
-            'name': 'max-retry-test',
-            'description': 'Test max retries',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "max-retry-test",
+            "description": "Test max retries",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "failing_stage",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 }
-            ]
+            ],
         }
-        
-        retry_manifest_path = self.workflows_dir / 'max-retry-manifest.yaml'
-        with open(retry_manifest_path, 'w', encoding='utf-8') as f:
+
+        retry_manifest_path = self.workflows_dir / "max-retry-manifest.yaml"
+        with open(retry_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(retry_manifest, f)
-        
+
         # Mock _execute_stage to always fail
         def mock_execute_stage(*args, **kwargs):
             return {
-                'stage': 'failing_stage',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Output',
-                'error': 'Validation failed',
-                'validation': {'valid': False, 'errors': ['File is empty'], 'artifact_results': {}},
-                'triage_decision': TriageDecision.RETRY
-            }
-        
-        # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "stage": "failing_stage",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Output",
+                "error": "Validation failed",
+                "validation": {
+                    "valid": False,
+                    "errors": ["File is empty"],
+                    "artifact_results": {},
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "triage_decision": TriageDecision.RETRY,
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+        # Mock load_skill to avoid encoding issues
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = {
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
+                },
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
+            }
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = retry_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch('time.sleep'):
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch("time.sleep"):
                         results = self.engine.execute_workflow(
-                            retry_manifest_path,
-                            session_id,
-                            request_content
+                            retry_manifest_path, session_id, request_content
                         )
-                    
+
                     # Should have retried max 3 times (initial + 3 retries = 4 calls)
-                    self.assertEqual(results['final_status'], 'escalated')
+                    self.assertEqual(results["final_status"], "escalated")
 
     def test_retry_with_correction_artifact(self):
         """Should create correction artifact during retry"""
-        session_id = 'TEST-006'
-        request_content = 'Test request'
-        
+        session_id = "TEST-006"
+        request_content = "Test request"
+
         retry_manifest = {
-            'name': 'correction-test',
-            'description': 'Test correction artifact',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "correction-test",
+            "description": "Test correction artifact",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "failing_stage",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 }
-            ]
+            ],
         }
-        
-        retry_manifest_path = self.workflows_dir / 'correction-manifest.yaml'
-        with open(retry_manifest_path, 'w', encoding='utf-8') as f:
+
+        retry_manifest_path = self.workflows_dir / "correction-manifest.yaml"
+        with open(retry_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(retry_manifest, f)
-        
+
         call_count = [0]
         correction_artifacts = []
-        
+
         def mock_execute_stage(*args, **kwargs):
             call_count[0] += 1
-            correction_artifacts.append(kwargs.get('correction_artifact'))
-            
+            correction_artifacts.append(kwargs.get("correction_artifact"))
+
             if call_count[0] == 1:
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Output',
-                    'error': 'Validation failed',
-                    'validation': {'valid': False, 'errors': ['File is empty'], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.RETRY
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Output",
+                    "error": "Validation failed",
+                    "validation": {
+                        "valid": False,
+                        "errors": ["File is empty"],
+                        "artifact_results": {},
+                    },
+                    "triage_decision": TriageDecision.RETRY,
                 }
             else:
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Success',
-                    'error': None,
-                    'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.PROCEED
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Success",
+                    "error": None,
+                    "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                    "triage_decision": TriageDecision.PROCEED,
                 }
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = retry_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch('time.sleep'):
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch("time.sleep"):
                         results = self.engine.execute_workflow(
-                            retry_manifest_path,
-                            session_id,
-                            request_content
+                            retry_manifest_path, session_id, request_content
                         )
-                    
+
                     # First call should have no correction artifact
                     self.assertIsNone(correction_artifacts[0])
                     # Second call should have correction artifact
                     self.assertIsNotNone(correction_artifacts[1])
-                    self.assertIn('correction-', correction_artifacts[1])
+                    self.assertIn("correction-", correction_artifacts[1])
 
     def test_gate_handling_approve(self):
         """Should handle gate with approve decision"""
-        session_id = 'TEST-007'
-        request_content = 'Test request'
-        
+        session_id = "TEST-007"
+        request_content = "Test request"
+
         gate_manifest = {
-            'name': 'gate-test',
-            'description': 'Test gate handling',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "gate-test",
+            "description": "Test gate handling",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'stage1',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md'],
-                    'gate': 'g1_approval'
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
+                    "gate": "g1_approval",
                 }
-            ]
+            ],
         }
-        
-        gate_manifest_path = self.workflows_dir / 'gate-manifest.yaml'
-        with open(gate_manifest_path, 'w', encoding='utf-8') as f:
+
+        gate_manifest_path = self.workflows_dir / "gate-manifest.yaml"
+        with open(gate_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(gate_manifest, f)
-        
+
         session_dir = self.work_dir / session_id
         session_dir.mkdir(exist_ok=True)
-        
+
         # Mock _execute_stage to succeed
         def mock_execute_stage(*args, **kwargs):
             return {
-                'stage': 'stage1',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Success',
-                'error': None,
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.PROCEED
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
             }
-        
+
         # Mock _handle_gate to return approve
         def mock_handle_gate(*args, **kwargs):
-            return {
-                'gate_id': 'g1_approval',
-                'verdict': 'approve',
-                'blocked': False
-            }
-        
+            return {"gate_id": "g1_approval", "verdict": "approve", "blocked": False}
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = gate_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch.object(self.engine, '_handle_gate', side_effect=mock_handle_gate):
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch.object(
+                        self.engine, "_handle_gate", side_effect=mock_handle_gate
+                    ):
                         results = self.engine.execute_workflow(
-                            gate_manifest_path,
-                            session_id,
-                            request_content
+                            gate_manifest_path, session_id, request_content
                         )
-                    
-                    self.assertEqual(results['final_status'], 'completed')
+
+                    self.assertEqual(results["final_status"], "completed")
 
     def test_gate_handling_block(self):
         """Should handle gate with block decision"""
-        session_id = 'TEST-008'
-        request_content = 'Test request'
-        
+        session_id = "TEST-008"
+        request_content = "Test request"
+
         gate_manifest = {
-            'name': 'gate-block-test',
-            'description': 'Test gate block',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "gate-block-test",
+            "description": "Test gate block",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'stage1',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md'],
-                    'gate': 'g1_approval'
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
+                    "gate": "g1_approval",
                 }
-            ]
+            ],
         }
-        
-        gate_manifest_path = self.workflows_dir / 'gate-block-manifest.yaml'
-        with open(gate_manifest_path, 'w', encoding='utf-8') as f:
+
+        gate_manifest_path = self.workflows_dir / "gate-block-manifest.yaml"
+        with open(gate_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(gate_manifest, f)
-        
+
         # Mock _execute_stage to succeed
         def mock_execute_stage(*args, **kwargs):
             return {
-                'stage': 'stage1',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Success',
-                'error': None,
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.PROCEED
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
             }
-        
+
         # Mock _handle_gate to return block
         def mock_handle_gate(*args, **kwargs):
-            return {
-                'gate_id': 'g1_approval',
-                'verdict': 'block',
-                'blocked': True
-            }
-        
+            return {"gate_id": "g1_approval", "verdict": "block", "blocked": True}
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = gate_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch.object(self.engine, '_handle_gate', side_effect=mock_handle_gate):
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch.object(
+                        self.engine, "_handle_gate", side_effect=mock_handle_gate
+                    ):
                         results = self.engine.execute_workflow(
-                            gate_manifest_path,
-                            session_id,
-                            request_content
+                            gate_manifest_path, session_id, request_content
                         )
-                    
-                    self.assertEqual(results['final_status'], 'blocked')
+
+                    self.assertEqual(results["final_status"], "blocked")
 
     def test_gate_handling_with_decision_file(self):
         """Should create gate decision file"""
-        session_id = 'TEST-009'
-        request_content = 'Test request'
-        
+        session_id = "TEST-009"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         # Mock time.sleep to speed up test
-        with patch('time.sleep'):
+        with patch("time.sleep"):
             gate_result = self.engine._handle_gate(
-                gate_id='g1_approval',
-                stage_name='stage1',
-                session_dir=session_dir
+                gate_id="g1_approval", stage_name="stage1", session_dir=session_dir
             )
-        
+
         # Check that gate decision file was created
-        gate_decision_file = session_dir / 'gate-g1_approval-decision.md'
+        gate_decision_file = session_dir / "gate-g1_approval-decision.md"
         self.assertTrue(gate_decision_file.exists())
-        
+
         # Verify the file has the expected structure
         content = gate_decision_file.read_text()
-        self.assertIn('Gate Decision: g1_approval', content)
-        self.assertIn('Stage: stage1', content)
-        self.assertIn('verdict:', content)
-        
+        self.assertIn("Gate Decision: g1_approval", content)
+        self.assertIn("Stage: stage1", content)
+        self.assertIn("verdict:", content)
+
         # Since no user input was provided, it should timeout and block
-        self.assertEqual(gate_result['verdict'], 'block')
-        self.assertTrue(gate_result['blocked'])
+        self.assertEqual(gate_result["verdict"], "block")
+        self.assertTrue(gate_result["blocked"])
 
     def test_gate_handling_timeout(self):
         """Should timeout and block when gate decision not provided"""
-        session_id = 'TEST-010'
-        request_content = 'Test request'
-        
+        session_id = "TEST-010"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         # Mock time.sleep to speed up test
-        with patch('time.sleep'):
+        with patch("time.sleep"):
             gate_result = self.engine._handle_gate(
-                gate_id='g1_approval',
-                stage_name='stage1',
-                session_dir=session_dir
+                gate_id="g1_approval", stage_name="stage1", session_dir=session_dir
             )
-        
+
         # Should timeout and block
-        self.assertEqual(gate_result['verdict'], 'block')
-        self.assertTrue(gate_result['blocked'])
+        self.assertEqual(gate_result["verdict"], "block")
+        self.assertTrue(gate_result["blocked"])
 
     def test_interactive_mode_pause(self):
         """Should create pause file and wait for user input in interactive mode"""
-        session_id = 'TEST-011'
-        request_content = 'Test request'
-        
+        session_id = "TEST-011"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'interactive_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "interactive_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        config_overrides = {'interactive_mode': True}
-        
+        config_overrides = {"interactive_mode": True}
+
         # Pre-create pause file with user input to avoid timeout
-        pause_file = session_dir / 'pause-interactive_stage.md'
+        pause_file = session_dir / "pause-interactive_stage.md"
         pause_file.write_text(
-            '# Interactive Pause: interactive_stage\n\n'
-            'input: User provided input\n'
+            "# Interactive Pause: interactive_stage\n\ninput: User provided input\n"
         )
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker to succeed
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 # Mock time.sleep to speed up test
-                with patch('time.sleep'):
+                with patch("time.sleep"):
                     result = self.engine._execute_stage(
                         stage=stage,
                         manifest=manifest,
                         session_dir=session_dir,
                         session_id=session_id,
-                        config_overrides=config_overrides
+                        config_overrides=config_overrides,
                     )
-        
+
         # Check that pause file was created
         self.assertTrue(pause_file.exists())
 
     def test_interactive_mode_resume(self):
         """Should resume after user provides input in pause file"""
-        session_id = 'TEST-012'
-        request_content = 'Test request'
-        
+        session_id = "TEST-012"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'interactive_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "interactive_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        config_overrides = {'interactive_mode': True}
-        
+        config_overrides = {"interactive_mode": True}
+
         # Create pause file with user input
-        pause_file = session_dir / 'pause-interactive_stage.md'
+        pause_file = session_dir / "pause-interactive_stage.md"
         pause_file.write_text(
-            '# Interactive Pause: interactive_stage\n\n'
-            'input: User provided input here\n'
+            "# Interactive Pause: interactive_stage\n\n"
+            "input: User provided input here\n"
         )
-        
+
         # Create artifact file to pass validation
-        (session_dir / 'design.md').write_text('# Design content\n\nSome design here.')
-        
+        (session_dir / "design.md").write_text("# Design content\n\nSome design here.")
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker to succeed
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 # Mock time.sleep to speed up test
-                with patch('time.sleep'):
+                with patch("time.sleep"):
                     result = self.engine._execute_stage(
                         stage=stage,
                         manifest=manifest,
                         session_dir=session_dir,
                         session_id=session_id,
-                        config_overrides=config_overrides
+                        config_overrides=config_overrides,
                     )
-        
-        self.assertEqual(result['triage_decision'], TriageDecision.PROCEED)
+
+        self.assertEqual(result["triage_decision"], TriageDecision.PROCEED)
 
     def test_stage_execution_with_correction_artifact(self):
         """Should pass correction artifact to skill invoker"""
-        session_id = 'TEST-013'
-        request_content = 'Test request'
-        
+        session_id = "TEST-013"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'correction_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "correction_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        correction_artifact = str(session_dir / 'correction-design.md')
-        
+        correction_artifact = str(session_dir / "correction-design.md")
+
         # Create correction artifact
-        Path(correction_artifact).write_text('# Correction\n\nFix this issue\n')
-        
+        Path(correction_artifact).write_text("# Correction\n\nFix this issue\n")
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 result = self.engine._execute_stage(
                     stage=stage,
                     manifest=manifest,
                     session_dir=session_dir,
                     session_id=session_id,
-                    correction_artifact=correction_artifact
+                    correction_artifact=correction_artifact,
                 )
-                
+
                 # Verify correction artifact was passed to skill invoker
                 mock_invoke.assert_called_once()
                 call_kwargs = mock_invoke.call_args[1]
-                self.assertEqual(call_kwargs['correction_artifact'], correction_artifact)
+                self.assertEqual(
+                    call_kwargs["correction_artifact"], correction_artifact
+                )
 
     def test_stage_execution_validation_failure(self):
         """Should return RETRY decision when validation fails"""
-        session_id = 'TEST-014'
-        request_content = 'Test request'
-        
+        session_id = "TEST-014"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'validation_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "validation_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker to succeed but create empty artifact
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 # Create empty artifact to fail validation
-                (session_dir / 'design.md').write_text('')
-                
+                (session_dir / "design.md").write_text("")
+
                 result = self.engine._execute_stage(
                     stage=stage,
                     manifest=manifest,
                     session_dir=session_dir,
-                    session_id=session_id
+                    session_id=session_id,
                 )
-                
-                self.assertEqual(result['triage_decision'], TriageDecision.RETRY)
-                self.assertIsNotNone(result['error'])
+
+                self.assertEqual(result["triage_decision"], TriageDecision.RETRY)
+                self.assertIsNotNone(result["error"])
 
     def test_stage_execution_skill_failure(self):
         """Should return ESCALATE decision when skill fails"""
-        session_id = 'TEST-015'
-        request_content = 'Test request'
-        
+        session_id = "TEST-015"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'failing_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "failing_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker to fail
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=False,
-                    output=None,
-                    error='Skill execution failed'
+                    success=False, output=None, error="Skill execution failed"
                 )
-                
+
                 result = self.engine._execute_stage(
                     stage=stage,
                     manifest=manifest,
                     session_dir=session_dir,
-                    session_id=session_id
+                    session_id=session_id,
                 )
-                
-                self.assertEqual(result['triage_decision'], TriageDecision.ESCALATE)
-                self.assertIsNotNone(result['error'])
+
+                self.assertEqual(result["triage_decision"], TriageDecision.ESCALATE)
+                self.assertIsNotNone(result["error"])
 
     def test_skip_stage(self):
         """Should skip stage when skip_brainstorming is enabled"""
-        session_id = 'TEST-016'
-        request_content = 'Test request'
-        
+        session_id = "TEST-016"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'brainstorming',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "brainstorming",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
-        manifest = {'skip_brainstorming': True}
-        
+
+        manifest = {"skip_brainstorming": True}
+
         result = self.engine._skip_stage(stage, session_dir, session_id)
-        
-        self.assertEqual(result['stage'], 'brainstorming')
-        self.assertEqual(result['success'], True)
-        self.assertEqual(result['triage_decision'], TriageDecision.PROCEED)
-        self.assertEqual(result['output'], 'Stage skipped - spec is clear')
-        
+
+        self.assertEqual(result["stage"], "brainstorming")
+        self.assertEqual(result["success"], True)
+        self.assertEqual(result["triage_decision"], TriageDecision.PROCEED)
+        self.assertEqual(result["output"], "Stage skipped - spec is clear")
+
         # Check that placeholder artifact was created
-        design_file = session_dir / 'design.md'
+        design_file = session_dir / "design.md"
         self.assertTrue(design_file.exists())
         content = design_file.read_text()
-        self.assertIn('Skipping brainstorming', content)
+        self.assertIn("Skipping brainstorming", content)
 
     def test_session_state_management(self):
         """Should manage session state correctly"""
-        session_id = 'TEST-017'
-        request_content = 'Test request'
-        
+        session_id = "TEST-017"
+        request_content = "Test request"
+
         session_dir = self.work_dir / session_id
         session_dir.mkdir(exist_ok=True)
-        
+
         # Initialize session
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         # Check session file was created
-        session_file = session_dir / 'session.json'
+        session_file = session_dir / "session.json"
         self.assertTrue(session_file.exists())
-        
+
         # Read session data
-        with open(session_file, 'r', encoding='utf-8') as f:
+        with open(session_file, encoding="utf-8") as f:
             session_data = json.load(f)
-        
-        self.assertEqual(session_data['session_id'], session_id)
-        self.assertEqual(session_data['status'], 'initialized')
-        self.assertEqual(session_data['request'], request_content)
+
+        self.assertEqual(session_data["session_id"], session_id)
+        self.assertEqual(session_data["status"], "initialized")
+        self.assertEqual(session_data["request"], request_content)
 
     def test_manifest_loading(self):
         """Should load manifest correctly"""
         # Mock _execute_stage to avoid encoding issues
-        with patch('orchestration_engine.validate_path_safe') as mock_validate:
+        with patch("orchestration_engine.validate_path_safe") as mock_validate:
             mock_validate.return_value = self.manifest_path
-            
-            with patch.object(self.engine, '_execute_stage') as mock_execute:
+
+            with patch.object(self.engine, "_execute_stage") as mock_execute:
                 mock_execute.return_value = {
-                    'stage': 'brainstorming',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Success',
-                    'error': None,
-                    'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.PROCEED
+                    "stage": "brainstorming",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Success",
+                    "error": None,
+                    "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                    "triage_decision": TriageDecision.PROCEED,
                 }
-                
+
                 # Mock _handle_gate to avoid waiting for gate decision
-                with patch.object(self.engine, '_handle_gate') as mock_handle_gate:
+                with patch.object(self.engine, "_handle_gate") as mock_handle_gate:
                     mock_handle_gate.return_value = {
-                        'gate_id': 'g1_approval',
-                        'verdict': 'approve',
-                        'blocked': False
+                        "gate_id": "g1_approval",
+                        "verdict": "approve",
+                        "blocked": False,
                     }
-                    
+
                     manifest = self.engine.execute_workflow(
-                        self.manifest_path,
-                        'TEST-018',
-                        'Test request'
+                        self.manifest_path, "TEST-018", "Test request"
                     )
-            
-            self.assertEqual(manifest['manifest'], 'test-workflow')
+
+            self.assertEqual(manifest["manifest"], "test-workflow")
 
     def test_manifest_validation_missing_file(self):
         """Should handle missing manifest file"""
-        missing_manifest = self.workflows_dir / 'missing-manifest.yaml'
-        
-        with patch('orchestration_engine.validate_path_safe') as mock_validate:
+        missing_manifest = self.workflows_dir / "missing-manifest.yaml"
+
+        with patch("orchestration_engine.validate_path_safe") as mock_validate:
             mock_validate.return_value = missing_manifest
-            
+
             result = self.engine.execute_workflow(
-                missing_manifest,
-                'TEST-019',
-                'Test request'
+                missing_manifest, "TEST-019", "Test request"
             )
-            
+
             # Should return error dict instead of raising exception
-            self.assertEqual(result['final_status'], 'failed')
-            self.assertEqual(result['error_type'], 'FileNotFoundError')
-            self.assertIn('Manifest file not found', result['error'])
+            self.assertEqual(result["final_status"], "failed")
+            self.assertEqual(result["error_type"], "FileNotFoundError")
+            self.assertIn("Manifest file not found", result["error"])
 
     def test_escalate_on_skill_failure(self):
         """Should escalate workflow when skill fails"""
-        session_id = 'TEST-020'
-        request_content = 'Test request'
-        
+        session_id = "TEST-020"
+        request_content = "Test request"
+
         escalate_manifest = {
-            'name': 'escalate-test',
-            'description': 'Test escalation',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "escalate-test",
+            "description": "Test escalation",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "failing_stage",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 }
-            ]
+            ],
         }
-        
-        escalate_manifest_path = self.workflows_dir / 'escalate-manifest.yaml'
-        with open(escalate_manifest_path, 'w', encoding='utf-8') as f:
+
+        escalate_manifest_path = self.workflows_dir / "escalate-manifest.yaml"
+        with open(escalate_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(escalate_manifest, f)
-        
+
         # Mock _execute_stage to return escalate decision
         def mock_execute_stage(*args, **kwargs):
             return {
-                'stage': 'failing_stage',
-                'skill': 'brainstorming',
-                'success': False,
-                'output': None,
-                'error': 'Skill failed',
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.ESCALATE
+                "stage": "failing_stage",
+                "skill": "brainstorming",
+                "success": False,
+                "output": None,
+                "error": "Skill failed",
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.ESCALATE,
             }
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = escalate_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
                     results = self.engine.execute_workflow(
-                        escalate_manifest_path,
-                        session_id,
-                        request_content
+                        escalate_manifest_path, session_id, request_content
                     )
-                
-                self.assertEqual(results['final_status'], 'escalated')
+
+                self.assertEqual(results["final_status"], "escalated")
 
     def test_no_gate_when_none(self):
         """Should not call gate handler when gate is 'none'"""
-        session_id = 'TEST-021'
-        request_content = 'Test request'
-        
+        session_id = "TEST-021"
+        request_content = "Test request"
+
         no_gate_manifest = {
-            'name': 'no-gate-test',
-            'description': 'Test no gate',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "no-gate-test",
+            "description": "Test no gate",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'stage1',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md'],
-                    'gate': 'none'
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
+                    "gate": "none",
                 }
-            ]
+            ],
         }
-        
-        no_gate_manifest_path = self.workflows_dir / 'no-gate-manifest.yaml'
-        with open(no_gate_manifest_path, 'w', encoding='utf-8') as f:
+
+        no_gate_manifest_path = self.workflows_dir / "no-gate-manifest.yaml"
+        with open(no_gate_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(no_gate_manifest, f)
-        
+
         def mock_execute_stage(*args, **kwargs):
             return {
-                'stage': 'stage1',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Success',
-                'error': None,
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.PROCEED
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
             }
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = no_gate_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch.object(self.engine, '_handle_gate') as mock_handle_gate:
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch.object(self.engine, "_handle_gate") as mock_handle_gate:
                         results = self.engine.execute_workflow(
-                            no_gate_manifest_path,
-                            session_id,
-                            request_content
+                            no_gate_manifest_path, session_id, request_content
                         )
-                    
+
                     # Gate handler should not be called
                     mock_handle_gate.assert_not_called()
-                    self.assertEqual(results['final_status'], 'completed')
+                    self.assertEqual(results["final_status"], "completed")
 
     def test_multiple_stages_execution(self):
         """Should execute multiple stages in sequence"""
-        session_id = 'TEST-022'
-        request_content = 'Test request'
-        
+        session_id = "TEST-022"
+        request_content = "Test request"
+
         multi_stage_manifest = {
-            'name': 'multi-stage-test',
-            'description': 'Test multiple stages',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "multi-stage-test",
+            "description": "Test multiple stages",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'stage1',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 },
                 {
-                    'name': 'stage2',
-                    'skill': 'implementation',
-                    'output_artifacts': ['code.py']
+                    "name": "stage2",
+                    "skill": "implementation",
+                    "output_artifacts": ["code.py"],
                 },
                 {
-                    'name': 'stage3',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['review.md']
-                }
-            ]
+                    "name": "stage3",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["review.md"],
+                },
+            ],
         }
-        
-        multi_stage_manifest_path = self.workflows_dir / 'multi-stage-manifest.yaml'
-        with open(multi_stage_manifest_path, 'w', encoding='utf-8') as f:
+
+        multi_stage_manifest_path = self.workflows_dir / "multi-stage-manifest.yaml"
+        with open(multi_stage_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(multi_stage_manifest, f)
-        
+
         # Mock _execute_stage to avoid encoding issues and return different results for each stage
         stage_results = [
             {
-                'stage': 'stage1',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Success',
-                'error': None,
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.PROCEED
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
             },
             {
-                'stage': 'stage2',
-                'skill': 'implementation',
-                'success': True,
-                'output': 'Success',
-                'error': None,
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.PROCEED
+                "stage": "stage2",
+                "skill": "implementation",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
             },
             {
-                'stage': 'stage3',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Success',
-                'error': None,
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.PROCEED
-            }
+                "stage": "stage3",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
+            },
         ]
-        
-        with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+        with patch("orchestration_engine.validate_path_safe") as mock_validate:
             mock_validate.return_value = multi_stage_manifest_path
-            
-            with patch.object(self.engine, '_execute_stage', side_effect=stage_results):
+
+            with patch.object(self.engine, "_execute_stage", side_effect=stage_results):
                 results = self.engine.execute_workflow(
-                    multi_stage_manifest_path,
-                    session_id,
-                    request_content
+                    multi_stage_manifest_path, session_id, request_content
                 )
-            
-            self.assertEqual(len(results['stages']), 3)
-            self.assertEqual(results['stages'][0]['stage'], 'stage1')
-            self.assertEqual(results['stages'][1]['stage'], 'stage2')
-            self.assertEqual(results['stages'][2]['stage'], 'stage3')
-            self.assertEqual(results['final_status'], 'completed')
+
+            self.assertEqual(len(results["stages"]), 3)
+            self.assertEqual(results["stages"][0]["stage"], "stage1")
+            self.assertEqual(results["stages"][1]["stage"], "stage2")
+            self.assertEqual(results["stages"][2]["stage"], "stage3")
+            self.assertEqual(results["final_status"], "completed")
 
     def test_config_overrides_passed_to_skill(self):
         """Should pass config overrides to skill invoker"""
-        session_id = 'TEST-023'
-        request_content = 'Test request'
-        
+        session_id = "TEST-023"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'config_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "config_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        config_overrides = {'custom_param': 'custom_value'}
-        
+        config_overrides = {"custom_param": "custom_value"}
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 self.engine._execute_stage(
                     stage=stage,
                     manifest=manifest,
                     session_dir=session_dir,
                     session_id=session_id,
-                    config_overrides=config_overrides
+                    config_overrides=config_overrides,
                 )
-                
+
                 # Verify config overrides were passed
                 call_kwargs = mock_invoke.call_args[1]
-                self.assertEqual(call_kwargs['config_overrides'], config_overrides)
+                self.assertEqual(call_kwargs["config_overrides"], config_overrides)
 
     def test_is_reviewer_flag(self):
         """Should set is_reviewer flag for requesting-code-review skill"""
-        session_id = 'TEST-024'
-        request_content = 'Test request'
-        
+        session_id = "TEST-024"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'review_stage',
-            'skill': 'requesting-code-review',
-            'output_artifacts': ['review.md']
+            "name": "review_stage",
+            "skill": "requesting-code-review",
+            "output_artifacts": ["review.md"],
         }
-        
+
         manifest = self.valid_manifest
-        
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'requesting-code-review',
-                    'description': 'Code review skill',
-                    'iron_law': 'NO APPROVAL WITHOUT REVIEW',
-                    'triggers': ['review'],
-                    'checklist': [],
-                    'terminal_state': 'completed',
-                    'announcement': 'Using the code review skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "requesting-code-review",
+                    "description": "Code review skill",
+                    "iron_law": "NO APPROVAL WITHOUT REVIEW",
+                    "triggers": ["review"],
+                    "checklist": [],
+                    "terminal_state": "completed",
+                    "announcement": "Using the code review skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Code Review Skill\n\n## Overview\nCode review skill for reviewing code.',
-                'format': 'separate'
+                "narrative": "# Code Review Skill\n\n## Overview\nCode review skill for reviewing code.",
+                "format": "separate",
             }
-            
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 self.engine._execute_stage(
                     stage=stage,
                     manifest=manifest,
                     session_dir=session_dir,
-                    session_id=session_id
+                    session_id=session_id,
                 )
-                
+
                 # Verify is_reviewer flag was set
                 call_kwargs = mock_invoke.call_args[1]
-                self.assertTrue(call_kwargs['is_reviewer'])
+                self.assertTrue(call_kwargs["is_reviewer"])
 
     # Additional retry/backoff tests for comprehensive coverage
-    
+
     def test_retry_with_intermittent_failures(self):
         """Should handle intermittent failures with retry"""
-        session_id = 'TEST-025'
-        request_content = 'Test request'
-        
+        session_id = "TEST-025"
+        request_content = "Test request"
+
         retry_manifest = {
-            'name': 'intermittent-test',
-            'description': 'Test intermittent failures',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "intermittent-test",
+            "description": "Test intermittent failures",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "failing_stage",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 }
-            ]
+            ],
         }
-        
-        retry_manifest_path = self.workflows_dir / 'intermittent-manifest.yaml'
-        with open(retry_manifest_path, 'w', encoding='utf-8') as f:
+
+        retry_manifest_path = self.workflows_dir / "intermittent-manifest.yaml"
+        with open(retry_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(retry_manifest, f)
-        
+
         # Mock _execute_stage to fail twice, then succeed
         call_count = [0]
-        
+
         def mock_execute_stage(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] <= 2:
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Output',
-                    'error': 'Intermittent error',
-                    'validation': {'valid': False, 'errors': ['Intermittent failure'], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.RETRY
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Output",
+                    "error": "Intermittent error",
+                    "validation": {
+                        "valid": False,
+                        "errors": ["Intermittent failure"],
+                        "artifact_results": {},
+                    },
+                    "triage_decision": TriageDecision.RETRY,
                 }
             else:
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Success',
-                    'error': None,
-                    'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.PROCEED
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Success",
+                    "error": None,
+                    "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                    "triage_decision": TriageDecision.PROCEED,
                 }
-        
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = retry_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch('time.sleep'):
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch("time.sleep"):
                         results = self.engine.execute_workflow(
-                            retry_manifest_path,
-                            session_id,
-                            request_content
+                            retry_manifest_path, session_id, request_content
                         )
-                        
+
                         # Should have retried twice (initial + 2 retries = 3 calls)
                         self.assertEqual(call_count[0], 3)
-                        self.assertEqual(results['final_status'], 'completed')
+                        self.assertEqual(results["final_status"], "completed")
 
     def test_retry_backoff_sequence(self):
         """Should verify exponential backoff sequence: 2, 4, 8 seconds"""
-        session_id = 'TEST-026'
-        request_content = 'Test request'
-        
+        session_id = "TEST-026"
+        request_content = "Test request"
+
         retry_manifest = {
-            'name': 'backoff-sequence-test',
-            'description': 'Test backoff sequence',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "backoff-sequence-test",
+            "description": "Test backoff sequence",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "failing_stage",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 }
-            ]
+            ],
         }
-        
-        retry_manifest_path = self.workflows_dir / 'backoff-sequence-manifest.yaml'
-        with open(retry_manifest_path, 'w', encoding='utf-8') as f:
+
+        retry_manifest_path = self.workflows_dir / "backoff-sequence-manifest.yaml"
+        with open(retry_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(retry_manifest, f)
-        
+
         # Mock _execute_stage to always fail to trigger all retries
         def mock_execute_stage(*args, **kwargs):
             return {
-                'stage': 'failing_stage',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Output',
-                'error': 'Validation failed',
-                'validation': {'valid': False, 'errors': ['File is empty'], 'artifact_results': {}},
-                'triage_decision': TriageDecision.RETRY
-            }
-        
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "stage": "failing_stage",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Output",
+                "error": "Validation failed",
+                "validation": {
+                    "valid": False,
+                    "errors": ["File is empty"],
+                    "artifact_results": {},
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "triage_decision": TriageDecision.RETRY,
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = {
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
+                },
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
+            }
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = retry_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch('time.sleep') as mock_sleep:
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch("time.sleep") as mock_sleep:
                         results = self.engine.execute_workflow(
-                            retry_manifest_path,
-                            session_id,
-                            request_content
+                            retry_manifest_path, session_id, request_content
                         )
-                        
+
                         # Verify backoff sequence: 2^1=2, 2^2=4, 2^3=8
                         expected_calls = [2, 4, 8]
-                        actual_calls = [call[0][0] for call in mock_sleep.call_args_list]
+                        actual_calls = [
+                            call[0][0] for call in mock_sleep.call_args_list
+                        ]
                         self.assertEqual(actual_calls, expected_calls)
-                        self.assertEqual(results['final_status'], 'escalated')
+                        self.assertEqual(results["final_status"], "escalated")
 
     def test_retry_status_updates(self):
         """Should update status during retry attempts"""
-        session_id = 'TEST-027'
-        request_content = 'Test request'
-        
+        session_id = "TEST-027"
+        request_content = "Test request"
+
         retry_manifest = {
-            'name': 'status-update-test',
-            'description': 'Test retry status updates',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "status-update-test",
+            "description": "Test retry status updates",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md']
+                    "name": "failing_stage",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
                 }
-            ]
+            ],
         }
-        
-        retry_manifest_path = self.workflows_dir / 'status-update-manifest.yaml'
-        with open(retry_manifest_path, 'w', encoding='utf-8') as f:
+
+        retry_manifest_path = self.workflows_dir / "status-update-manifest.yaml"
+        with open(retry_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(retry_manifest, f)
-        
+
         # Mock _execute_stage to fail once, then succeed
         call_count = [0]
-        
+
         def mock_execute_stage(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Output',
-                    'error': 'Validation failed',
-                    'validation': {'valid': False, 'errors': ['File is empty'], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.RETRY
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Output",
+                    "error": "Validation failed",
+                    "validation": {
+                        "valid": False,
+                        "errors": ["File is empty"],
+                        "artifact_results": {},
+                    },
+                    "triage_decision": TriageDecision.RETRY,
                 }
             else:
                 return {
-                    'stage': 'failing_stage',
-                    'skill': 'brainstorming',
-                    'success': True,
-                    'output': 'Success',
-                    'error': None,
-                    'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                    'triage_decision': TriageDecision.PROCEED
+                    "stage": "failing_stage",
+                    "skill": "brainstorming",
+                    "success": True,
+                    "output": "Success",
+                    "error": None,
+                    "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                    "triage_decision": TriageDecision.PROCEED,
                 }
-        
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = retry_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch('time.sleep'):
-                        with patch('orchestration_engine.update_status') as mock_update_status:
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch("time.sleep"):
+                        with patch(
+                            "orchestration_engine.update_status"
+                        ) as mock_update_status:
                             results = self.engine.execute_workflow(
-                                retry_manifest_path,
-                                session_id,
-                                request_content
+                                retry_manifest_path, session_id, request_content
                             )
-                            
+
                             # Verify status was updated with retry information
-                            retry_calls = [call for call in mock_update_status.call_args_list 
-                                         if 'retrying' in str(call)]
+                            retry_calls = [
+                                call
+                                for call in mock_update_status.call_args_list
+                                if "retrying" in str(call)
+                            ]
                             self.assertGreater(len(retry_calls), 0)
 
     # Additional gate-blocking tests for comprehensive coverage
-    
+
     def test_gate_request_changes_verdict(self):
         """Should handle gate with request_changes verdict"""
-        session_id = 'TEST-028'
-        request_content = 'Test request'
-        
+        session_id = "TEST-028"
+        request_content = "Test request"
+
         gate_manifest = {
-            'name': 'gate-request-changes-test',
-            'description': 'Test gate request changes',
-            'skip_brainstorming': True,
-            'stages': [
+            "name": "gate-request-changes-test",
+            "description": "Test gate request changes",
+            "skip_brainstorming": True,
+            "stages": [
                 {
-                    'name': 'stage1',
-                    'skill': 'brainstorming',
-                    'output_artifacts': ['design.md'],
-                    'gate': 'g1_approval'
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
+                    "gate": "g1_approval",
                 }
-            ]
+            ],
         }
-        
-        gate_manifest_path = self.workflows_dir / 'gate-request-changes-manifest.yaml'
-        with open(gate_manifest_path, 'w', encoding='utf-8') as f:
+
+        gate_manifest_path = self.workflows_dir / "gate-request-changes-manifest.yaml"
+        with open(gate_manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(gate_manifest, f)
-        
+
         # Mock _execute_stage to succeed
         def mock_execute_stage(*args, **kwargs):
             return {
-                'stage': 'stage1',
-                'skill': 'brainstorming',
-                'success': True,
-                'output': 'Success',
-                'error': None,
-                'validation': {'valid': True, 'errors': [], 'artifact_results': {}},
-                'triage_decision': TriageDecision.PROCEED
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
             }
-        
+
         # Mock _handle_gate to return request_changes
         def mock_handle_gate(*args, **kwargs):
             return {
-                'gate_id': 'g1_approval',
-                'verdict': 'request_changes',
-                'blocked': True
+                "gate_id": "g1_approval",
+                "verdict": "request_changes",
+                "blocked": True,
             }
-        
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
+
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
             mock_load_skill.return_value = {
-                'definition': {
-                    'schema_version': 1,
-                    'name': 'brainstorming',
-                    'description': 'Brainstorming skill',
-                    'iron_law': 'NO IMPLEMENTATION UNTIL DESIGN APPROVED',
-                    'triggers': ['new_feature'],
-                    'checklist': [],
-                    'terminal_state': 'writing-plans',
-                    'announcement': 'Using the brainstorming skill',
-                    'red_flags': []
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
                 },
-                'narrative': '# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.',
-                'format': 'separate'
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
             }
-            
-            with patch('orchestration_engine.validate_path_safe') as mock_validate:
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
                 mock_validate.return_value = gate_manifest_path
-                
-                with patch.object(self.engine, '_execute_stage', side_effect=mock_execute_stage):
-                    with patch.object(self.engine, '_handle_gate', side_effect=mock_handle_gate):
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch.object(
+                        self.engine, "_handle_gate", side_effect=mock_handle_gate
+                    ):
                         results = self.engine.execute_workflow(
-                            gate_manifest_path,
-                            session_id,
-                            request_content
+                            gate_manifest_path, session_id, request_content
                         )
-                        
-                        self.assertEqual(results['final_status'], 'blocked')
+
+                        self.assertEqual(results["final_status"], "blocked")
 
     def test_gate_malformed_decision(self):
         """Should handle malformed gate decision file"""
-        session_id = 'TEST-030'
-        request_content = 'Test request'
-        
+        session_id = "TEST-030"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         # Pre-create gate decision file with malformed content
-        gate_decision_file = session_dir / 'gate-g1_approval-decision.md'
+        gate_decision_file = session_dir / "gate-g1_approval-decision.md"
         gate_decision_file.write_text(
-            '# Gate Decision: g1_approval\n\n'
-            'Stage: stage1\n\n'
-            'invalid content without verdict\n'
+            "# Gate Decision: g1_approval\n\n"
+            "Stage: stage1\n\n"
+            "invalid content without verdict\n"
         )
-        
-        with patch('time.sleep'):
+
+        with patch("time.sleep"):
             gate_result = self.engine._handle_gate(
-                gate_id='g1_approval',
-                stage_name='stage1',
-                session_dir=session_dir
+                gate_id="g1_approval", stage_name="stage1", session_dir=session_dir
             )
-        
+
         # Should timeout and block when no valid verdict found
-        self.assertEqual(gate_result['verdict'], 'block')
-        self.assertTrue(gate_result['blocked'])
+        self.assertEqual(gate_result["verdict"], "block")
+        self.assertTrue(gate_result["blocked"])
 
     # Additional interactive-pause tests for comprehensive coverage
-    
+
     def test_interactive_pause_timeout(self):
         """Should timeout when no user input provided"""
-        session_id = 'TEST-032'
-        request_content = 'Test request'
-        
+        session_id = "TEST-032"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'interactive_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "interactive_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        config_overrides = {'interactive_mode': True}
-        
+        config_overrides = {"interactive_mode": True}
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker to succeed
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 # Mock time.sleep to simulate timeout
-                with patch('time.sleep') as mock_sleep:
+                with patch("time.sleep") as mock_sleep:
                     # Simulate waiting beyond timeout
                     mock_sleep.side_effect = lambda x: None
-                    
+
                     result = self.engine._execute_stage(
                         stage=stage,
                         manifest=manifest,
                         session_dir=session_dir,
                         session_id=session_id,
-                        config_overrides=config_overrides
+                        config_overrides=config_overrides,
                     )
-        
+
         # Check that pause file was created
-        pause_file = session_dir / 'pause-interactive_stage.md'
+        pause_file = session_dir / "pause-interactive_stage.md"
         self.assertTrue(pause_file.exists())
 
     def test_interactive_pause_malformed_input(self):
         """Should handle malformed user input in pause file"""
-        session_id = 'TEST-033'
-        request_content = 'Test request'
-        
+        session_id = "TEST-033"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'interactive_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "interactive_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        config_overrides = {'interactive_mode': True}
-        
+        config_overrides = {"interactive_mode": True}
+
         # Create pause file with malformed input (no 'input:' prefix)
-        pause_file = session_dir / 'pause-interactive_stage.md'
+        pause_file = session_dir / "pause-interactive_stage.md"
         pause_file.write_text(
-            '# Interactive Pause: interactive_stage\n\n'
-            'This is malformed input without the input: prefix\n'
+            "# Interactive Pause: interactive_stage\n\n"
+            "This is malformed input without the input: prefix\n"
         )
-        
+
         # Create artifact file to pass validation
-        (session_dir / 'design.md').write_text('# Design content\n\nSome design here.')
-        
+        (session_dir / "design.md").write_text("# Design content\n\nSome design here.")
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker to succeed
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 # Mock time.sleep to speed up test
-                with patch('time.sleep'):
+                with patch("time.sleep"):
                     result = self.engine._execute_stage(
                         stage=stage,
                         manifest=manifest,
                         session_dir=session_dir,
                         session_id=session_id,
-                        config_overrides=config_overrides
+                        config_overrides=config_overrides,
                     )
-        
+
         # Should still proceed even with malformed input
-        self.assertEqual(result['triage_decision'], TriageDecision.PROCEED)
+        self.assertEqual(result["triage_decision"], TriageDecision.PROCEED)
 
     def test_interactive_pause_with_empty_input(self):
         """Should handle empty user input in pause file"""
-        session_id = 'TEST-035'
-        request_content = 'Test request'
-        
+        session_id = "TEST-035"
+        request_content = "Test request"
+
         # Initialize session first
         from deterministic_tools import session_init
+
         session_dir = session_init(session_id, self.work_dir, request_content)
-        
+
         stage = {
-            'name': 'interactive_stage',
-            'skill': 'brainstorming',
-            'output_artifacts': ['design.md']
+            "name": "interactive_stage",
+            "skill": "brainstorming",
+            "output_artifacts": ["design.md"],
         }
-        
+
         manifest = self.valid_manifest
-        config_overrides = {'interactive_mode': True}
-        
+        config_overrides = {"interactive_mode": True}
+
         # Create pause file with empty input
-        pause_file = session_dir / 'pause-interactive_stage.md'
-        pause_file.write_text(
-            '# Interactive Pause: interactive_stage\n\n'
-            'input: \n'
-        )
-        
+        pause_file = session_dir / "pause-interactive_stage.md"
+        pause_file.write_text("# Interactive Pause: interactive_stage\n\ninput: \n")
+
         # Create artifact file to pass validation
-        (session_dir / 'design.md').write_text('# Design content\n\nSome design here.')
-        
+        (session_dir / "design.md").write_text("# Design content\n\nSome design here.")
+
         # Mock load_skill to avoid encoding issues
-        with patch('orchestration_engine.load_skill') as mock_load_skill:
-            mock_load_skill.return_value = self.mock_load_skill('brainstorming')
-            
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = self.mock_load_skill("brainstorming")
+
             # Mock skill invoker to succeed
-            with patch.object(self.engine.skill_invoker, 'invoke_skill') as mock_invoke:
+            with patch.object(self.engine.skill_invoker, "invoke_skill") as mock_invoke:
                 mock_invoke.return_value = MagicMock(
-                    success=True,
-                    output='Success',
-                    error=None
+                    success=True, output="Success", error=None
                 )
-                
+
                 # Mock time.sleep to speed up test
-                with patch('time.sleep'):
+                with patch("time.sleep"):
                     result = self.engine._execute_stage(
                         stage=stage,
                         manifest=manifest,
                         session_dir=session_dir,
                         session_id=session_id,
-                        config_overrides=config_overrides
+                        config_overrides=config_overrides,
                     )
-        
+
         # Should proceed with empty input
-        self.assertEqual(result['triage_decision'], TriageDecision.PROCEED)
+        self.assertEqual(result["triage_decision"], TriageDecision.PROCEED)
 
 
-if __name__ == '__main__':
+class TestArtifactPathValidation(unittest.TestCase):
+    """Tests for artifact path validation and manifest traversal rejection"""
+
+    def setUp(self):
+        """Set up test fixtures"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+        self.work_dir = self.temp_path / "work"
+        self.work_dir.mkdir()
+        self.workflows_dir = self.temp_path / "workflows"
+        self.workflows_dir.mkdir()
+        self.engine = OrchestrationEngine(self.work_dir, {"demo_mode": True})
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir)
+
+    def test_validate_artifact_path_contains_traversal(self):
+        """_validate_artifact_path should reject traversal in artifact names"""
+        session_dir = self.work_dir / "session-1"
+        session_dir.mkdir()
+        # A traversal attempt in the artifact name should be sanitized such
+        # that the resulting path stays inside the session directory.
+        safe_path = self.engine._validate_artifact_path(
+            "../../evil.md", session_dir
+        )
+        # The sanitized path must resolve inside session_dir
+        self.assertTrue(
+            str(safe_path).startswith(str(session_dir.resolve()))
+            or safe_path.resolve() == (session_dir / "evil.md").resolve()
+        )
+        # No traversal segment should remain in the final path
+        self.assertNotIn("..", str(safe_path))
+
+    def test_validate_artifact_path_rejects_empty(self):
+        """_validate_artifact_path should reject empty artifact names"""
+        session_dir = self.work_dir / "session-2"
+        session_dir.mkdir()
+        from security_utils import InvalidInputError
+
+        with self.assertRaises(InvalidInputError):
+            self.engine._validate_artifact_path("", session_dir)
+
+    def test_validate_stage_artifacts_rejects_traversal(self):
+        """_validate_stage_artifacts should sanitize traversal artifacts into the session dir"""
+        session_dir = self.work_dir / "session-3"
+        session_dir.mkdir()
+        result, artifact_paths = self.engine._validate_stage_artifacts(
+            "evil_stage", session_dir, ["../../etc/passwd"]
+        )
+        # Sanitization strips traversal segments; the resulting path must
+        # remain inside the session directory (no escape possible).
+        self.assertEqual(len(artifact_paths), 1)
+        resolved = artifact_paths[0].resolve()
+        self.assertTrue(
+            str(resolved).startswith(str(session_dir.resolve())),
+            f"artifact path {resolved} escaped session dir {session_dir}",
+        )
+        self.assertNotIn("..", str(artifact_paths[0]))
+
+    def test_validate_stage_artifacts_rejects_empty_name(self):
+        """_validate_stage_artifacts should fail validation on empty artifact names"""
+        session_dir = self.work_dir / "session-3b"
+        session_dir.mkdir()
+        result, artifact_paths = self.engine._validate_stage_artifacts(
+            "evil_stage", session_dir, [""]
+        )
+        self.assertFalse(result["valid"])
+        self.assertEqual(artifact_paths, [])
+        self.assertTrue(
+            any("Invalid artifact path" in e for e in result["errors"])
+        )
+
+    def test_manifest_path_traversal_rejected(self):
+        """_validate_and_load_manifest should reject traversal manifest paths"""
+        # The work_dir parent is self.temp_path; a path that resolves outside
+        # it via traversal must be rejected before any file is loaded.
+        traversal_path = self.work_dir.parent / ".." / "evil-manifest.yaml"
+        session_id, manifest_path, manifest, error = (
+            self.engine._validate_and_load_manifest("SESSION-X", traversal_path)
+        )
+        self.assertIsNotNone(error)
+        self.assertEqual(error["final_status"], "failed")
+        self.assertIn("Input validation failed", error["error"])
+
+    def test_manifest_absolute_path_outside_rejected(self):
+        """_validate_and_load_manifest should reject absolute paths outside base"""
+        # An absolute manifest path that resolves outside the work_dir parent.
+        outside = self.temp_path.parent / "absolute-evil.yaml"
+        session_id, manifest_path, manifest, error = (
+            self.engine._validate_and_load_manifest("SESSION-Y", outside)
+        )
+        self.assertIsNotNone(error)
+        self.assertEqual(error["final_status"], "failed")
+
+    def test_resolve_max_retries(self):
+        """_resolve_max_retries should parse and validate stage retry config"""
+        self.assertEqual(self.engine._resolve_max_retries({}), 3)
+        self.assertEqual(
+            self.engine._resolve_max_retries({"name": "s", "max_retries": 1}), 1
+        )
+        self.assertEqual(
+            self.engine._resolve_max_retries({"name": "s", "max_retries": "5"}), 5
+        )
+        self.assertEqual(
+            self.engine._resolve_max_retries({"name": "s", "max_retries": -2}), 3
+        )
+        self.assertEqual(
+            self.engine._resolve_max_retries({"name": "s", "max_retries": "bad"}), 3
+        )
+        self.assertEqual(
+            self.engine._resolve_max_retries({"name": "s", "max_retries": 99}), 10
+        )
+
+
+if __name__ == "__main__":
     unittest.main()

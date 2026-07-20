@@ -1,14 +1,16 @@
-# -*- coding: utf-8 -*-
 """
 Minimal ACP Test Script
 Tests basic communication with devin-cli ACP mode using Python 3 to call batch file
 """
 
-import subprocess
 import json
 import os
+import subprocess
+
+import pytest
 
 
+@pytest.mark.skip(reason="Interactive ACP server test; run manually with `py workflow-engine/test_acp_minimal.py`")
 def test_acp_minimal():
     """Test minimal ACP communication by calling the working batch file"""
     print("=" * 60)
@@ -25,39 +27,45 @@ def test_acp_minimal():
     try:
         # Run the batch file using subprocess without shell=True for security
         result = subprocess.run(
-            ['cmd', '/c', str(batch_file)],
+            ["cmd", "/c", str(batch_file)],
             capture_output=True,
             text=True,
             timeout=30,
-            cwd=workspace
+            cwd=workspace,
         )
-        
+
         print(f"Process exit code: {result.returncode}")
-        
+
         if result.stderr:
             print(f"Stderr: {result.stderr}")
-        
+
         if result.stdout:
             print(f"Raw output length: {len(result.stdout)}")
-            
+
             # Extract JSON from output (it may be mixed with log lines)
-            lines = result.stdout.split('\n')
-            json_lines = [line for line in lines if line.strip().startswith('{')]
-            
+            lines = result.stdout.split("\n")
+            json_lines = [line for line in lines if line.strip().startswith("{")]
+
             if json_lines:
                 json_response = json_lines[0]
                 print(f"JSON response: {json_response}")
-                
+
                 try:
                     init_response = json.loads(json_response)
-                    print(f"Parsed initialize response: {json.dumps(init_response, indent=2)}")
-                    
+                    print(
+                        f"Parsed initialize response: {json.dumps(init_response, indent=2)}"
+                    )
+
                     # Check if authentication is required
-                    if 'authMethods' in init_response.get('result', {}):
-                        auth_methods = init_response['result']['authMethods']
-                        print(f"\nAuthentication required. Available methods: {auth_methods}")
-                        print("Note: For full functionality, implement authenticate step")
-                    
+                    if "authMethods" in init_response.get("result", {}):
+                        auth_methods = init_response["result"]["authMethods"]
+                        print(
+                            f"\nAuthentication required. Available methods: {auth_methods}"
+                        )
+                        print(
+                            "Note: For full functionality, implement authenticate step"
+                        )
+
                     print("\n" + "=" * 60)
                     print("Test complete - ACP connection successful!")
                     print("=" * 60)
@@ -70,7 +78,7 @@ def test_acp_minimal():
                 print(result.stdout)
         else:
             print("No output received")
-        
+
         return False
 
     except subprocess.TimeoutExpired:
@@ -79,9 +87,10 @@ def test_acp_minimal():
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_acp_minimal()

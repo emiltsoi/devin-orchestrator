@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 Audit Helpers - Deterministic helper modules for audit ledger, gate recording, and run.jsonl
 """
 
 import json
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
 import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 # Thread-safe locks for file operations
 _audit_lock = threading.Lock()
@@ -19,14 +18,14 @@ def append_audit(
     session_dir: Path,
     stage: str,
     skill: str,
-    injected_context: List[str],
+    injected_context: list[str],
     structural_result: str,
     reviewer_verdict: str,
     confidence: str,
     rationale: str,
     triage_decision: str,
     retry_count: int,
-    gate_verdict: str
+    gate_verdict: str,
 ) -> None:
     """
     Appends structured entry to session-audit.md
@@ -44,7 +43,7 @@ def append_audit(
         retry_count: Number of retry attempts for this stage
         gate_verdict: "approved", "rejected", or "none"
     """
-    audit_path = session_dir / 'session-audit.md'
+    audit_path = session_dir / "session-audit.md"
     timestamp = datetime.now(timezone.utc).isoformat()
 
     # Build human-readable markdown entry
@@ -52,7 +51,7 @@ def append_audit(
 ## Stage: {stage}
 - Timestamp: {timestamp}
 - Skill: {skill}
-- Injected Context: {', '.join(injected_context) if injected_context else 'none'}
+- Injected Context: {", ".join(injected_context) if injected_context else "none"}
 - Structural Result: {structural_result}
 - Reviewer Verdict: {reviewer_verdict}
 - Confidence: {confidence}
@@ -63,9 +62,8 @@ def append_audit(
 """
 
     # Thread-safe append operation
-    with _audit_lock:
-        with open(audit_path, 'a', encoding='utf-8') as f:
-            f.write(entry)
+    with _audit_lock, open(audit_path, "a", encoding="utf-8") as f:
+        f.write(entry)
 
 
 def record_gate(session_dir: Path, gate_id: str, verdict: str) -> None:
@@ -77,7 +75,7 @@ def record_gate(session_dir: Path, gate_id: str, verdict: str) -> None:
         gate_id: Gate identifier (e.g., "g1_requirement_approval")
         verdict: "approved" or "rejected"
     """
-    audit_path = session_dir / 'session-audit.md'
+    audit_path = session_dir / "session-audit.md"
     timestamp = datetime.now(timezone.utc).isoformat()
 
     # Build gate record entry
@@ -89,12 +87,11 @@ def record_gate(session_dir: Path, gate_id: str, verdict: str) -> None:
 """
 
     # Thread-safe append operation
-    with _gate_lock:
-        with open(audit_path, 'a', encoding='utf-8') as f:
-            f.write(entry)
+    with _gate_lock, open(audit_path, "a", encoding="utf-8") as f:
+        f.write(entry)
 
 
-def write_run_jsonl(session_dir: Path, entry: Dict[str, Any]) -> None:
+def write_run_jsonl(session_dir: Path, entry: dict[str, Any]) -> None:
     """
     Appends machine-readable entry to run.jsonl
 
@@ -114,13 +111,22 @@ def write_run_jsonl(session_dir: Path, entry: Dict[str, Any]) -> None:
             - retry_count: Number of retry attempts
             - gate_verdict: "approved", "rejected", or "none"
     """
-    run_jsonl_path = session_dir / 'run.jsonl'
+    run_jsonl_path = session_dir / "run.jsonl"
 
     # Validate entry has required fields
     required_fields = [
-        'timestamp', 'session_id', 'stage', 'skill', 'injected_context',
-        'structural_result', 'reviewer_verdict', 'confidence', 'rationale',
-        'triage_decision', 'retry_count', 'gate_verdict'
+        "timestamp",
+        "session_id",
+        "stage",
+        "skill",
+        "injected_context",
+        "structural_result",
+        "reviewer_verdict",
+        "confidence",
+        "rationale",
+        "triage_decision",
+        "retry_count",
+        "gate_verdict",
     ]
 
     for field in required_fields:
@@ -128,6 +134,5 @@ def write_run_jsonl(session_dir: Path, entry: Dict[str, Any]) -> None:
             raise ValueError(f"Missing required field: {field}")
 
     # Thread-safe append operation
-    with _run_jsonl_lock:
-        with open(run_jsonl_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry) + '\n')
+    with _run_jsonl_lock, open(run_jsonl_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")

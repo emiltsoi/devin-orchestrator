@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Guardrails for Devin dispatch
 
@@ -8,10 +7,10 @@ Implements safety checks based on learned Devin behavior:
 - Independent verification for reviewer BLOCK verdicts
 """
 
+import re
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-import re
+from typing import Any
 
 
 class Guardrails:
@@ -43,23 +42,36 @@ class Guardrails:
             return False
 
         try:
-            content = module_path.read_text(encoding='utf-8')
+            content = module_path.read_text(encoding="utf-8")
 
-            # Count import statements
-            import_pattern = r'^\s*(?:from\s+\S+\s+)?import\s+'
+            # Count import statements. The pattern captures the full import
+            # line so the inner re.search below can extract the module name.
+            import_pattern = r"^\s*(?:from\s+\S+\s+)?import\s+\w.*$"
             imports = re.findall(import_pattern, content, re.MULTILINE)
 
             # Filter out stdlib imports (they don't count toward coupling)
             stdlib_modules = {
-                'os', 'sys', 'pathlib', 'json', 're', 'datetime',
-                'typing', 'dataclasses', 'collections', 'itertools',
-                'functools', 'math', 'random', 'string', 'io'
+                "os",
+                "sys",
+                "pathlib",
+                "json",
+                "re",
+                "datetime",
+                "typing",
+                "dataclasses",
+                "collections",
+                "itertools",
+                "functools",
+                "math",
+                "random",
+                "string",
+                "io",
             }
 
             external_imports = []
             for imp in imports:
                 # Extract module name from import statement
-                match = re.search(r'import\s+(\w+)', imp)
+                match = re.search(r"import\s+(\w+)", imp)
                 if match:
                     module_name = match.group(1)
                     if module_name not in stdlib_modules:
@@ -86,8 +98,8 @@ class Guardrails:
             return False
 
         try:
-            content = file_path.read_text(encoding='utf-8')
-            lines = content.strip().split('\n')
+            content = file_path.read_text(encoding="utf-8")
+            lines = content.strip().split("\n")
             return len(lines) > 10
         except Exception:
             return False
@@ -108,17 +120,19 @@ class Guardrails:
 
         try:
             result = subprocess.run(
-                ['py', '-m', 'py_compile', str(file_path)],
+                ["py", "-m", "py_compile", str(file_path)],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
             return result.returncode == 0
         except Exception:
             return False
 
     @staticmethod
-    def verify_compliance_block(block_verdict: str, file_path: Optional[Path] = None) -> Dict[str, Any]:
+    def verify_compliance_block(
+        _block_verdict: str, file_path: Path | None = None
+    ) -> dict[str, Any]:
         """
         Independently verify a compliance reviewer BLOCK verdict
 
@@ -132,38 +146,37 @@ class Guardrails:
         Returns:
             Dict with 'verified' (bool) and 'notes' (str)
         """
-        result = {
-            'verified': False,
-            'notes': []
-        }
+        result = {"verified": False, "notes": []}
 
         # If no file path provided, cannot verify
         if not file_path:
-            result['notes'].append('No file path provided for verification')
+            result["notes"].append("No file path provided for verification")
             return result
 
         # Verify file exists
         if not Guardrails.verify_file_exists(file_path):
-            result['notes'].append('File does not exist or is trivial')
+            result["notes"].append("File does not exist or is trivial")
             return result
 
         # Verify syntax if Python file
-        if file_path.suffix == '.py':
+        if file_path.suffix == ".py":
             if Guardrails.verify_syntax(file_path):
-                result['notes'].append('Syntax verification passed')
-                result['verified'] = True
+                result["notes"].append("Syntax verification passed")
+                result["verified"] = True
             else:
-                result['notes'].append('Syntax verification FAILED')
-                result['verified'] = False
+                result["notes"].append("Syntax verification FAILED")
+                result["verified"] = False
         else:
             # Non-Python file: verify existence only
-            result['notes'].append('Non-Python file, verified existence only')
-            result['verified'] = True
+            result["notes"].append("Non-Python file, verified existence only")
+            result["verified"] = True
 
         return result
 
     @staticmethod
-    def check_leaf_module_boundary(target_module: Path, workspace: Path) -> Dict[str, Any]:
+    def check_leaf_module_boundary(
+        target_module: Path, _workspace: Path
+    ) -> dict[str, Any]:
         """
         Check if dispatch respects leaf module boundary
 
@@ -178,18 +191,30 @@ class Guardrails:
 
         if target_module.exists():
             try:
-                content = target_module.read_text(encoding='utf-8')
-                import_pattern = r'^\s*(?:from\s+\S+\s+)?import\s+'
+                content = target_module.read_text(encoding="utf-8")
+                import_pattern = r"^\s*(?:from\s+\S+\s+)?import\s+\w.*$"
                 imports = re.findall(import_pattern, content, re.MULTILINE)
 
                 stdlib_modules = {
-                    'os', 'sys', 'pathlib', 'json', 're', 'datetime',
-                    'typing', 'dataclasses', 'collections', 'itertools',
-                    'functools', 'math', 'random', 'string', 'io'
+                    "os",
+                    "sys",
+                    "pathlib",
+                    "json",
+                    "re",
+                    "datetime",
+                    "typing",
+                    "dataclasses",
+                    "collections",
+                    "itertools",
+                    "functools",
+                    "math",
+                    "random",
+                    "string",
+                    "io",
                 }
 
                 for imp in imports:
-                    match = re.search(r'import\s+(\w+)', imp)
+                    match = re.search(r"import\s+(\w+)", imp)
                     if match:
                         module_name = match.group(1)
                         if module_name not in stdlib_modules:
@@ -197,7 +222,4 @@ class Guardrails:
             except Exception:
                 pass
 
-        return {
-            'is_leaf': coupling_count <= 2,
-            'coupling_count': coupling_count
-        }
+        return {"is_leaf": coupling_count <= 2, "coupling_count": coupling_count}

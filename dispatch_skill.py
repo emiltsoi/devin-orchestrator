@@ -39,15 +39,23 @@ def main():
     demo_mode = len(sys.argv) > 5 and sys.argv[5].lower() == 'true'
     config_overrides_json = sys.argv[6] if len(sys.argv) > 6 else None
     
+    # Load config first so we can constrain workspace validation to the
+    # configured session work directory.
+    config = ConfigLoader.load()
+
     # Validate and sanitize inputs
     try:
         skill_name = validate_skill_name(skill_name)
         session_id = validate_session_id(session_id)
-        workspace = str(validate_workspace_path(workspace))
+        workspace = str(
+            validate_workspace_path(
+                workspace, base_allowed_dir=config.session_work_dir
+            )
+        )
     except InvalidInputError as e:
         print(f"Input validation error: {e}", file=sys.stderr)
         sys.exit(1)
-    
+
     # Parse config overrides if provided
     config_overrides = {}
     if config_overrides_json:
@@ -55,10 +63,7 @@ def main():
             config_overrides = json.loads(config_overrides_json)
         except json.JSONDecodeError:
             print(f"Warning: Invalid JSON for config_overrides: {config_overrides_json}")
-    
-    # Load config
-    config = ConfigLoader.load()
-    
+
     # Create skill invoker
     skill_invoker = SkillInvoker(demo_mode=demo_mode)
     

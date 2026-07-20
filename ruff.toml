@@ -1,3 +1,14 @@
+exclude = [
+    "workflow-engine/work",
+    "workflow-engine/.pytest_cache",
+    ".git",
+    ".github",
+    "__pycache__",
+    "*.pyc",
+    "build",
+    "dist",
+]
+
 [lint]
 select = [
     "E",      # pycodestyle errors
@@ -22,6 +33,10 @@ ignore = [
 "test_*.py" = [
     "ARG",    # unused arguments in tests
     "S101",   # assert allowed in tests
+    "F841",   # unused local variables in tests (assertion result often ignored)
+    "SIM",    # simplify suggestions often clash with explicit test setup
+    "E712",   # explicit True/False comparisons in assertions
+    "F401",   # unused imports (availability/import tests)
 ]
 
 [format]

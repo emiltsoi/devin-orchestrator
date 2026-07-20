@@ -1,34 +1,37 @@
-# -*- coding: utf-8 -*-
 """
 Floor Validator - Structural and Iron-Law validation for artifacts
 Provides side-effect-free, deterministic validation functions
 """
 
-from pathlib import Path
-from typing import Dict, Any, List, Union
 import re
+from pathlib import Path
+from typing import Any
+
 import yaml
 
 
-def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:
+def validate_structural(artifacts: list[Path] | Path) -> dict[str, Any]:
     """
     Check if artifacts exist, are non-empty, and contain no placeholders
 
     Args:
-        artifacts: List of paths to the artifact files
+        artifacts: Single path or list of paths to the artifact files
 
     Returns:
         Dict with 'result' (PASS|FAIL) and 'failures' list
     """
+    if isinstance(artifacts, Path):
+        artifacts = [artifacts]
+
     failures = []
 
     # Check for placeholder patterns
     placeholder_patterns = [
-        r'PLACEHOLDER',
-        r'TODO',
-        r'TBD',
-        r'Created after dispatch failure',
-        r'<!-- .* -->',  # HTML comment placeholders
+        r"PLACEHOLDER",
+        r"TODO",
+        r"TBD",
+        r"Created after dispatch failure",
+        r"<!-- .* -->",  # HTML comment placeholders
     ]
 
     for artifact in artifacts:
@@ -37,7 +40,7 @@ def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:
             continue
 
         try:
-            content = artifact.read_text(encoding='utf-8')
+            content = artifact.read_text(encoding="utf-8")
         except Exception as e:
             failures.append(f"Failed to read artifact: {e}")
             continue
@@ -54,7 +57,7 @@ def validate_structural(artifacts: List[Path]) -> Dict[str, Any]:
     return {"result": "PASS" if not failures else "FAIL", "failures": failures}
 
 
-def validate_iron_law(artifact: Path, iron_law: str) -> Dict[str, Any]:
+def validate_iron_law(artifact: Path, iron_law: str) -> dict[str, Any]:
     """
     Check if Iron Law is followed
 
@@ -75,19 +78,20 @@ def validate_iron_law(artifact: Path, iron_law: str) -> Dict[str, Any]:
         return {"result": "FAIL", "failures": failures}
 
     try:
-        content = artifact.read_text(encoding='utf-8')
+        content = artifact.read_text(encoding="utf-8")
     except Exception as e:
         failures.append(f"Failed to read artifact: {e}")
         return {"result": "FAIL", "failures": failures}
 
     # Extract key requirements from Iron Law
     # This is a simplified check - real implementation would parse Iron Law text
-    if 'test' in iron_law.lower() and 'test' not in content.lower():
+    if "test" in iron_law.lower() and "test" not in content.lower():
         failures.append("Iron Law requires tests but none found in artifact")
 
-    if 'no placeholder' in iron_law.lower():
-        if 'placeholder' in content.lower() or 'todo' in content.lower():
-            failures.append("Iron Law prohibits placeholders but found in artifact")
+    if "no placeholder" in iron_law.lower() and (
+        "placeholder" in content.lower() or "todo" in content.lower()
+    ):
+        failures.append("Iron Law prohibits placeholders but found in artifact")
 
     if failures:
         return {"result": "FAIL", "failures": failures}
@@ -95,7 +99,7 @@ def validate_iron_law(artifact: Path, iron_law: str) -> Dict[str, Any]:
     return {"result": "PASS", "failures": []}
 
 
-def validate_format(artifact: Path) -> Dict[str, Any]:
+def validate_format(artifact: Path) -> dict[str, Any]:
     """
     Check YAML/JSON format if applicable
 
@@ -108,19 +112,20 @@ def validate_format(artifact: Path) -> Dict[str, Any]:
     failures = []
     suffix = artifact.suffix.lower()
 
-    if suffix in ['.yaml', '.yml']:
+    if suffix in [".yaml", ".yml"]:
         try:
-            with open(artifact, 'r', encoding='utf-8') as f:
+            with open(artifact, encoding="utf-8") as f:
                 yaml.safe_load(f)
             return {"result": "PASS", "failures": [], "checked": True}
         except yaml.YAMLError as e:
             failures.append(f"YAML parsing error: {e}")
             return {"result": "FAIL", "failures": failures, "checked": True}
 
-    if suffix == '.json':
+    if suffix == ".json":
         import json
+
         try:
-            with open(artifact, 'r', encoding='utf-8') as f:
+            with open(artifact, encoding="utf-8") as f:
                 json.load(f)
             return {"result": "PASS", "failures": [], "checked": True}
         except json.JSONDecodeError as e:
