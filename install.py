@@ -81,7 +81,26 @@ def install(global_root: Optional[Path] = None, source_dir: Optional[Path] = Non
         if not dry_run:
             shutil.copy2(source_config, target_config)
         print(f"Would copy config: {source_config} -> {target_config}")
-    
+
+    # Copy dispatch entry-point scripts so any workspace can invoke them
+    for script_name in ("dispatch_devin.py", "dispatch_skill.py"):
+        source_script = source_dir / script_name
+        target_script = global_root / script_name
+        if source_script.exists():
+            if not dry_run:
+                shutil.copy2(source_script, target_script)
+            print(f"Would copy dispatch script: {source_script} -> {target_script}")
+
+    # Copy role files used by dispatch_devin.py
+    source_roles = source_dir / "roles"
+    target_roles = global_root / "roles"
+    if source_roles.exists():
+        if not dry_run:
+            if target_roles.exists():
+                shutil.rmtree(target_roles)
+            shutil.copytree(source_roles, target_roles)
+        print(f"Would copy roles: {source_roles} -> {target_roles}")
+
     # Create work directory
     work_dir = global_root / "work"
     if not dry_run:
