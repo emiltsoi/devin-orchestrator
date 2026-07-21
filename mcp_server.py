@@ -19,11 +19,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import re
 import subprocess
 import sys
+import time
+from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 # Add workflow-engine to Python path so we can import ConfigLoader and
 # security_utils without requiring the harness to be installed as a package.
@@ -31,7 +38,15 @@ WORKFLOW_ENGINE_DIR = Path(__file__).parent / "workflow-engine"
 sys.path.insert(0, str(WORKFLOW_ENGINE_DIR))
 
 from config_loader import ConfigLoader  # noqa: E402
-from security_utils import validate_path_safe  # noqa: E402
+from security_utils import (  # noqa: E402
+    InvalidInputError,
+    PathTraversalError,
+    validate_path_safe,
+    validate_session_id,
+    validate_skill_name,
+    validate_workflow_name,
+    validate_workspace_path,
+)
 
 
 class McpServer:
@@ -40,12 +55,23 @@ class McpServer:
     PROTOCOL_VERSION = "2024-11-05"
     SERVER_NAME = "devin-orchestrator"
     SERVER_VERSION = "0.1.0"
+    MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+    # Rate limiting: max 10 calls per tool per 60-second window
+    RATE_LIMIT_MAX_CALLS = 10
+    RATE_LIMIT_WINDOW_SECONDS = 60
+    # Timeout validation: min 1 second, max 1 hour (3600 seconds)
+    DEFAULT_TIMEOUT_SECONDS = 300
+    MIN_TIMEOUT_SECONDS = 1
+    MAX_TIMEOUT_SECONDS = 3600
 
     def __init__(self, workspace: str | None = None) -> None:
         self.workspace = workspace
         self.config = ConfigLoader.load(workspace=workspace)
         self.stdin = sys.stdin.buffer
         self.stdout = sys.stdout.buffer
+        self._framing: str | None = None  # "ndjson" or "content-length"
+        # Rate limiting: track tool call timestamps per tool name
+        self._tool_call_history: defaultdict[str, list[float]] = defaultdict(list)
 
     # --------------------------------------------------------------------- #
     # Tool definitions (exposed via tools/list)
@@ -139,6 +165,11 @@ class McpServer:
                         "is_reviewer": {"type": "boolean", "default": False},
                         "demo_mode": {"type": "boolean", "default": False},
                         "config_overrides": {"type": "object", "default": {}},
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Timeout in seconds",
+                            "default": 600,
+                        },
                     },
                     "required": ["skill_name", "session_id", "workspace"],
                 },
@@ -151,8 +182,185 @@ class McpServer:
                     "properties": {
                         "path": {"type": "string"},
                         "workspace": {"type": "string"},
+                        "session_id": {"type": "string"},
                     },
                     "required": ["path"],
+                },
+            },
+            {
+                "name": "execute",
+                "description": "Execute a request with automatic or explicit intent routing.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "The user request to execute",
+                        },
+                        "intent": {
+                            "type": "string",
+                            "description": "Intent to use (auto, implement, review, investigate, plan)",
+                            "default": "auto",
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
+                            "default": 300,
+                        },
+                    },
+                    "required": ["request"],
+                },
+            },
+            {
+                "name": "implement",
+                "description": "Execute an implementation request using the superpower workflow.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "The implementation request",
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
+                            "default": 300,
+                        },
+                    },
+                    "required": ["request"],
+                },
+            },
+            {
+                "name": "review",
+                "description": "Execute a review request using the code_review workflow.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "The review request",
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
+                            "default": 300,
+                        },
+                    },
+                    "required": ["request"],
+                },
+            },
+            {
+                "name": "investigate",
+                "description": "Execute an investigation request using the rca workflow.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "The investigation request",
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
+                            "default": 300,
+                        },
+                    },
+                    "required": ["request"],
+                },
+            },
+            {
+                "name": "plan",
+                "description": "Execute a planning request using the writing-plans skill.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "request": {
+                            "type": "string",
+                            "description": "The planning request",
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
+                    },
+                    "required": ["request"],
+                },
+            },
+            {
+                "name": "run_workflow",
+                "description": "Run a specific workflow with a request.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string",
+                            "description": "Name of the workflow to run",
+                        },
+                        "request": {
+                            "type": "string",
+                            "description": "The user request",
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
+                            "default": 300,
+                        },
+                    },
+                    "required": ["workflow", "request"],
+                },
+            },
+            {
+                "name": "run_skill",
+                "description": "Run a specific skill with a request.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "skill": {
+                            "type": "string",
+                            "description": "Name of the skill to run",
+                        },
+                        "request": {
+                            "type": "string",
+                            "description": "The user request",
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
+                            "default": 300,
+                        },
+                    },
+                    "required": ["skill", "request"],
                 },
             },
         ]
@@ -198,17 +406,147 @@ class McpServer:
         params = request.get("params", {})
         name = params.get("name")
         arguments = params.get("arguments", {})
-        try:
-            content = self._run_tool(name, arguments)
-            is_error = False
-        except Exception as e:
-            content = [self._text_content(f"Error: {e}")]
+
+        # Check rate limit for this tool
+        if not self._check_rate_limit(name):
+            content = [self._text_content(f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds.")]
             is_error = True
+        else:
+            try:
+                content = self._run_tool(name, arguments)
+                is_error = False
+            except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
+                content = [self._text_content(f"Error: {e}")]
+                is_error = True
+            except (KeyError, TypeError) as e:
+                content = [self._text_content(f"Invalid arguments: {e}")]
+                is_error = True
+            except (OSError, RuntimeError) as e:
+                content = [self._text_content(f"System error: {e}")]
+                is_error = True
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
             "result": {"content": content, "isError": is_error},
         }
+
+    def _check_rate_limit(self, tool_name: str) -> bool:
+        """
+        Check if the tool call is within rate limits.
+
+        Args:
+            tool_name: Name of the tool being called
+
+        Returns:
+            True if the call is allowed, False if rate limit is exceeded
+        """
+        current_time = time.time()
+        # Clean up old calls outside the time window
+        self._tool_call_history[tool_name] = [
+            timestamp for timestamp in self._tool_call_history[tool_name]
+            if current_time - timestamp < self.RATE_LIMIT_WINDOW_SECONDS
+        ]
+
+        # Check if under the limit
+        if len(self._tool_call_history[tool_name]) >= self.RATE_LIMIT_MAX_CALLS:
+            return False
+
+        # Record this call
+        self._tool_call_history[tool_name].append(current_time)
+        return True
+
+    def _validate_timeout(self, timeout: int | None) -> int:
+        """
+        Validate and normalize a timeout value.
+
+        Args:
+            timeout: Optional timeout value in seconds
+
+        Returns:
+            Validated timeout in seconds (clamped to MIN/MAX_TIMEOUT_SECONDS)
+
+        Raises:
+            InvalidInputError: If timeout is invalid
+        """
+        if timeout is None:
+            return self.DEFAULT_TIMEOUT_SECONDS
+
+        if not isinstance(timeout, int):
+            raise InvalidInputError(f"Timeout must be an integer, got {type(timeout).__name__}")
+
+        if timeout < self.MIN_TIMEOUT_SECONDS:
+            raise InvalidInputError(f"Timeout must be at least {self.MIN_TIMEOUT_SECONDS} seconds")
+
+        if timeout > self.MAX_TIMEOUT_SECONDS:
+            raise InvalidInputError(f"Timeout cannot exceed {self.MAX_TIMEOUT_SECONDS} seconds")
+
+        return timeout
+
+    def _parse_config_overrides(self, config_overrides: Any) -> dict:
+        """
+        Parse and validate config_overrides parameter.
+
+        Args:
+            config_overrides: Config overrides (can be dict, JSON string, or other types)
+
+        Returns:
+            Validated config overrides dictionary
+
+        Raises:
+            InvalidInputError: If config_overrides is invalid or malformed JSON
+        """
+        if config_overrides is None:
+            return {}
+
+        # If it's already a dict, validate and return it
+        if isinstance(config_overrides, dict):
+            return self._validate_config_overrides_dict(config_overrides)
+
+        # If it's a string, try to parse as JSON
+        if isinstance(config_overrides, str):
+            try:
+                parsed = json.loads(config_overrides)
+                if not isinstance(parsed, dict):
+                    raise InvalidInputError(
+                        "config_overrides JSON must parse to an object/dictionary"
+                    )
+                return self._validate_config_overrides_dict(parsed)
+            except json.JSONDecodeError as e:
+                raise InvalidInputError(
+                    f"config_overrides contains malformed JSON: {e}"
+                ) from e
+
+        # Any other type is invalid
+        raise InvalidInputError(
+            f"config_overrides must be a dictionary or JSON string, got {type(config_overrides).__name__}"
+        )
+
+    def _validate_config_overrides_dict(self, config_overrides: dict) -> dict:
+        """
+        Validate that config_overrides dictionary contains only safe values.
+
+        Args:
+            config_overrides: Dictionary to validate
+
+        Returns:
+            Validated dictionary
+
+        Raises:
+            InvalidInputError: If dictionary contains invalid keys or values
+        """
+        # Validate config_overrides keys are strings and values are basic types
+        valid_types = (str, int, float, bool, type(None))
+        for key, value in config_overrides.items():
+            if not isinstance(key, str):
+                raise InvalidInputError(
+                    f"config_overrides key must be string, got {type(key).__name__}"
+                )
+            if not isinstance(value, valid_types):
+                raise InvalidInputError(
+                    f"config_overrides value for key '{key}' must be basic type (str, int, float, bool, None), got {type(value).__name__}"
+                )
+
+        return config_overrides
 
     def _error(self, request: dict, code: int, message: str) -> dict:
         return {
@@ -231,13 +569,34 @@ class McpServer:
         return {"type": "text", "text": text}
 
     def _tool_list_skills(self, _arguments: dict) -> list[dict]:
+        """
+        List all available skills with their metadata.
+
+        Args:
+            _arguments: Tool arguments (unused)
+
+        Returns:
+            List containing JSON-formatted skill definitions
+        """
         skills_dir = self.config.skills_dir
         skills = []
         if skills_dir.exists():
             for entry in sorted(skills_dir.iterdir()):
                 yaml_file = entry / f"{entry.name}.yaml"
                 if entry.is_dir() and yaml_file.exists():
-                    data = yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+                    try:
+                        data = yaml.safe_load(
+                            yaml_file.read_text(encoding="utf-8")
+                        ) or {}
+                    except yaml.YAMLError as e:
+                        # Skip malformed skill YAML files so a single corrupt
+                        # file does not crash the listing operation.
+                        logger.warning(
+                            "Skipping malformed skill YAML %s: %s",
+                            yaml_file,
+                            e,
+                        )
+                        continue
                     skills.append(
                         {
                             "name": entry.name,
@@ -248,45 +607,229 @@ class McpServer:
         return [self._text_content(json.dumps(skills, indent=2))]
 
     def _tool_get_skill(self, arguments: dict) -> list[dict]:
-        name = arguments["name"]
-        skill_dir = self.config.skills_dir / name
-        yaml_file = skill_dir / f"{name}.yaml"
-        md_file = skill_dir / f"{name}.md"
+        """
+        Get the YAML definition and markdown narrative for a skill.
+
+        Args:
+            arguments: Tool arguments containing skill name
+
+        Returns:
+            List containing skill definition and narrative
+
+        Raises:
+            FileNotFoundError: If skill is not found
+        """
+        try:
+            name = arguments["name"]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid name parameter: {e}")]
+
+        # Validate skill name to prevent path traversal
+        try:
+            skill_name = validate_skill_name(name)
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid skill name: {e}")]
+
+        # Resolve the skill directory against skills_dir before validation so
+        # relative names are contained correctly (validate_path_safe resolves
+        # bare relative paths against CWD, which would escape the base
+        # directory). Mirrors the _tool_get_workflow pattern.
+        try:
+            skill_dir = validate_path_safe(
+                self.config.skills_dir,
+                self.config.skills_dir / skill_name,
+                allow_absolute=True,
+            )
+        except (InvalidInputError, PathTraversalError) as e:
+            return [self._text_content(f"Path validation failed: {e}")]
+
+        yaml_file = skill_dir / f"{skill_name}.yaml"
+        md_file = skill_dir / f"{skill_name}.md"
         if not yaml_file.exists():
-            raise FileNotFoundError(f"Skill not found: {name}")
+            raise FileNotFoundError(f"Skill not found: {skill_name}")
         parts = ["# YAML\n", yaml_file.read_text(encoding="utf-8")]
         if md_file.exists():
             parts.extend(["\n# Markdown\n", md_file.read_text(encoding="utf-8")])
         return [self._text_content("".join(parts))]
 
     def _tool_list_workflows(self, _arguments: dict) -> list[dict]:
+        """
+        List all available workflow manifests with their metadata.
+
+        Args:
+            _arguments: Tool arguments (unused)
+
+        Returns:
+            List containing JSON-formatted workflow definitions
+        """
         workflows_dir = self.config.workflows_dir
         workflows = []
+        use_case_map: dict[str, list[dict]] = {}
+        use_cases_file = workflows_dir / "use-cases.yaml"
+        if use_cases_file.exists():
+            try:
+                use_cases_data = yaml.safe_load(use_cases_file.read_text(encoding="utf-8")) or {}
+                for uc in use_cases_data.get("use_cases", []):
+                    wf_name = uc.get("workflow")
+                    if not wf_name:
+                        continue
+                    use_case_map.setdefault(wf_name, []).append(
+                        {
+                            "id": uc.get("id"),
+                            "name": uc.get("name"),
+                            "type": uc.get("type"),
+                            "description": uc.get("description"),
+                            "slash_command": uc.get("slash_command"),
+                            "git_operations": uc.get("git_operations"),
+                            "session_id_format": uc.get("session_id_format"),
+                        }
+                    )
+            except (FileNotFoundError, yaml.YAMLError, ValueError, KeyError):
+                # Silently handle errors in use-cases file to avoid breaking workflow listing
+                pass
         if workflows_dir.exists():
             for manifest in sorted(workflows_dir.glob("*.manifest.yaml")):
-                data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+                try:
+                    data = yaml.safe_load(
+                        manifest.read_text(encoding="utf-8")
+                    ) or {}
+                except yaml.YAMLError as e:
+                    # Skip malformed workflow manifests so a single corrupt
+                    # file does not crash the listing operation.
+                    logger.warning(
+                        "Skipping malformed workflow manifest %s: %s",
+                        manifest,
+                        e,
+                    )
+                    continue
+                wf_name = manifest.stem.replace(".manifest", "")
                 workflows.append(
                     {
-                        "name": manifest.stem.replace(".manifest", ""),
+                        "name": wf_name,
                         "description": data.get("description", ""),
                         "schema_version": data.get("schema_version", ""),
+                        "use_cases": use_case_map.get(wf_name, []),
                     }
                 )
         return [self._text_content(json.dumps(workflows, indent=2))]
 
     def _tool_get_workflow(self, arguments: dict) -> list[dict]:
-        name = arguments["name"]
-        workflows_dir = self.config.workflows_dir
-        manifest = workflows_dir / f"{name}.manifest.yaml"
-        runbook = workflows_dir / f"{name}.runbook.md"
+        """
+        Get a workflow manifest and its runbook.
+
+        Args:
+            arguments: Tool arguments containing workflow name
+
+        Returns:
+            List containing workflow manifest and runbook
+
+        Raises:
+            FileNotFoundError: If workflow is not found
+        """
+        try:
+            name = arguments["name"]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid name parameter: {e}")]
+
+        # Validate workflow name to prevent path traversal. Workflow names allow
+        # underscores (e.g. code_review) unlike skill names which are hyphen-only.
+        try:
+            workflow_name = validate_workflow_name(name)
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid workflow name: {e}")]
+
+        # Workflow files are directly in workflows_dir. Resolve the manifest
+        # path against workflows_dir before validation so relative names are
+        # contained correctly (validate_path_safe resolves bare relative paths
+        # against CWD, which would escape the base directory).
+        try:
+            manifest = validate_path_safe(
+                self.config.workflows_dir,
+                self.config.workflows_dir / f"{workflow_name}.manifest.yaml",
+                allow_absolute=True,
+            )
+        except (InvalidInputError, PathTraversalError) as e:
+            return [self._text_content(f"Path validation failed: {e}")]
+
+        runbook = manifest.parent / f"{workflow_name}.runbook.md"
         if not manifest.exists():
-            raise FileNotFoundError(f"Workflow not found: {name}")
+            raise FileNotFoundError(f"Workflow not found: {workflow_name}")
         parts = ["# Manifest\n", manifest.read_text(encoding="utf-8")]
         if runbook.exists():
             parts.extend(["\n# Runbook\n", runbook.read_text(encoding="utf-8")])
         return [self._text_content("".join(parts))]
 
     def _tool_dispatch_devin(self, arguments: dict) -> list[dict]:
+        """
+        Dispatch a generic Devin run with a role and prompt file.
+
+        Args:
+            arguments: Tool arguments containing role, prompt_file, work_dir, etc.
+
+        Returns:
+            List containing dispatch result with exit code and output
+        """
+        # Validate work_dir is under global_root
+        try:
+            work_dir = validate_workspace_path(
+                arguments["work_dir"], base_allowed_dir=self.config.global_root
+            )
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid work_dir: {e}")]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid work_dir parameter: {e}")]
+
+        # Validate prompt_file is under work_dir. Relative paths resolve
+        # against work_dir (not CWD) by joining first, mirroring the
+        # _tool_read_artifact pattern.
+        try:
+            prompt_input = Path(arguments["prompt_file"])
+            if prompt_input.is_absolute():
+                prompt_file = validate_path_safe(
+                    work_dir, prompt_input, allow_absolute=True
+                )
+            else:
+                prompt_file = validate_path_safe(
+                    work_dir, work_dir / prompt_input, allow_absolute=True
+                )
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid prompt_file: {e}")]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid prompt_file parameter: {e}")]
+
+        # Validate output_file if provided is under work_dir, with the same
+        # relative-path handling as prompt_file. Keep the validated path so we
+        # read the output from work_dir rather than CWD (M-1).
+        validated_output_file: Path | None = None
+        if arguments.get("output_file"):
+            try:
+                output_input = Path(arguments["output_file"])
+                if output_input.is_absolute():
+                    validated_output_file = validate_path_safe(
+                        work_dir, output_input, allow_absolute=True
+                    )
+                else:
+                    validated_output_file = validate_path_safe(
+                        work_dir, work_dir / output_input, allow_absolute=True
+                    )
+            except InvalidInputError as e:
+                return [self._text_content(f"Invalid output_file: {e}")]
+
+        # Validate role is either a short name or a path under global_root/roles
+        role = arguments["role"]
+        role_path = Path(role)
+        if role_path.is_absolute():
+            # If absolute, must be under global_root/roles
+            roles_dir = self.config.global_root / "roles"
+            try:
+                role_path = validate_path_safe(roles_dir, role_path, allow_absolute=True)
+            except InvalidInputError as e:
+                return [self._text_content(f"Invalid role path: {e}")]
+        else:
+            # Short name - validate it contains only safe characters
+            if not re.match(r"^[a-zA-Z0-9_-]+$", role):
+                return [self._text_content(f"Invalid role name: {role}")]
+
         script = Path(__file__).parent / "dispatch_devin.py"
         cmd = [sys.executable, str(script)]
         if arguments.get("model"):
@@ -295,101 +838,459 @@ class McpServer:
             cmd.extend(["--agent", str(arguments["agent"])])
         if arguments.get("phase"):
             cmd.extend(["--phase", str(arguments["phase"])])
-        cmd.extend(["--role", str(arguments["role"])])
-        cmd.extend(["--prompt-file", str(arguments["prompt_file"])])
-        cmd.extend(["--work-dir", str(arguments["work_dir"])])
+        cmd.extend(["--role", str(role)])
+        cmd.extend(["--prompt-file", str(prompt_file)])
+        cmd.extend(["--work-dir", str(work_dir)])
         if arguments.get("output_file"):
             cmd.extend(["--output-file", str(arguments["output_file"])])
         for ctx in arguments.get("focused_context", []):
             cmd.extend(["--focused-context", str(ctx)])
-        if arguments.get("timeout"):
-            cmd.extend(["--timeout", str(arguments["timeout"])])
 
-        timeout = int(arguments.get("timeout", 600))
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(arguments["work_dir"]),
-        )
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        cmd.extend(["--timeout", str(timeout)])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                cwd=str(work_dir),
+            )
+        except subprocess.TimeoutExpired:
+            return [self._text_content(
+                f"Devin dispatch timed out after {timeout} seconds."
+            )]
         text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
         if result.stderr:
             text += f"\n\nSTDERR:\n{result.stderr}"
-        if arguments.get("output_file"):
-            out_path = Path(arguments["output_file"])
-            if out_path.exists():
-                text += f"\n\n--- OUTPUT FILE ({out_path}) ---\n"
-                text += out_path.read_text(encoding="utf-8")
+        if validated_output_file is not None and validated_output_file.exists():
+            text += f"\n\n--- OUTPUT FILE ({validated_output_file}) ---\n"
+            text += validated_output_file.read_text(encoding="utf-8")
         return [self._text_content(text)]
 
     def _tool_dispatch_skill(self, arguments: dict) -> list[dict]:
+        """
+        Invoke a named skill in a target workspace.
+
+        Args:
+            arguments: Tool arguments containing skill_name, session_id, workspace, etc.
+
+        Returns:
+            List containing dispatch result with exit code and output
+        """
+        # Validate workspace is under global_root
+        try:
+            workspace = validate_workspace_path(
+                arguments["workspace"], base_allowed_dir=self.config.global_root
+            )
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid workspace: {e}")]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid workspace parameter: {e}")]
+
+        # Validate skill_name
+        try:
+            skill_name = validate_skill_name(arguments["skill_name"])
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid skill_name: {e}")]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid skill_name parameter: {e}")]
+
+        # Validate session_id
+        try:
+            session_id = validate_session_id(arguments["session_id"])
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid session_id: {e}")]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid session_id parameter: {e}")]
+
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        # Validate and parse config_overrides
+        try:
+            overrides = self._parse_config_overrides(arguments.get("config_overrides"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid config_overrides: {e}")]
+
         script = Path(__file__).parent / "dispatch_skill.py"
         cmd = [
             sys.executable,
             str(script),
-            str(arguments["skill_name"]),
-            str(arguments["session_id"]),
-            str(arguments["workspace"]),
+            str(skill_name),
+            str(session_id),
+            str(workspace),
             str(arguments.get("is_reviewer", False)).lower(),
             str(arguments.get("demo_mode", False)).lower(),
         ]
-        overrides = arguments.get("config_overrides", {})
         if overrides:
             cmd.append(json.dumps(overrides))
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return [self._text_content(
+                f"Skill dispatch timed out after {timeout} seconds."
+            )]
         text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
         if result.stderr:
             text += f"\n\nSTDERR:\n{result.stderr}"
         return [self._text_content(text)]
 
     def _tool_read_artifact(self, arguments: dict) -> list[dict]:
-        path = Path(arguments["path"])
-        workspace = arguments.get("workspace") or self.workspace
-        base = Path(workspace) if workspace else Path.cwd()
-        if path.is_absolute():
-            target = validate_path_safe(base, path, allow_absolute=True)
+        """
+        Read a file from a workspace.
+
+        Args:
+            arguments: Tool arguments containing path, optional session_id and workspace
+
+        Returns:
+            List containing file contents
+
+        Raises:
+            FileNotFoundError: If file is not found
+        """
+        from session_manager import resolve_session
+
+        try:
+            path = Path(arguments["path"])
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid path parameter: {e}")]
+
+        session_id = arguments.get("session_id")
+
+        # If session_id is provided, resolve the workspace from session
+        if session_id:
+            try:
+                workspace = resolve_session(self.config.session_work_dir, session_id)
+            except (FileNotFoundError, ValueError) as e:
+                return [self._text_content(f"Failed to resolve session {session_id}: {e}")]
+            base = Path(workspace)
         else:
-            target = validate_path_safe(base, base / path, allow_absolute=True)
+            # Without a session_id, use the caller-supplied workspace (or the
+            # server's pre-loaded workspace). Validate it against global_root so
+            # a client cannot point at an arbitrary location on the filesystem.
+            # Fall back to session_work_dir (never Path.cwd()) when nothing is
+            # supplied, keeping reads contained within the harness root.
+            workspace = arguments.get("workspace") or self.workspace
+            if workspace:
+                try:
+                    base = validate_workspace_path(
+                        workspace, base_allowed_dir=self.config.global_root
+                    )
+                except (InvalidInputError, PathTraversalError) as e:
+                    return [self._text_content(f"Invalid workspace: {e}")]
+            else:
+                base = self.config.session_work_dir
+        try:
+            if path.is_absolute():
+                target = validate_path_safe(base, path, allow_absolute=True)
+            else:
+                target = validate_path_safe(base, base / path, allow_absolute=True)
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid path: {e}")]
+
         if not target.is_file():
             raise FileNotFoundError(f"File not found: {target}")
         return [self._text_content(target.read_text(encoding="utf-8"))]
+
+    def _tool_execute(self, arguments: dict) -> list[dict]:
+        """
+        Execute a request with automatic or explicit intent routing.
+
+        Args:
+            arguments: Tool arguments containing request, intent, demo_mode, timeout
+
+        Returns:
+            List containing execution result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=arguments.get("demo_mode", False),
+            timeout=timeout,
+        )
+        request = arguments["request"]
+        intent = arguments.get("intent", "auto")
+        result = orchestrator.execute(request, intent)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_implement(self, arguments: dict) -> list[dict]:
+        """
+        Execute an implementation request using the superpower workflow.
+
+        Args:
+            arguments: Tool arguments containing request, demo_mode, timeout
+
+        Returns:
+            List containing implementation result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=arguments.get("demo_mode", False),
+            timeout=timeout,
+        )
+        request = arguments["request"]
+        result = orchestrator.implement(request)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_review(self, arguments: dict) -> list[dict]:
+        """
+        Execute a review request using the code_review workflow.
+
+        Args:
+            arguments: Tool arguments containing request, demo_mode, timeout
+
+        Returns:
+            List containing review result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=arguments.get("demo_mode", False),
+            timeout=timeout,
+        )
+        request = arguments["request"]
+        result = orchestrator.review(request)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_investigate(self, arguments: dict) -> list[dict]:
+        """
+        Execute an investigation request using the rca workflow.
+
+        Args:
+            arguments: Tool arguments containing request, demo_mode, timeout
+
+        Returns:
+            List containing investigation result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=arguments.get("demo_mode", False),
+            timeout=timeout,
+        )
+        request = arguments["request"]
+        result = orchestrator.investigate(request)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_plan(self, arguments: dict) -> list[dict]:
+        """
+        Execute a planning request using the writing-plans skill.
+
+        Args:
+            arguments: Tool arguments containing request, demo_mode
+
+        Returns:
+            List containing planning result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=arguments.get("demo_mode", False),
+        )
+        request = arguments["request"]
+        result = orchestrator.plan(request)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_run_workflow(self, arguments: dict) -> list[dict]:
+        """
+        Run a specific workflow with a request.
+
+        Args:
+            arguments: Tool arguments containing workflow, request, demo_mode, timeout
+
+        Returns:
+            List containing workflow execution result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=arguments.get("demo_mode", False),
+            timeout=timeout,
+        )
+
+        # Validate workflow name to prevent path traversal / manifest injection.
+        # Mirrors the pattern used in _tool_get_workflow. Workflow names allow
+        # underscores (e.g. code_review) unlike skill names which are hyphen-only.
+        try:
+            workflow = arguments["workflow"]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid workflow parameter: {e}")]
+        try:
+            workflow_name = validate_workflow_name(workflow)
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid workflow name: {e}")]
+
+        request = arguments["request"]
+        result = orchestrator.run_workflow(workflow_name, request)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_run_skill(self, arguments: dict) -> list[dict]:
+        """
+        Run a specific skill with a request.
+
+        Args:
+            arguments: Tool arguments containing skill, request, demo_mode, timeout
+
+        Returns:
+            List containing skill execution result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=arguments.get("demo_mode", False),
+            timeout=timeout,
+        )
+        skill = arguments["skill"]
+        request = arguments["request"]
+        result = orchestrator.run_skill(skill, request)
+        return [self._text_content(json.dumps(result, indent=2))]
 
     # --------------------------------------------------------------------- #
     # stdio transport
     # --------------------------------------------------------------------- #
     def _read_message(self) -> dict | None:
-        headers: dict[str, str] = {}
+        # Auto-detect framing: NDJSON (one JSON object per line, MCP 2025-11-25)
+        # or LSP-style Content-Length headers (older MCP / TypeScript SDK).
         while True:
             line = self.stdin.readline()
             if not line:
                 return None
-            if line in (b"\r\n", b"\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.lower().startswith(b"content-length:"):
+                return self._read_content_length_message(stripped)
+            self._framing = self._framing or "ndjson"
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError as e:
+                # Return parse error for malformed JSON
+                return self._error({"id": None}, -32700, f"JSON parse error: {e}")
+
+    def _read_content_length_message(self, first_line: bytes) -> dict | None:
+        headers: dict[str, str] = {}
+        # first_line already stripped, e.g. b"Content-Length: 123"
+        if b":" in first_line:
+            key, value = first_line.split(b":", 1)
+            headers[key.strip().lower().decode()] = value.strip().decode()
+        while True:
+            header_line = self.stdin.readline()
+            if not header_line:
+                return None
+            if header_line in (b"\r\n", b"\n"):
                 break
-            # Strip trailing CRLF/LF
-            if line.endswith(b"\r\n"):
-                line = line[:-2]
-            elif line.endswith(b"\n"):
-                line = line[:-1]
-            if b":" in line:
-                key, value = line.split(b":", 1)
-                headers[key.strip().lower().decode()] = value.strip().decode()
-        length = int(headers.get("content-length", "0"))
+            h = header_line.strip()
+            if b":" in h:
+                k, v = h.split(b":", 1)
+                headers[k.strip().lower().decode()] = v.strip().decode()
+
+        # Validate and parse Content-Length
+        content_length_str = headers.get("content-length", "0")
+        try:
+            length = int(content_length_str)
+        except ValueError:
+            # Invalid Content-Length header - return parse error
+            return self._error({"id": None}, -32700, "Invalid Content-Length header")
+
         if length <= 0:
-            return None
-        body = self.stdin.read(length)
-        return json.loads(body)
+            return self._error({"id": None}, -32700, "Content-Length must be positive")
+
+        if length > self.MAX_MESSAGE_SIZE:
+            return self._error(
+                {"id": None},
+                -32700,
+                f"Message size {length} exceeds maximum {self.MAX_MESSAGE_SIZE}",
+            )
+
+        body = self._read_exactly(length)
+        self._framing = self._framing or "content-length"
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError as e:
+            return self._error({"id": None}, -32700, f"JSON parse error: {e}")
+
+    def _read_exactly(self, n: int) -> bytes:
+        chunks: list[bytes] = []
+        remaining = n
+        while remaining > 0:
+            chunk = self.stdin.read(remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        return b"".join(chunks)
 
     def _write_message(self, message: dict) -> None:
         body = json.dumps(message).encode()
-        header = f"Content-Length: {len(body)}\r\n\r\n".encode()
-        self.stdout.write(header + body)
+        if self._framing == "ndjson":
+            self.stdout.write(body + b"\n")
+        else:
+            header = f"Content-Length: {len(body)}\r\n\r\n".encode()
+            self.stdout.write(header + body)
         self.stdout.flush()
 
     def run(self) -> None:
@@ -397,6 +1298,10 @@ class McpServer:
             request = self._read_message()
             if request is None:
                 break
+            # If _read_message returned an error response, write it directly
+            if "error" in request:
+                self._write_message(request)
+                continue
             response = self.handle(request)
             if response is not None:
                 self._write_message(response)

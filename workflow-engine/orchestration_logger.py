@@ -47,8 +47,8 @@ class OrchestrationLogger:
         log_level: LogLevel = LogLevel.INFO,
         enable_console: bool = True,
         enable_file: bool = True,
-        max_bytes: int = 10 * 1024 * 1024,  # 10 MB
-        backup_count: int = 5,
+        max_bytes: int | None = None,
+        backup_count: int | None = None,
     ):
         """
         Initialize orchestration logger
@@ -59,8 +59,8 @@ class OrchestrationLogger:
             log_level: Minimum log level to capture
             enable_console: Whether to output to console
             enable_file: Whether to output to file
-            max_bytes: Maximum size of log file before rotation
-            backup_count: Number of backup files to keep
+            max_bytes: Maximum size of log file before rotation (defaults to config or 10MB)
+            backup_count: Number of backup files to keep (defaults to config or 5)
         """
         self.name = name
         self.logger = logging.getLogger(name)
@@ -75,6 +75,22 @@ class OrchestrationLogger:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
+        # Load log rotation settings from config if not provided
+        if max_bytes is None or backup_count is None:
+            try:
+                from config_loader import ConfigLoader
+                config = ConfigLoader.load()
+                if max_bytes is None:
+                    max_bytes = config.log_max_bytes
+                if backup_count is None:
+                    backup_count = config.log_backup_count
+            except Exception:
+                # If config loading fails, use sensible defaults
+                if max_bytes is None:
+                    max_bytes = 10 * 1024 * 1024  # 10 MB
+                if backup_count is None:
+                    backup_count = 5
+
         # Create formatter
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -83,7 +99,7 @@ class OrchestrationLogger:
 
         # Console handler
         if enable_console:
-            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler = logging.StreamHandler(sys.stderr)
             console_handler.setLevel(log_level.value)
             console_handler.setFormatter(formatter)
             self.logger.addHandler(console_handler)
@@ -141,6 +157,42 @@ class OrchestrationLogger:
             self.logger.error(json.dumps(log_data))
         elif level == LogLevel.CRITICAL:
             self.logger.critical(json.dumps(log_data))
+
+    def _sanitize_context(self, context: dict[str, Any]) -> dict[str, Any]:
+        """
+        Sanitize context dictionary to remove sensitive data before logging.
+
+        Args:
+            context: Context dictionary to sanitize
+
+        Returns:
+            Sanitized context dictionary with sensitive fields redacted
+        """
+        if not isinstance(context, dict):
+            return {}
+
+        sensitive_keys = {
+            "password", "token", "api_key", "secret", "credential",
+            "auth", "key", "private_key", "access_token", "refresh_token"
+        }
+
+        sanitized = {}
+        for key, value in context.items():
+            # Check if key contains sensitive keywords
+            key_lower = key.lower()
+            if any(sensitive in key_lower for sensitive in sensitive_keys):
+                sanitized[key] = "[REDACTED]"
+            elif isinstance(value, dict):
+                sanitized[key] = self._sanitize_context(value)
+            elif isinstance(value, (list, tuple)):
+                sanitized[key] = [
+                    self._sanitize_context(item) if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                sanitized[key] = value
+
+        return sanitized
 
     def log_workflow_start(
         self, session_id: str, manifest_name: str, request_content: str, **kwargs
@@ -230,13 +282,15 @@ class OrchestrationLogger:
         self, session_id: str, skill_name: str, context: dict[str, Any], **kwargs
     ) -> None:
         """Log skill invocation start"""
+        # Sanitize context to avoid logging sensitive data
+        sanitized_context = self._sanitize_context(context)
         self._log_structured(
             LogLevel.INFO,
             "skill_invocation_start",
             f"Invoking skill: {skill_name}",
             session_id=session_id,
             skill_name=skill_name,
-            context=context,
+            context=sanitized_context,
             **kwargs,
         )
 
@@ -416,11 +470,14 @@ def get_logger(
     log_level: LogLevel = LogLevel.INFO,
     enable_console: bool = True,
     enable_file: bool = True,
-    max_bytes: int = 10 * 1024 * 1024,
-    backup_count: int = 5,
+    max_bytes: int | None = None,
+    backup_count: int | None = None,
 ) -> OrchestrationLogger:
     """
-    Get or create global logger instance
+    Get or create global logger instance.
+
+    For new code, consider instantiating OrchestrationLogger() explicitly
+    to avoid global state dependencies.
 
     Args:
         name: Logger name
@@ -428,8 +485,8 @@ def get_logger(
         log_level: Minimum log level to capture
         enable_console: Whether to output to console
         enable_file: Whether to output to file
-        max_bytes: Maximum size of log file before rotation
-        backup_count: Number of backup files to keep
+        max_bytes: Maximum size of log file before rotation (defaults to config or 10MB)
+        backup_count: Number of backup files to keep (defaults to config or 5)
 
     Returns:
         OrchestrationLogger instance

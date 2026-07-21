@@ -15,6 +15,17 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+class WorkflowManifestError(Exception):
+    """Raised when a workflow manifest cannot be parsed (e.g. malformed YAML).
+
+    A dedicated, catchable exception type so callers (orchestration_engine,
+    stateless_orchestrator) can surface a user-friendly error instead of
+    letting the raw ``yaml.YAMLError`` propagate and crash the server.
+    """
+
+    pass
+
+
 def session_init(session_id: str, work_dir: Path, request_content: str = "") -> Path:
     """
     Scaffold session directory and initial artifacts
@@ -204,11 +215,20 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
 
     Returns:
         Parsed manifest as dictionary
+
+    Raises:
+        WorkflowManifestError: If the manifest YAML is malformed
+        FileNotFoundError: If the manifest file does not exist
     """
     import yaml
 
-    with open(manifest_path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        raise WorkflowManifestError(
+            f"Invalid YAML in manifest {manifest_path}: {e}"
+        ) from e
 
 
 def load_skill(skill_dir: Path, skill_name: str) -> dict[str, Any]:
@@ -243,8 +263,10 @@ def load_skill(skill_dir: Path, skill_name: str) -> dict[str, Any]:
     if md_path:
         content = md_path.read_text(encoding="utf-8")
 
-        # Check for YAML frontmatter
-        frontmatter_match = re.match(r"^---\n(.*?)\n---\n(.*)$", content, re.DOTALL)
+        # Check for YAML frontmatter. Tolerate both \n and \r\n line endings so
+        # CRLF-formatted skill files (e.g. on Windows) parse correctly. This
+        # mirrors the pattern used in devin_cli_adapter._parse_frontmatter.
+        frontmatter_match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
 
         if frontmatter_match:
             # Single file format with frontmatter

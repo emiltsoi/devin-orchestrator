@@ -1229,7 +1229,10 @@ _global_monitoring_system: MonitoringSystem | None = None
 
 def get_monitoring_system(config: MonitoringConfig | None = None) -> MonitoringSystem:
     """
-    Get or create global monitoring system instance
+    Get or create global monitoring system instance.
+
+    For new code, consider instantiating MonitoringSystem(config) explicitly
+    to avoid global state dependencies and enable multi-tenant scenarios.
 
     Args:
         config: Optional monitoring configuration

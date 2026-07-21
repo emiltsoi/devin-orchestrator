@@ -8,6 +8,9 @@ Skills are loaded from workflow-engine/skills/ and injected into prompts
 when their description matches prompt content.
 """
 
+import contextlib
+import logging
+import os
 import re
 import subprocess
 import tempfile
@@ -15,7 +18,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from security_utils import InvalidInputError, PathTraversalError, validate_path_safe
 from transport_adapter import InvocationResult, TransportAdapter
+
+logger = logging.getLogger(__name__)
 
 # Allowlist of valid devin-cli permission modes. The CLI only accepts these
 # values; any other string must be rejected before being passed to a subprocess
@@ -148,8 +154,11 @@ class DevinCliAdapter(TransportAdapter):
                             "content": content,
                             "triggers": [],
                         }
-                except Exception:
-                    # Skip skills that fail to load
+                except Exception as e:
+                    # Log warning and skip skills that fail to load
+                    logger.warning(
+                        "Failed to load legacy skill from %s: %s", skill_dir, e
+                    )
                     continue
                 # Legacy layout is mutually exclusive with v1 for the same dir;
                 # continue to the next directory.
@@ -175,8 +184,11 @@ class DevinCliAdapter(TransportAdapter):
                         )
                         if isinstance(loaded, dict):
                             sidecar = loaded
-                    except Exception:
+                    except Exception as e:
                         # A malformed sidecar should not break skill loading.
+                        logger.warning(
+                            "Failed to load sidecar YAML from %s: %s", yaml_candidate, e
+                        )
                         sidecar = {}
 
                 name = (
@@ -212,8 +224,11 @@ class DevinCliAdapter(TransportAdapter):
                     "content": md_content,
                     "triggers": triggers,
                 }
-            except Exception:
-                # Skip skills that fail to load
+            except Exception as e:
+                # Log warning and skip skills that fail to load
+                logger.warning(
+                    "Failed to load v1 skill from %s: %s", skill_dir, e
+                )
                 continue
 
         return skills
@@ -235,7 +250,8 @@ class DevinCliAdapter(TransportAdapter):
             return {}
         try:
             loaded = yaml.safe_load(match.group(1))
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to parse frontmatter: %s", e)
             return {}
         return loaded if isinstance(loaded, dict) else {}
 
@@ -327,7 +343,19 @@ class DevinCliAdapter(TransportAdapter):
         # Add correction artifact if provided
         # Note: Devin CLI doesn't support --correction, so we inject into prompt instead
         if correction_artifact:
-            prompt += f"\n\n## Correction Artifact\n- {correction_artifact}\n"
+            # Validate correction_artifact path is safe
+            try:
+                validated_artifact = validate_path_safe(
+                    Path(self.workspace), Path(correction_artifact), allow_absolute=True
+                )
+                prompt += f"\n\n## Correction Artifact\n- {validated_artifact}\n"
+            except (InvalidInputError, PathTraversalError) as e:
+                return InvocationResult(
+                    success=False,
+                    output="",
+                    error=f"Invalid correction_artifact path: {e}",
+                    exit_code=-1,
+                )
 
         # Build command. The prompt is written to a temporary .md file inside
         # the workspace and passed via --prompt-file to avoid platform command
@@ -341,16 +369,28 @@ class DevinCliAdapter(TransportAdapter):
 
         prompt_file: Path | None = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
+            # Use mkstemp for atomic temporary file creation to avoid race conditions
+            fd, temp_path = tempfile.mkstemp(
                 suffix=".md",
                 prefix="devin_prompt_",
                 dir=self.workspace,
-                delete=False,
-                encoding="utf-8",
-            ) as f:
-                f.write(prompt)
-                prompt_file = Path(f.name)
+                text=True,
+            )
+            try:
+                # Set restrictive permissions (0o600 on Unix, owner-only on Windows)
+                # On Windows, we use the most restrictive permissions available
+                if hasattr(os, 'chmod'):
+                    with contextlib.suppress(OSError, AttributeError):
+                        os.chmod(fd, 0o600)
+
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    f.write(prompt)
+                prompt_file = Path(temp_path)
+            except OSError:
+                # If writing fails, clean up the file descriptor
+                with contextlib.suppress(OSError):
+                    os.close(fd)
+                raise
 
             cmd.extend(["--prompt-file", str(prompt_file), "--print"])
 
@@ -397,13 +437,14 @@ class DevinCliAdapter(TransportAdapter):
                     exit_code=-1,
                 )
         finally:
-            # Clean up the temporary prompt file; best-effort.
+            # Clean up the temporary prompt file; best-effort with proper error handling
             if prompt_file is not None:
                 try:
                     if prompt_file.exists():
                         prompt_file.unlink()
                 except OSError:
-                    pass
+                    # Log warning but don't fail the operation if cleanup fails
+                    logger.warning(f"Failed to clean up temporary file {prompt_file}")
 
     def __enter__(self):
         """Context manager entry (no-op for simple adapter)"""

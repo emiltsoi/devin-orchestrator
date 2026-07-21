@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from security_utils import InvalidInputError
 
 # Allowlist of valid devin-cli permission modes. Must match the allowlist
 # enforced by DevinCliAdapter. Invalid configured values fall back to
@@ -42,10 +43,19 @@ class GlobalConfig:
     model_overrides: dict[str, str] | None = None
     # Optional agent skill injection: maps agent name -> list of skill names.
     agent_skills: dict[str, list[str]] | None = None
+    dispatch_timeout_seconds: int = 300
+    # Log rotation settings
+    log_max_bytes: int = 10 * 1024 * 1024  # 10 MB
+    log_backup_count: int = 5
 
 
 class ConfigLoader:
-    """Loads global configuration from config file and environment variables"""
+    """
+    Loads global configuration from config file and environment variables.
+
+    For new code, consider passing configuration explicitly rather than
+    relying on global state via ConfigLoader.load().
+    """
 
     DEFAULT_CONFIG_PATH = Path.home() / ".devin-orchestrator" / "config.yaml"
     FALLBACK_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
@@ -61,6 +71,9 @@ class ConfigLoader:
 
         Returns:
             String with environment variables expanded
+
+        Raises:
+            InvalidInputError: If expanded value contains invalid characters
         """
         if not isinstance(value, str):
             return value
@@ -71,7 +84,23 @@ class ConfigLoader:
         def replace_env_var(match):
             var_name = match.group(1)
             default_value = match.group(2) if match.group(2) is not None else ""
-            return os.environ.get(var_name, default_value)
+            expanded = os.environ.get(var_name, default_value)
+
+            # Validate expanded value
+            if not isinstance(expanded, str):
+                expanded = str(expanded)
+
+            # Reject empty/whitespace-only results for required fields
+            if expanded.strip() == "":
+                logger.warning(
+                    f"Environment variable {var_name} expanded to empty/whitespace-only string"
+                )
+                return ""
+
+            # Remove control characters (except tab and newline which are sometimes legitimate)
+            expanded = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]", "", expanded)
+
+            return expanded
 
         return re.sub(pattern, replace_env_var, value)
 
@@ -132,43 +161,116 @@ class ConfigLoader:
                 path = Path.home() / path
             return path
 
-        # Build configuration with environment variable overrides
-        global_root = expand_path(
-            os.getenv(
-                "DEVIN_ORCHESTRATOR_ROOT",
-                config_data.get("global_root", "~/.devin-orchestrator"),
-            )
-        )
-        skills_dir = expand_path(
-            os.getenv(
-                "DEVIN_ORCHESTRATOR_SKILLS_DIR",
-                config_data.get("skills_dir", "~/.devin-orchestrator/skills"),
-            )
-        )
-        workflows_dir = expand_path(
-            os.getenv(
-                "DEVIN_ORCHESTRATOR_WORKFLOWS_DIR",
-                config_data.get("workflows_dir", "~/.devin-orchestrator/workflows"),
-            )
-        )
-        workflow_engine_dir = expand_path(
-            os.getenv(
-                "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR",
-                config_data.get(
-                    "workflow_engine_dir", "~/.devin-orchestrator/workflow-engine"
-                ),
-            )
-        )
-        devin_cli_path = str(
-            expand_path(
-                os.getenv(
-                    "DEVIN_CLI_PATH",
-                    config_data.get(
-                        "devin_cli_path", "~/AppData/Local/devin/cli/bin/devin.exe"
-                    ),
+        # Validate that expanded paths don't escape intended boundaries
+        def validate_expanded_path(path: Path, context: str) -> Path:
+            """
+            Validate that an expanded path doesn't escape safe boundaries.
+
+            For path-context fields, ensure the result stays within reasonable
+            directories (home directory or current directory tree).
+            """
+            try:
+                # Allow paths under home directory or current directory
+                home_dir = Path.home()
+                current_dir = Path.cwd()
+
+                # Resolve to absolute path
+                resolved = path.resolve()
+
+                # Check if path is under home or current directory
+                try:
+                    resolved.relative_to(home_dir)
+                    return resolved  # Safe: under home directory
+                except ValueError:
+                    pass
+
+                try:
+                    resolved.relative_to(current_dir)
+                    return resolved  # Safe: under current directory
+                except ValueError:
+                    pass
+
+                # If neither, raise an error - unsafe path
+                raise InvalidInputError(
+                    f"Path {context}={resolved} is not under home or current directory; "
+                    "this is unsafe and not allowed"
                 )
+
+            except (OSError, RuntimeError) as e:
+                raise InvalidInputError(f"Path validation failed for {context}={path}: {e}") from e
+
+        # Build configuration with environment variable overrides
+        try:
+            global_root = validate_expanded_path(
+                expand_path(
+                    os.getenv(
+                        "DEVIN_ORCHESTRATOR_ROOT",
+                        config_data.get("global_root", "~/.devin-orchestrator"),
+                    )
+                ),
+                "global_root"
+            )
+        except InvalidInputError as e:
+            raise InvalidInputError(f"Invalid global_root configuration: {e}") from e
+
+        try:
+            skills_dir = validate_expanded_path(
+                expand_path(
+                    os.getenv(
+                        "DEVIN_ORCHESTRATOR_SKILLS_DIR",
+                        config_data.get("skills_dir", "~/.devin-orchestrator/skills"),
+                    )
+                ),
+                "skills_dir"
+            )
+        except InvalidInputError as e:
+            raise InvalidInputError(f"Invalid skills_dir configuration: {e}") from e
+
+        try:
+            workflows_dir = validate_expanded_path(
+                expand_path(
+                    os.getenv(
+                        "DEVIN_ORCHESTRATOR_WORKFLOWS_DIR",
+                        config_data.get("workflows_dir", "~/.devin-orchestrator/workflows"),
+                    )
+                ),
+                "workflows_dir"
+            )
+        except InvalidInputError as e:
+            raise InvalidInputError(f"Invalid workflows_dir configuration: {e}") from e
+
+        try:
+            workflow_engine_dir = validate_expanded_path(
+                expand_path(
+                    os.getenv(
+                        "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR",
+                        config_data.get(
+                            "workflow_engine_dir", "~/.devin-orchestrator/workflow-engine"
+                        ),
+                    )
+                ),
+                "workflow_engine_dir"
+            )
+        except InvalidInputError as e:
+            raise InvalidInputError(f"Invalid workflow_engine_dir configuration: {e}") from e
+
+        try:
+            devin_cli_path = str(
+                validate_expanded_path(
+                    expand_path(
+                        os.getenv(
+                            "DEVIN_CLI_PATH",
+                            config_data.get(
+                                "devin_cli_path", "~/AppData/Local/devin/cli/bin/devin.exe"
+                        ),
+                    )
+                ),
+                "devin_cli_path"
             )
         )
+        except InvalidInputError as e:
+            raise InvalidInputError(f"Invalid devin_cli_path configuration: {e}") from e
+
         default_model = os.getenv(
             "DEVIN_DEFAULT_MODEL", config_data.get("default_model", "swe-1.6")
         )
@@ -191,12 +293,34 @@ class ConfigLoader:
                 sorted(ALLOWED_PERMISSION_MODES),
             )
             default_permission_mode = "dangerous"
-        session_work_dir = expand_path(
-            os.getenv(
-                "DEVIN_SESSION_WORK_DIR",
-                config_data.get("session_work_dir", "~/.devin-orchestrator/work"),
+
+        try:
+            session_work_dir = validate_expanded_path(
+                expand_path(
+                    os.getenv(
+                        "DEVIN_SESSION_WORK_DIR",
+                        config_data.get("session_work_dir", "~/.devin-orchestrator/work"),
+                    )
+                ),
+                "session_work_dir"
             )
+        except InvalidInputError as e:
+            raise InvalidInputError(f"Invalid session_work_dir configuration: {e}") from e
+
+        # Dispatch timeout for devin-cli calls; prevents hung agents from blocking
+        # the orchestrator indefinitely.
+        raw_timeout = os.getenv(
+            "DEVIN_DISPATCH_TIMEOUT_SECONDS",
+            config_data.get("dispatch_timeout_seconds", 300),
         )
+        try:
+            dispatch_timeout_seconds = int(raw_timeout)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid dispatch_timeout_seconds %r; falling back to 300",
+                raw_timeout,
+            )
+            dispatch_timeout_seconds = 300
 
         # Fallback to current directory for testing (if global paths don't exist)
         if not skills_dir.exists():
@@ -250,6 +374,27 @@ class ConfigLoader:
             else {}
         )
 
+        # Log rotation settings with sensible defaults
+        raw_log_max_bytes = config_data.get("log_max_bytes", 10 * 1024 * 1024)
+        try:
+            log_max_bytes = int(raw_log_max_bytes)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid log_max_bytes %r; falling back to 10MB",
+                raw_log_max_bytes,
+            )
+            log_max_bytes = 10 * 1024 * 1024
+
+        raw_log_backup_count = config_data.get("log_backup_count", 5)
+        try:
+            log_backup_count = int(raw_log_backup_count)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid log_backup_count %r; falling back to 5",
+                raw_log_backup_count,
+            )
+            log_backup_count = 5
+
         return GlobalConfig(
             global_root=global_root,
             skills_dir=skills_dir,
@@ -263,6 +408,9 @@ class ConfigLoader:
             models=models,
             model_overrides=model_overrides,
             agent_skills=agent_skills,
+            dispatch_timeout_seconds=dispatch_timeout_seconds,
+            log_max_bytes=log_max_bytes,
+            log_backup_count=log_backup_count,
         )
 
 

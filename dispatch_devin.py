@@ -206,9 +206,11 @@ def main() -> int:
         Path(args.output_file).write_text(result.output, encoding="utf-8")
 
     if result.output:
-        print(result.output)
+        sys.stdout.buffer.write((result.output + "\n").encode("utf-8"))
+        sys.stdout.buffer.flush()
     if result.error:
-        print(result.error, file=sys.stderr)
+        sys.stderr.buffer.write((result.error + "\n").encode("utf-8"))
+        sys.stderr.buffer.flush()
 
     return result.exit_code if result.exit_code is not None else (0 if result.success else 1)
 

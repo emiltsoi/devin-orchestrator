@@ -9,12 +9,26 @@ The wrapper is necessary because Cascade cannot import Python modules directly, 
 the bash tool to execute scripts.
 """
 
+# ruff: noqa: E402
 import json
 import sys
 from pathlib import Path
 
-# Add global orchestrator to Python path
-sys.path.insert(0, str(Path.home() / ".devin-orchestrator" / "workflow-engine"))
+# Add workflow-engine to Python path using script location
+# This works regardless of installation location
+script_dir = Path(__file__).parent
+workflow_engine_dir = script_dir / "workflow-engine"
+if workflow_engine_dir.exists():
+    sys.path.insert(0, str(workflow_engine_dir))
+else:
+    # Fallback to relative import if script is in workflow-engine directory
+    if script_dir.name == "workflow-engine":
+        sys.path.insert(0, str(script_dir))
+    else:
+        # Last resort: try the global installation path
+        global_path = Path.home() / ".devin-orchestrator" / "workflow-engine"
+        if global_path.exists():
+            sys.path.insert(0, str(global_path))
 
 from config_loader import ConfigLoader
 from security_utils import (
@@ -48,9 +62,13 @@ def main():
     try:
         skill_name = validate_skill_name(skill_name)
         session_id = validate_session_id(session_id)
+        # Validate against global_root to match the MCP server's containment
+        # check. session_work_dir is a subdirectory of global_root, so this
+        # accepts any workspace the MCP server would accept (including those
+        # under global_root but outside session_work_dir).
         workspace = str(
             validate_workspace_path(
-                workspace, base_allowed_dir=config.session_work_dir
+                workspace, base_allowed_dir=config.global_root
             )
         )
     except InvalidInputError as e:

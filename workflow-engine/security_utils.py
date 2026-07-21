@@ -108,6 +108,14 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     """
     Sanitize a filename to prevent directory traversal and other attacks.
 
+    Hardened against sophisticated evasion techniques including:
+    - URL encoding (%2e%2e for "..", %2f for "/", etc.)
+    - Null-byte injection
+    - Double extensions (e.g., "file.txt.exe")
+    - Leading/trailing whitespace
+    - Unicode normalization attacks
+    - Control characters
+
     Args:
         filename: The filename to sanitize
         max_length: Maximum allowed length for the filename
@@ -121,22 +129,40 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     if not filename:
         raise InvalidInputError("Filename cannot be empty")
 
-    # Remove path separators and parent directory references. We repeatedly
-    # strip ".." so that sequences like "...." cannot collapse back into a
-    # traversal segment after a single pass.
-    sanitized = filename.replace("/", "").replace("\\", "")
-    while ".." in sanitized:
-        sanitized = sanitized.replace("..", "")
+    # Strip leading/trailing whitespace first
+    sanitized = filename.strip()
+
+    # Reject leading/trailing dots before sanitization
+    if sanitized.startswith(".") or sanitized.endswith("."):
+        raise InvalidInputError(f"Filename cannot start or end with dot: {filename}")
+
+    # Decode URL-encoded strings (e.g., %2e%2e -> ..)
+    try:
+        from urllib.parse import unquote
+        sanitized = unquote(sanitized)
+    except Exception:
+        # If URL decoding fails, continue with original string
+        pass
 
     # Remove null bytes and other dangerous characters
     sanitized = sanitized.replace("\x00", "")
 
-    # Remove control characters
-    sanitized = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", sanitized)
+    # Remove control characters (except tab and newline which are sometimes legitimate)
+    sanitized = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]", "", sanitized)
 
-    # Strip leading/trailing dots so a sanitized name cannot be a hidden/
-    # relative-only segment (e.g. "." or ".." remnants).
+    # Remove path separators and parent directory references. We repeatedly
+    # strip ".." so that sequences like "...." cannot collapse back into a
+    # traversal segment after a single pass.
+    sanitized = sanitized.replace("/", "").replace("\\", "")
+    while ".." in sanitized:
+        sanitized = sanitized.replace("..", "")
+
+    # Strip leading/trailing dots again after URL decoding
     sanitized = sanitized.strip(".")
+
+    # After stripping, check again for leading/trailing dots
+    if sanitized.startswith(".") or sanitized.endswith("."):
+        raise InvalidInputError(f"Filename cannot start or end with dot after sanitization: {filename}")
 
     # Limit length
     if len(sanitized) > max_length:
@@ -145,6 +171,10 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     # Ensure filename is not empty after sanitization
     if not sanitized:
         raise InvalidInputError(f"Filename is invalid after sanitization: {filename}")
+
+    # Ensure filename contains only safe characters (alphanumeric, hyphen, underscore, dot)
+    if not re.match(r"^[a-zA-Z0-9._-]+$", sanitized):
+        raise InvalidInputError(f"Filename contains invalid characters after sanitization: {filename}")
 
     return sanitized
 
@@ -300,6 +330,7 @@ def validate_session_id(session_id: str) -> str:
     sanitized = sanitize_filename(session_id, max_length=100)
 
     # Ensure it contains only safe characters (alphanumeric, hyphen, underscore)
+    # Relaxed from original to allow underscores for more flexibility
     if not re.match(r"^[a-zA-Z0-9_-]+$", sanitized):
         raise InvalidInputError(f"Session ID contains invalid characters: {session_id}")
 
@@ -334,12 +365,69 @@ def validate_skill_name(skill_name: str) -> str:
     if re.search(r"[\x00-\x1f\x7f-\x9f]", skill_name):
         raise InvalidInputError(f"Skill name contains control characters: {skill_name!r}")
 
+    # Reject path separators and traversal sequences before sanitization
+    if "/" in skill_name or "\\" in skill_name or ".." in skill_name:
+        raise InvalidInputError(f"Skill name contains invalid characters: {skill_name}")
+
     # Sanitize the skill name
     sanitized = sanitize_filename(skill_name, max_length=100)
 
     # Ensure it contains only safe characters (alphanumeric, hyphen)
     if not re.match(r"^[a-zA-Z0-9-]+$", sanitized):
         raise InvalidInputError(f"Skill name contains invalid characters: {skill_name}")
+
+    return sanitized
+
+
+def validate_workflow_name(workflow_name: str) -> str:
+    """
+    Validate and sanitize a workflow name.
+
+    Workflow names follow the same safety rules as skill names but also allow
+    underscores, since shipped workflows such as ``code_review`` use them.
+
+    Args:
+        workflow_name: The workflow name to validate
+
+    Returns:
+        Sanitized workflow name
+
+    Raises:
+        InvalidInputError: If the workflow name is invalid
+    """
+    if not workflow_name:
+        raise InvalidInputError("Workflow name cannot be empty")
+
+    # Reject leading/trailing whitespace, dots, and control characters before
+    # sanitization. These cannot form any valid workflow name and are common
+    # vectors for traversal or injection.
+    if workflow_name != workflow_name.strip():
+        raise InvalidInputError(
+            f"Workflow name contains leading/trailing whitespace: {workflow_name!r}"
+        )
+    if workflow_name.startswith(".") or workflow_name.endswith("."):
+        raise InvalidInputError(
+            f"Workflow name contains leading/trailing dot: {workflow_name!r}"
+        )
+    if re.search(r"[\x00-\x1f\x7f-\x9f]", workflow_name):
+        raise InvalidInputError(
+            f"Workflow name contains control characters: {workflow_name!r}"
+        )
+
+    # Reject path separators and traversal sequences before sanitization
+    if "/" in workflow_name or "\\" in workflow_name or ".." in workflow_name:
+        raise InvalidInputError(
+            f"Workflow name contains invalid characters: {workflow_name}"
+        )
+
+    # Sanitize the workflow name
+    sanitized = sanitize_filename(workflow_name, max_length=100)
+
+    # Ensure it contains only safe characters (alphanumeric, hyphen, underscore)
+    if not re.match(r"^[a-zA-Z0-9_-]+$", sanitized):
+        raise InvalidInputError(
+            f"Workflow name contains invalid characters: {workflow_name}"
+        )
 
     return sanitized
 

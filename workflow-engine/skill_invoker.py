@@ -2,12 +2,17 @@
 Skill Invoker - Invokes skills using transport adapters
 """
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from devin_cli_adapter import DevinCliAdapter
 from metrics import get_metrics_collector
+from security_utils import InvalidInputError, validate_skill_name
+
+if TYPE_CHECKING:
+    from metrics import MetricsCollector
 
 
 @dataclass
@@ -39,6 +44,7 @@ class SkillInvoker:
         model: str | None = None,
         permission_mode: str = "dangerous",
         demo_mode: bool = False,
+        metrics: "MetricsCollector | None" = None,
     ):
         """
         Initialize skill invoker
@@ -49,6 +55,7 @@ class SkillInvoker:
             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
             permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
             demo_mode: If True, skip real Devin dispatches and simulate (for testing)
+            metrics: Optional metrics collector (defaults to global instance)
         """
         from config_loader import ConfigLoader
 
@@ -68,7 +75,77 @@ class SkillInvoker:
             else config.default_permission_mode
         )
         self.demo_mode = demo_mode
-        self.metrics = get_metrics_collector()
+        self.dispatch_timeout_seconds = getattr(
+            config, "dispatch_timeout_seconds", 300
+        )
+        # Use provided metrics or fall back to global instance for backward compatibility
+        self.metrics = metrics if metrics is not None else get_metrics_collector()
+
+    def _parse_config_overrides(self, config_overrides: Any) -> dict:
+        """
+        Parse and validate config_overrides parameter.
+
+        Args:
+            config_overrides: Config overrides (can be dict, JSON string, or other types)
+
+        Returns:
+            Validated config overrides dictionary
+
+        Raises:
+            InvalidInputError: If config_overrides is invalid or malformed JSON
+        """
+        if config_overrides is None:
+            return {}
+
+        # If it's already a dict, validate and return it
+        if isinstance(config_overrides, dict):
+            return self._validate_config_overrides_dict(config_overrides)
+
+        # If it's a string, try to parse as JSON
+        if isinstance(config_overrides, str):
+            try:
+                parsed = json.loads(config_overrides)
+                if not isinstance(parsed, dict):
+                    raise InvalidInputError(
+                        "config_overrides JSON must parse to an object/dictionary"
+                    )
+                return self._validate_config_overrides_dict(parsed)
+            except json.JSONDecodeError as e:
+                raise InvalidInputError(
+                    f"config_overrides contains malformed JSON: {e}"
+                ) from e
+
+        # Any other type is invalid
+        raise InvalidInputError(
+            f"config_overrides must be a dictionary or JSON string, got {type(config_overrides).__name__}"
+        )
+
+    def _validate_config_overrides_dict(self, config_overrides: dict) -> dict:
+        """
+        Validate that config_overrides dictionary contains only safe values.
+
+        Args:
+            config_overrides: Dictionary to validate
+
+        Returns:
+            Validated dictionary
+
+        Raises:
+            InvalidInputError: If dictionary contains invalid keys or values
+        """
+        # Validate config_overrides keys are strings and values are basic types
+        valid_types = (str, int, float, bool, type(None))
+        for key, value in config_overrides.items():
+            if not isinstance(key, str):
+                raise InvalidInputError(
+                    f"config_overrides key must be string, got {type(key).__name__}"
+                )
+            if not isinstance(value, valid_types):
+                raise InvalidInputError(
+                    f"config_overrides value for key '{key}' must be basic type (str, int, float, bool, None), got {type(value).__name__}"
+                )
+
+        return config_overrides
 
     def invoke_skill(
         self,
@@ -80,6 +157,7 @@ class SkillInvoker:
         correction_artifact: str | None = None,
         is_reviewer: bool = False,
         config_overrides: dict[str, Any] | None = None,
+        timeout: int | None = None,
     ) -> SkillInvocationResult:
         """
         Invoke a skill using the devin-cli transport adapter
@@ -92,10 +170,27 @@ class SkillInvoker:
             focused_context: Optional list of artifact paths to inject into worker dispatch
             correction_artifact: Optional path to correction artifact for retry loops
             is_reviewer: Whether this is a reviewer dispatch (triggers swe-compliance skill)
+            timeout: Optional per-call timeout in seconds (defaults to configured value)
 
         Returns:
             SkillInvocationResult with success status and output
         """
+        # Validate the skill name before it is interpolated into any filesystem
+        # path. This is the single choke point for the run_skill chain
+        # (MCP _tool_run_skill -> StatelessOrchestrator.run_skill -> here ->
+        # deterministic_tools.load_skill) and prevents path traversal via names
+        # like "../../etc/passwd".
+        try:
+            validated_skill_name = validate_skill_name(skill_name)
+        except InvalidInputError as e:
+            return SkillInvocationResult(
+                success=False,
+                session_id=None,
+                output=None,
+                error=f"Invalid skill name: {e}",
+            )
+
+        effective_timeout = timeout or self.dispatch_timeout_seconds
         if not self.devin_cli_path:
             return SkillInvocationResult(
                 success=False,
@@ -108,7 +203,7 @@ class SkillInvoker:
         from deterministic_tools import load_skill
 
         try:
-            skill_data = load_skill(self.skills_dir, skill_name)
+            skill_data = load_skill(self.skills_dir, validated_skill_name)
         except FileNotFoundError as e:
             error_msg = str(e)
             if "markdown not found" in error_msg:
@@ -136,11 +231,21 @@ class SkillInvoker:
         skill_def = skill_data["definition"]
         skill_narrative = skill_data["narrative"]
 
-        # Apply config overrides to skill definition
+        # Apply config overrides to skill definition with validation
         if config_overrides:
+            try:
+                overrides = self._parse_config_overrides(config_overrides)
+            except InvalidInputError as e:
+                return SkillInvocationResult(
+                    success=False,
+                    session_id=None,
+                    output=None,
+                    error=f"Invalid config_overrides: {str(e)}",
+                )
+
             if "configuration" not in skill_def:
                 skill_def["configuration"] = {}
-            skill_def["configuration"].update(config_overrides)
+            skill_def["configuration"].update(overrides)
 
         # Use custom prompt if provided (for retry), otherwise build standard prompt
         if custom_prompt:
@@ -176,11 +281,11 @@ class SkillInvoker:
             )
             result = adapter.invoke(
                 prompt,
-                timeout=300,
+                timeout=effective_timeout,
                 focused_context=focused_context,
                 correction_artifact=correction_artifact,
                 enable_skills=False,
-            )  # 5 minute timeout for skills
+            )
 
             return SkillInvocationResult(
                 success=result.success,
@@ -189,9 +294,17 @@ class SkillInvoker:
                 error=result.error,
             )
 
+        except (InvalidInputError, ValueError) as e:
+            return SkillInvocationResult(
+                success=False, session_id=None, output=None, error=f"Validation error: {str(e)}"
+            )
+        except OSError as e:
+            return SkillInvocationResult(
+                success=False, session_id=None, output=None, error=f"File system error: {str(e)}"
+            )
         except Exception as e:
             return SkillInvocationResult(
-                success=False, session_id=None, output=None, error=str(e)
+                success=False, session_id=None, output=None, error=f"Unexpected error: {str(e)}"
             )
 
     def build_skill_prompt(

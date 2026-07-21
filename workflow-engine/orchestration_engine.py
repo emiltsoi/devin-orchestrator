@@ -10,14 +10,20 @@ and manages state transitions.
 import json
 import logging
 import os
+import random
 import sys
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from metrics import MetricsCollector
+    from monitoring import MonitoringSystem
 
 from config_loader import ConfigLoader
 from deterministic_tools import (
+    WorkflowManifestError,
     create_placeholder_artifact,
     load_manifest,
     load_skill,
@@ -35,7 +41,7 @@ from security_utils import (
     validate_path_safe,
     validate_session_id,
 )
-from skill_invoker import SkillInvoker
+from skill_invoker import SkillInvocationResult, SkillInvoker
 
 # Configure logging
 logging.basicConfig(
@@ -55,20 +61,23 @@ class TriageDecision(Enum):
 class OrchestrationEngine:
     """Actual orchestration engine for workflow execution"""
 
-    def __init__(self, work_dir: Path, config: dict[str, Any] | None = None):
+    def __init__(self, work_dir: Path, config: dict[str, Any] | None = None, metrics: "MetricsCollector | None" = None, monitoring: "MonitoringSystem | None" = None):
         """
         Initialize orchestration engine
 
         Args:
             work_dir: Base work directory for sessions
             config: Optional configuration dictionary
+            metrics: Optional metrics collector (defaults to global instance)
+            monitoring: Optional monitoring system (defaults to global instance)
         """
         try:
             self.work_dir = work_dir
             self.config = config or {}
-            self.skill_invoker = SkillInvoker(demo_mode=config.get("demo_mode", False))
-            self.metrics = get_metrics_collector()
-            self.monitoring = get_monitoring_system()
+            self.skill_invoker = SkillInvoker(demo_mode=self.config.get("demo_mode", False))
+            # Use provided instances or fall back to global instances for backward compatibility
+            self.metrics = metrics if metrics is not None else get_metrics_collector()
+            self.monitoring = monitoring if monitoring is not None else get_monitoring_system()
             logger.info(f"OrchestrationEngine initialized with work_dir: {work_dir}")
         except Exception as e:
             logger.error(f"Error initializing OrchestrationEngine: {e}")
@@ -137,7 +146,7 @@ class OrchestrationEngine:
 
     def _validate_and_load_manifest(
         self, session_id: str, manifest_path: Path
-    ) -> tuple:
+    ) -> tuple[str, Path, dict[str, Any] | None, dict[str, Any] | None]:
         """
         Validate and sanitize inputs, then load the workflow manifest.
 
@@ -195,22 +204,32 @@ class OrchestrationEngine:
                 "error": f"Invalid JSON in manifest file: {e}",
                 "error_type": "JSONDecodeError",
             }
-        except Exception as e:
+        except WorkflowManifestError as e:
+            logger.error(f"Invalid YAML in manifest file {manifest_path}: {e}")
+            return None, None, None, {
+                "session_id": session_id,
+                "manifest": "unknown",
+                "stages": [],
+                "final_status": "failed",
+                "error": f"Invalid YAML in manifest file: {e}",
+                "error_type": "WorkflowManifestError",
+            }
+        except (OSError, RuntimeError) as e:
             logger.error(
-                f"Unexpected error loading manifest {manifest_path}: {e}"
+                f"System error loading manifest {manifest_path}: {e}"
             )
             return None, None, None, {
                 "session_id": session_id,
                 "manifest": "unknown",
                 "stages": [],
                 "final_status": "failed",
-                "error": f"Unexpected error loading manifest: {str(e)}",
+                "error": f"System error loading manifest: {str(e)}",
                 "error_type": type(e).__name__,
             }
 
     def _init_workflow_session(
         self, session_id: str, request_content: str, manifest: dict[str, Any]
-    ) -> tuple:
+    ) -> tuple[Path, dict[str, Any] | None]:
         """
         Initialize the session directory.
 
@@ -240,14 +259,14 @@ class OrchestrationEngine:
                 "error": f"OS error initializing session: {str(e)}",
                 "error_type": "OSError",
             }
-        except Exception as e:
-            logger.error(f"Unexpected error initializing session: {e}")
+        except (ValueError, InvalidInputError, PathTraversalError) as e:
+            logger.error(f"Input error initializing session: {e}")
             return None, {
                 "session_id": session_id,
                 "manifest": manifest.get("name", "unknown"),
                 "stages": [],
                 "final_status": "failed",
-                "error": f"Unexpected error initializing session: {str(e)}",
+                "error": f"Input error initializing session: {str(e)}",
                 "error_type": type(e).__name__,
             }
 
@@ -259,7 +278,16 @@ class OrchestrationEngine:
         config_overrides: dict[str, Any] | None,
         results: dict[str, Any],
     ) -> None:
-        """Execute all stages in the manifest, updating results in place."""
+        """
+        Execute all stages in the manifest, updating results in place.
+
+        Args:
+            manifest: Workflow manifest configuration
+            session_dir: Session directory
+            session_id: Session identifier
+            config_overrides: Optional configuration overrides for skills
+            results: Results dictionary to update in place
+        """
         for stage in manifest["stages"]:
             try:
                 stage_result = self._execute_stage(
@@ -270,9 +298,9 @@ class OrchestrationEngine:
                     config_overrides=config_overrides,
                 )
                 results["stages"].append(stage_result)
-            except Exception as e:
+            except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
                 logger.error(
-                    f"Unexpected error executing stage "
+                    f"Error executing stage "
                     f"{stage.get('name', 'unknown')}: {e}"
                 )
                 results["stages"].append(
@@ -281,10 +309,10 @@ class OrchestrationEngine:
                         "skill": stage.get("skill", "unknown"),
                         "success": False,
                         "output": None,
-                        "error": f"Unexpected error during stage execution: {str(e)}",
+                        "error": f"Error during stage execution: {str(e)}",
                         "validation": {
                             "valid": False,
-                            "errors": [f"Unexpected error: {str(e)}"],
+                            "errors": [f"Error: {str(e)}"],
                             "artifact_results": {},
                         },
                         "triage_decision": TriageDecision.ESCALATE,
@@ -346,7 +374,17 @@ class OrchestrationEngine:
         """
         Retry a failed stage with exponential backoff and correction artifacts.
 
-        Returns True if the outer stage loop should break (retries exhausted).
+        Args:
+            stage: Stage configuration from manifest
+            manifest: Full manifest configuration
+            session_dir: Session directory
+            session_id: Session identifier
+            config_overrides: Optional configuration overrides for skills
+            stage_result: Previous stage execution result
+            results: Results dictionary to update in place
+
+        Returns:
+            True if the outer stage loop should break (retries exhausted)
         """
         max_retries = self._resolve_max_retries(stage)
         retry_count = 0
@@ -361,8 +399,11 @@ class OrchestrationEngine:
                 f"Retry {retry_count}/{max_retries}: {last_error}",
             )
 
-            # Exponential backoff: 2^retry_count seconds
-            backoff_seconds = 2**retry_count
+            # Exponential backoff with jitter to avoid thundering herd
+            # Base backoff: 2^retry_count seconds, plus random jitter up to 50%
+            base_backoff = 2**retry_count
+            jitter = random.uniform(0, 0.5 * base_backoff)
+            backoff_seconds = base_backoff + jitter
             time.sleep(backoff_seconds)
 
             # Re-dispatch with correction artifact
@@ -423,10 +464,17 @@ class OrchestrationEngine:
         return False
 
     def _resolve_max_retries(self, stage: dict[str, Any]) -> int:
-        """Resolve max retry count for a stage from its configuration.
+        """
+        Resolve max retry count for a stage from its configuration.
 
         Falls back to the default of 3 and clamps to a sane range.
         Invalid values are logged and treated as the default.
+
+        Args:
+            stage: Stage configuration from manifest
+
+        Returns:
+            Maximum number of retries for this stage
         """
         default_max = 3
         stage_name = stage.get("name", "<unknown>")
@@ -458,18 +506,28 @@ class OrchestrationEngine:
         session_dir: Path,
         results: dict[str, Any],
     ) -> None:
-        """End metrics tracking, export metrics to file, and run monitoring."""
+        """
+        End metrics tracking, export metrics to file, and run monitoring.
+
+        Args:
+            session_id: Session identifier
+            session_dir: Session directory
+            results: Results dictionary containing final status
+        """
         # End metrics tracking for this workflow
         self.metrics.end_workflow(session_id, results["final_status"])
 
         # Export metrics to file
         metrics_file = session_dir / "metrics.json"
-        self.metrics.export_to_file(metrics_file, session_id)
+        try:
+            self.metrics.export_to_file(metrics_file, session_id)
+        except (OSError, ValueError) as e:
+            logger.error(f"Failed to export metrics to {metrics_file}: {e}")
 
         # Monitor workflow completion for alerting
         try:
             self.monitoring.monitor_workflow(session_id)
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in workflow monitoring: {e}")
 
     def _execute_stage(
@@ -490,6 +548,7 @@ class OrchestrationEngine:
             session_dir: Session directory
             session_id: Session identifier
             config_overrides: Optional configuration overrides for skills
+            correction_artifact: Optional path to correction artifact for retry loops
 
         Returns:
             Dictionary with stage execution results
@@ -561,7 +620,13 @@ class OrchestrationEngine:
         """
         Create a pause file for interactive input and wait for user modification.
 
-        Returns an error dict if pause file creation fails, None on success.
+        Args:
+            stage_name: Name of the stage
+            skill_name: Name of the skill being invoked
+            session_dir: Session directory
+
+        Returns:
+            Error dict if pause file creation fails, None on success
         """
         try:
             pause_file = self._validate_artifact_path(
@@ -626,7 +691,14 @@ Edit this file with your input, then save to continue.
     def _wait_for_pause_input(
         self, pause_file: Path, stage_name: str, session_dir: Path
     ) -> None:
-        """Wait for the pause file to be modified with user input."""
+        """
+        Wait for the pause file to be modified with user input.
+
+        Args:
+            pause_file: Path to the pause file
+            stage_name: Name of the stage
+            session_dir: Session directory
+        """
         try:
             import time
 
@@ -640,24 +712,20 @@ Edit this file with your input, then save to continue.
                 waited_seconds += check_interval
 
                 current_content = pause_file.read_text(encoding="utf-8")
-                if (
-                    current_content != initial_content
-                    and "input:" in current_content
-                ):
-                    # Parse user input
-                    user_input = ""
-                    for line in current_content.split("\n"):
-                        if line.startswith("input:"):
-                            user_input = line.split(":", 1)[1].strip()
-                            break
+                if current_content != initial_content:
+                    # Use structured extraction with regex for robust parsing
+                    user_input = self._extract_user_input(current_content)
 
-                    update_status(
-                        session_dir,
-                        stage_name,
-                        "paused",
-                        f"User input received: {user_input[:50]}...",
-                    )
-                    break
+                    if user_input is not None:
+                        # Input found and successfully parsed
+                        update_status(
+                            session_dir,
+                            stage_name,
+                            "paused",
+                            f"User input received: {user_input[:50]}...",
+                        )
+                        break
+                    # If user_input is None, no valid input found yet, continue waiting
 
             if waited_seconds >= max_wait_seconds:
                 update_status(
@@ -683,6 +751,39 @@ Edit this file with your input, then save to continue.
                 f"IO error reading pause file: {str(e)}",
             )
 
+    def _extract_user_input(self, content: str) -> str | None:
+        """
+        Extract user input from pause file content using structured parsing.
+
+        Args:
+            content: The pause file content
+
+        Returns:
+            Extracted user input, or None if no valid input found
+        """
+        import re
+
+        # Try multiple patterns to extract input, in order of preference
+        patterns = [
+            # Pattern 1: "input: value" on its own line
+            r"^input:\s*(.+)$",
+            # Pattern 2: "input: value" anywhere in content (take first match)
+            r"input:\s*(.+)",
+            # Pattern 3: Markdown code block format
+            r"```\s*input:\s*(.+?)\s*```",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, content, re.MULTILINE | re.IGNORECASE)
+            if match:
+                user_input = match.group(1).strip()
+                # Validate that we got non-empty input
+                if user_input:
+                    return user_input
+
+        # No valid input found
+        return None
+
     def _load_stage_skill(
         self, skill_name: str, stage_name: str
     ) -> dict[str, Any] | None:
@@ -699,6 +800,21 @@ Edit this file with your input, then save to continue.
             load_skill(skills_dir, skill_name)
             logger.info(f"Loaded skill {skill_name} from {skills_dir}")
             return None
+        except (InvalidInputError, ValueError) as e:
+            logger.error(f"Validation error loading skill {skill_name}: {e}")
+            return {
+                "stage": stage_name,
+                "skill": skill_name,
+                "success": False,
+                "output": None,
+                "error": f"Validation error loading skill: {str(e)}",
+                "validation": {
+                    "valid": False,
+                    "errors": [f"Validation error: {str(e)}"],
+                    "artifact_results": {},
+                },
+                "triage_decision": TriageDecision.ESCALATE,
+            }
         except FileNotFoundError as e:
             logger.error(f"Skill directory or file not found for {skill_name}: {e}")
             return {
@@ -729,17 +845,17 @@ Edit this file with your input, then save to continue.
                 },
                 "triage_decision": TriageDecision.ESCALATE,
             }
-        except Exception as e:
-            logger.error(f"Unexpected error loading skill {skill_name}: {e}")
+        except (RuntimeError, PathTraversalError) as e:
+            logger.error(f"Error loading skill {skill_name}: {e}")
             return {
                 "stage": stage_name,
                 "skill": skill_name,
                 "success": False,
                 "output": None,
-                "error": f"Unexpected error loading skill: {str(e)}",
+                "error": f"Error loading skill: {str(e)}",
                 "validation": {
                     "valid": False,
-                    "errors": [f"Unexpected error loading skill: {str(e)}"],
+                    "errors": [f"Error loading skill: {str(e)}"],
                     "artifact_results": {},
                 },
                 "triage_decision": TriageDecision.ESCALATE,
@@ -754,7 +870,7 @@ Edit this file with your input, then save to continue.
         session_id: str,
         config_overrides: dict[str, Any] | None,
         correction_artifact: str | None,
-    ) -> tuple:
+    ) -> tuple[SkillInvocationResult | None, dict[str, Any] | None]:
         """
         Dispatch skill invocation with error handling and metrics recording.
 
@@ -772,6 +888,7 @@ Edit this file with your input, then save to continue.
                 is_reviewer=stage.get("skill") == "requesting-code-review",
                 config_overrides=config_overrides,
                 correction_artifact=correction_artifact,
+                timeout=self.config.get("dispatch_timeout_seconds"),
             )
             logger.info(
                 f"Skill {skill_name} invocation completed with "
@@ -783,22 +900,42 @@ Edit this file with your input, then save to continue.
                 skill_name, result.success, result.error
             )
             return result, None
-        except RuntimeError as e:
+        except (InvalidInputError, ValueError) as e:
             logger.error(
-                f"Runtime error during skill invocation for {skill_name}: {e}"
+                f"Validation error during skill invocation for {skill_name}: {e}"
             )
             self.metrics.record_skill_result(
-                skill_name, False, f"Runtime error: {str(e)}"
+                skill_name, False, f"Validation error: {str(e)}"
             )
             return None, {
                 "stage": stage_name,
                 "skill": skill_name,
                 "success": False,
                 "output": None,
-                "error": f"Runtime error during skill invocation: {str(e)}",
+                "error": f"Validation error during skill invocation: {str(e)}",
                 "validation": {
                     "valid": False,
-                    "errors": [f"Runtime error: {str(e)}"],
+                    "errors": [f"Validation error: {str(e)}"],
+                    "artifact_results": {},
+                },
+                "triage_decision": TriageDecision.ESCALATE,
+            }
+        except OSError as e:
+            logger.error(
+                f"File system error during skill invocation for {skill_name}: {e}"
+            )
+            self.metrics.record_skill_result(
+                skill_name, False, f"File system error: {str(e)}"
+            )
+            return None, {
+                "stage": stage_name,
+                "skill": skill_name,
+                "success": False,
+                "output": None,
+                "error": f"File system error during skill invocation: {str(e)}",
+                "validation": {
+                    "valid": False,
+                    "errors": [f"File system error: {str(e)}"],
                     "artifact_results": {},
                 },
                 "triage_decision": TriageDecision.ESCALATE,
@@ -821,12 +958,12 @@ Edit this file with your input, then save to continue.
                 },
                 "triage_decision": TriageDecision.RETRY,
             }
-        except Exception as e:
+        except (RuntimeError, PathTraversalError) as e:
             logger.error(
-                f"Unexpected error during skill invocation for {skill_name}: {e}"
+                f"Error during skill invocation for {skill_name}: {e}"
             )
             self.metrics.record_skill_result(
-                skill_name, False, f"Unexpected error: {str(e)}"
+                skill_name, False, f"Error: {str(e)}"
             )
             return None, {
                 "stage": stage_name,
@@ -875,7 +1012,7 @@ Edit this file with your input, then save to continue.
         stage_name: str,
         session_dir: Path,
         output_artifacts: list[str],
-    ) -> tuple:
+    ) -> tuple[dict[str, Any], list[Path]]:
         """
         Validate stage output artifacts structurally.
 
@@ -930,14 +1067,14 @@ Edit this file with your input, then save to continue.
                 },
                 artifact_paths,
             )
-        except Exception as e:
+        except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
             logger.error(
-                f"Unexpected error during validation for stage {stage_name}: {e}"
+                f"Error during validation for stage {stage_name}: {e}"
             )
             return (
                 {
                     "valid": False,
-                    "errors": [f"Unexpected validation error: {str(e)}"],
+                    "errors": [f"Validation error: {str(e)}"],
                     "artifact_results": {},
                 },
                 artifact_paths,
@@ -982,7 +1119,7 @@ Edit this file with your input, then save to continue.
                     review_artifact_path.write_text(
                         review_output, encoding="utf-8"
                     )
-            except Exception as e:
+            except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
                 logger.error(
                     f"Reviewer dispatch failed for stage {stage_name}: {e}"
                 )
@@ -1039,8 +1176,17 @@ Edit this file with your input, then save to continue.
         """
         Dispatch a neutral reviewer worker to evaluate stage artifacts.
 
-        Returns a tuple of (verdict, confidence, review_output) where verdict is
-        'PASS' or 'FAIL' and confidence is 'HIGH', 'MEDIUM', or 'LOW'.
+        Args:
+            stage_name: Name of the stage being reviewed
+            skill_name: Name of the skill that was invoked
+            session_dir: Session directory
+            session_id: Session identifier
+            artifact_paths: List of artifact paths to review
+            correction_artifact: Optional path to correction artifact
+
+        Returns:
+            Tuple of (verdict, confidence, review_output) where verdict is
+            'PASS' or 'FAIL' and confidence is 'HIGH', 'MEDIUM', or 'LOW'.
         """
         focused_context = [str(p) for p in artifact_paths if p.exists()]
         if not focused_context:
@@ -1052,7 +1198,7 @@ Edit this file with your input, then save to continue.
         if review_output_artifact.exists():
             try:
                 existing_review = review_output_artifact.read_text(encoding="utf-8")
-            except Exception:
+            except (OSError, RuntimeError):
                 existing_review = ""
         else:
             existing_review = ""
@@ -1191,19 +1337,19 @@ Edit this file with your input, then save to continue.
             return self._wait_and_parse_gate_decision(
                 gate_id, session_dir, gate_decision_file
             )
-        except Exception as e:
-            logger.error(f"Unexpected error during gate handling: {e}")
+        except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
+            logger.error(f"Error during gate handling: {e}")
             update_status(
                 session_dir,
                 f"gate_{gate_id}",
                 "error",
-                f"Unexpected gate handling error: {str(e)}",
+                f"Gate handling error: {str(e)}",
             )
             return {
                 "gate_id": gate_id,
                 "verdict": "block",
                 "blocked": True,
-                "error": f"Unexpected gate handling error: {str(e)}",
+                "error": f"Gate handling error: {str(e)}",
             }
 
     def _create_gate_decision_file(
@@ -1306,7 +1452,7 @@ Please edit this file with your decision.
                         logger.info(
                             f"Gate {gate_id} decision recorded: {verdict}"
                         )
-                    except Exception as e:
+                    except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
                         logger.error(f"Error recording gate decision: {e}")
                         update_status(
                             session_dir,
@@ -1335,7 +1481,7 @@ Please edit this file with your decision.
             logger.warning(
                 f"Gate {gate_id} timeout after {max_wait_seconds} seconds"
             )
-        except Exception as e:
+        except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
             logger.error(f"Error recording gate timeout: {e}")
             update_status(
                 session_dir,
@@ -1409,10 +1555,10 @@ def _load_cli_config() -> tuple:
         _print_cli_error(
             "Invalid JSON in configuration file", "JSONDecodeError", str(e)
         )
-    except Exception as e:
-        logger.error(f"Unexpected error loading configuration: {e}")
+    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+        logger.error(f"Error loading configuration: {e}")
         _print_cli_error(
-            "Unexpected error loading configuration", type(e).__name__, str(e)
+            "Error loading configuration", type(e).__name__, str(e)
         )
 
 
@@ -1420,7 +1566,7 @@ def _create_cli_engine(work_dir: Path, config: Any) -> OrchestrationEngine:
     """Create orchestration engine, exiting on error."""
     try:
         return OrchestrationEngine(work_dir, config.__dict__)
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
         logger.error(f"Error initializing orchestration engine: {e}")
         _print_cli_error(
             "Error initializing orchestration engine", type(e).__name__, str(e)
@@ -1440,7 +1586,7 @@ def _run_cli_workflow(
             manifest_path, session_id, request_content, skip_brainstorming
         )
         print(json.dumps(results, indent=2, default=str))
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
         logger.error(f"Error executing workflow: {e}")
         _print_cli_error(
             "Error executing workflow", type(e).__name__, str(e)
@@ -1473,12 +1619,12 @@ def main():
             )
         )
         sys.exit(130)
-    except Exception as e:
-        logger.error(f"Unexpected error in main: {e}")
+    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+        logger.error(f"Error in main: {e}")
         print(
             json.dumps(
                 {
-                    "error": "Unexpected error",
+                    "error": "Error",
                     "error_type": type(e).__name__,
                     "details": str(e),
                 },

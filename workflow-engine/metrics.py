@@ -358,7 +358,7 @@ class MetricsCollector:
         with self._lock:
             return self._workflows.copy()
 
-    def export_to_file(self, output_path: Path, session_id: str | None = None) -> bool:
+    def export_to_file(self, output_path: Path, session_id: str | None = None) -> None:
         """
         Export metrics to a JSON file
 
@@ -366,78 +366,78 @@ class MetricsCollector:
             output_path: Path to output file
             session_id: Optional session ID to export specific workflow, or None for all
 
-        Returns:
-            True if export succeeded, False otherwise
+        Raises:
+            OSError: If file operations fail
+            ValueError: If data serialization fails or session not found
         """
-        try:
-            with self._lock:
-                if session_id:
-                    workflows_to_export = {session_id: self._workflows.get(session_id)}
-                else:
-                    workflows_to_export = self._workflows.copy()
+        with self._lock:
+            if session_id:
+                workflows_to_export = {session_id: self._workflows.get(session_id)}
+                if workflows_to_export[session_id] is None:
+                    raise ValueError(f"Session {session_id} not found in metrics")
+            else:
+                workflows_to_export = self._workflows.copy()
 
-                # Convert to serializable format
-                export_data = {}
-                for sid, workflow in workflows_to_export.items():
-                    if workflow:
-                        export_data[sid] = {
-                            "session_id": workflow.session_id,
-                            "manifest_name": workflow.manifest_name,
-                            "start_time": workflow.start_time,
-                            "end_time": workflow.end_time,
-                            "total_duration": workflow.total_duration,
-                            "final_status": workflow.final_status,
-                            "stage_metrics": [
-                                {
-                                    "stage_name": sm.stage_name,
-                                    "skill_name": sm.skill_name,
-                                    "start_time": sm.start_time,
-                                    "end_time": sm.end_time,
-                                    "duration": sm.duration,
-                                    "success": sm.success,
-                                    "retry_count": sm.retry_count,
-                                    "error": sm.error,
-                                    "triage_decision": sm.triage_decision,
-                                }
-                                for sm in workflow.stage_metrics
-                            ],
-                            "skill_metrics": [
-                                {
-                                    "skill_name": sim.skill_name,
-                                    "session_id": sim.session_id,
-                                    "start_time": sim.start_time,
-                                    "end_time": sim.end_time,
-                                    "duration": sim.duration,
-                                    "success": sim.success,
-                                    "error": sim.error,
-                                    "is_reviewer": sim.is_reviewer,
-                                }
-                                for sim in workflow.skill_metrics
-                            ],
-                            "gate_metrics": [
-                                {
-                                    "gate_id": gm.gate_id,
-                                    "stage_name": gm.stage_name,
-                                    "start_time": gm.start_time,
-                                    "end_time": gm.end_time,
-                                    "duration": gm.duration,
-                                    "verdict": gm.verdict,
-                                    "blocked": gm.blocked,
-                                }
-                                for gm in workflow.gate_metrics
-                            ],
-                        }
+            if not workflows_to_export:
+                raise ValueError("No metrics to export")
 
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(output_path, "w") as f:
-                    json.dump(export_data, f, indent=2, default=str)
+            # Convert to serializable format
+            export_data = {}
+            for sid, workflow in workflows_to_export.items():
+                if workflow:
+                    export_data[sid] = {
+                        "session_id": workflow.session_id,
+                        "manifest_name": workflow.manifest_name,
+                        "start_time": workflow.start_time,
+                        "end_time": workflow.end_time,
+                        "total_duration": workflow.total_duration,
+                        "final_status": workflow.final_status,
+                        "stage_metrics": [
+                            {
+                                "stage_name": sm.stage_name,
+                                "skill_name": sm.skill_name,
+                                "start_time": sm.start_time,
+                                "end_time": sm.end_time,
+                                "duration": sm.duration,
+                                "success": sm.success,
+                                "retry_count": sm.retry_count,
+                                "error": sm.error,
+                                "triage_decision": sm.triage_decision,
+                            }
+                            for sm in workflow.stage_metrics
+                        ],
+                        "skill_metrics": [
+                            {
+                                "skill_name": sim.skill_name,
+                                "session_id": sim.session_id,
+                                "start_time": sim.start_time,
+                                "end_time": sim.end_time,
+                                "duration": sim.duration,
+                                "success": sim.success,
+                                "error": sim.error,
+                                "is_reviewer": sim.is_reviewer,
+                            }
+                            for sim in workflow.skill_metrics
+                        ],
+                        "gate_metrics": [
+                            {
+                                "gate_id": gm.gate_id,
+                                "stage_name": gm.stage_name,
+                                "start_time": gm.start_time,
+                                "end_time": gm.end_time,
+                                "duration": gm.duration,
+                                "verdict": gm.verdict,
+                                "blocked": gm.blocked,
+                            }
+                            for gm in workflow.gate_metrics
+                        ],
+                    }
 
-                logger.info(f"Exported metrics to {output_path}")
-                return True
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w") as f:
+                json.dump(export_data, f, indent=2, default=str)
 
-        except Exception as e:
-            logger.error(f"Failed to export metrics to {output_path}: {e}")
-            return False
+            logger.info(f"Exported metrics to {output_path}")
 
     def export_to_console(self, session_id: str | None = None) -> str:
         """
@@ -544,15 +544,29 @@ class MetricsCollector:
                 logger.info("Cleared all metrics")
 
 
-# Global metrics collector instance
-_global_metrics_collector = MetricsCollector()
+# Global metrics collector instance (for backward compatibility)
+_global_metrics_collector: MetricsCollector | None = None
 
 
 def get_metrics_collector() -> MetricsCollector:
     """
-    Get the global metrics collector instance
+    Get the global metrics collector instance.
+
+    For new code, consider instantiating MetricsCollector() explicitly
+    to avoid global state dependencies and enable multi-tenant scenarios.
 
     Returns:
         Global MetricsCollector instance
     """
+    global _global_metrics_collector
+
+    if _global_metrics_collector is None:
+        _global_metrics_collector = MetricsCollector()
+
     return _global_metrics_collector
+
+
+def reset_metrics_collector() -> None:
+    """Reset global metrics collector instance (useful for testing)"""
+    global _global_metrics_collector
+    _global_metrics_collector = None
