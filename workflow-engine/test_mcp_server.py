@@ -27,6 +27,12 @@ def server(tmp_path):
     (workspace / ".devin-orchestrator").mkdir()
     (tmp_path / "skills").mkdir()
     (tmp_path / "workflows").mkdir()
+    roles_dir = tmp_path / "roles"
+    roles_dir.mkdir()
+    (roles_dir / "coder.md").write_text("# coder role", encoding="utf-8")
+    devin_cli = tmp_path / "devin" / "bin" / "devin.exe"
+    devin_cli.parent.mkdir(parents=True, exist_ok=True)
+    devin_cli.write_text("dummy", encoding="utf-8")
     cfg_path = workspace / ".devin-orchestrator" / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -35,7 +41,7 @@ skills_dir: {(tmp_path / "skills").as_posix()}
 workflows_dir: {(tmp_path / "workflows").as_posix()}
 workflow_engine_dir: {(tmp_path / "engine").as_posix()}
 session_work_dir: {workspace.as_posix()}
-devin_cli_path: /usr/bin/devin
+devin_cli_path: {devin_cli.as_posix()}
 """,
         encoding="utf-8",
     )
@@ -178,6 +184,11 @@ def test_get_workflow(server, tmp_path):
 
 
 def test_dispatch_devin_builds_command(server):
+    work_dir = server.config.global_root / "devin_ws"
+    work_dir.mkdir()
+    prompt_file = work_dir / "prompt.md"
+    prompt_file.write_text("# prompt", encoding="utf-8")
+
     with patch("mcp_server.subprocess.run") as mock_run:
         mock_run.return_value = Mock(
             returncode=0, stdout="ok", stderr="", args=[]
@@ -191,8 +202,8 @@ def test_dispatch_devin_builds_command(server):
                     "name": "dispatch_devin",
                     "arguments": {
                         "role": "coder",
-                        "prompt_file": "/tmp/prompt.md",
-                        "work_dir": "/tmp/ws",
+                        "prompt_file": str(prompt_file),
+                        "work_dir": str(work_dir),
                         "model": "glm-5-2",
                     },
                 },
@@ -203,11 +214,14 @@ def test_dispatch_devin_builds_command(server):
     cmd = call_args[0][0]
     assert "dispatch_devin.py" in cmd[-1] or "dispatch_devin.py" in str(cmd[1])
     assert "--role" in cmd
-    assert "coder" in cmd
+    assert str(server.config.global_root / "roles" / "coder.md") in cmd
     assert "glm-5-2" in cmd
 
 
 def test_dispatch_skill_builds_command(server):
+    workspace = server.config.global_root / "skill_ws"
+    workspace.mkdir()
+
     with patch("mcp_server.subprocess.run") as mock_run:
         mock_run.return_value = Mock(
             returncode=0, stdout='{"success": true}', stderr="", args=[]
@@ -222,7 +236,7 @@ def test_dispatch_skill_builds_command(server):
                     "arguments": {
                         "skill_name": "brainstorming",
                         "session_id": "S1",
-                        "workspace": "/tmp/ws",
+                        "workspace": str(workspace),
                     },
                 },
             }
@@ -232,7 +246,7 @@ def test_dispatch_skill_builds_command(server):
     cmd = call_args[0][0]
     assert "brainstorming" in cmd
     assert "S1" in cmd
-    assert "/tmp/ws" in cmd
+    assert str(workspace) in cmd
 
 
 def test_read_artifact(server, tmp_path):
