@@ -25,8 +25,9 @@ import subprocess
 import sys
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, IO
 
 import yaml
 
@@ -64,7 +65,11 @@ class McpServer:
     MIN_TIMEOUT_SECONDS = 1
     MAX_TIMEOUT_SECONDS = 3600
 
-    def __init__(self, workspace: str | None = None) -> None:
+    DEFAULT_MESSAGE_LOG = Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+
+    def __init__(
+        self, workspace: str | None = None, message_log_path: str | None = None
+    ) -> None:
         self.workspace = workspace
         self.config = ConfigLoader.load(workspace=workspace)
         self.stdin = sys.stdin.buffer
@@ -72,6 +77,47 @@ class McpServer:
         self._framing: str | None = None  # "ndjson" or "content-length"
         # Rate limiting: track tool call timestamps per tool name
         self._tool_call_history: defaultdict[str, list[float]] = defaultdict(list)
+        self._message_log_path: Path | None = None
+        self._message_log: IO[str] | None = None
+        if message_log_path is not None:
+            self._open_message_log(message_log_path)
+
+    def _open_message_log(self, message_log_path: str) -> None:
+        """Open the NDJSON message log file, creating its directory if needed."""
+        try:
+            log_path = Path(message_log_path).expanduser()
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._message_log_path = log_path
+            self._message_log = open(
+                log_path, "a", encoding="utf-8", buffering=1
+            )
+            logger.info("MCP message log: %s", log_path)
+        except (OSError, ValueError) as e:
+            logger.warning("Cannot open MCP message log %s: %s", message_log_path, e)
+            self._message_log_path = None
+            self._message_log = None
+
+    def _log_message(
+        self, direction: str, payload: dict[str, Any] | bytes
+    ) -> None:
+        """Append a JSON-RPC message (or raw bytes) to the message log."""
+        if self._message_log is None:
+            return
+        try:
+            if isinstance(payload, bytes):
+                message: Any = {
+                    "_raw": payload.decode("utf-8", errors="replace")
+                }
+            else:
+                message = payload
+            entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "direction": direction,
+                "message": message,
+            }
+            self._message_log.write(json.dumps(entry, default=str) + "\n")
+        except (OSError, TypeError) as e:
+            logger.warning("Failed to write to MCP message log: %s", e)
 
     # --------------------------------------------------------------------- #
     # Tool definitions (exposed via tools/list)
@@ -1386,6 +1432,7 @@ class McpServer:
             if stripped.lower().startswith(b"content-length:"):
                 return self._read_content_length_message(stripped)
             self._framing = self._framing or "ndjson"
+            self._log_message("in", stripped)
             try:
                 return json.loads(stripped)
             except json.JSONDecodeError as e:
@@ -1429,6 +1476,7 @@ class McpServer:
 
         body = self._read_exactly(length)
         self._framing = self._framing or "content-length"
+        self._log_message("in", body)
         try:
             return json.loads(body)
         except json.JSONDecodeError as e:
@@ -1446,6 +1494,7 @@ class McpServer:
         return b"".join(chunks)
 
     def _write_message(self, message: dict) -> None:
+        self._log_message("out", message)
         body = json.dumps(message).encode()
         if self._framing == "ndjson":
             self.stdout.write(body + b"\n")
@@ -1455,17 +1504,24 @@ class McpServer:
         self.stdout.flush()
 
     def run(self) -> None:
-        while True:
-            request = self._read_message()
-            if request is None:
-                break
-            # If _read_message returned an error response, write it directly
-            if "error" in request:
-                self._write_message(request)
-                continue
-            response = self.handle(request)
-            if response is not None:
-                self._write_message(response)
+        try:
+            while True:
+                request = self._read_message()
+                if request is None:
+                    break
+                # If _read_message returned an error response, write it directly
+                if "error" in request:
+                    self._write_message(request)
+                    continue
+                response = self.handle(request)
+                if response is not None:
+                    self._write_message(response)
+        finally:
+            if self._message_log is not None:
+                try:
+                    self._message_log.close()
+                except OSError:
+                    pass
 
 
 def main() -> None:
@@ -1475,8 +1531,18 @@ def main() -> None:
         default=None,
         help="Optional workspace path to pre-load local config from",
     )
+    parser.add_argument(
+        "--message-log",
+        nargs="?",
+        const=str(McpServer.DEFAULT_MESSAGE_LOG),
+        default=None,
+        help="Log JSON-RPC messages to an NDJSON file (default: %(const)s)",
+    )
     args = parser.parse_args()
-    server = McpServer(workspace=args.workspace)
+    server = McpServer(
+        workspace=args.workspace,
+        message_log_path=args.message_log,
+    )
     server.run()
 
 
