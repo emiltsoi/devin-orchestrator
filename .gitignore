@@ -10,9 +10,10 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Session work directories (optional - uncomment if you want to ignore)
+# Session and generated work directories
 # sessions/
-# work/
+work/
+archive/
 
 # Per-workspace deployment directories
 .devin/workflows/
