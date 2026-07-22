@@ -12,7 +12,7 @@ def test_skill_loading():
     """Test that skills are loaded and injected correctly"""
 
     # Initialize adapter with skills directory
-    devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
+    devin_cli_path = str(Path.home() / "AppData/Local/devin/cli/bin/devin.exe")
     skills_dir = Path(__file__).parent / "skills"
 
     adapter = DevinCliAdapter(devin_cli_path=devin_cli_path, skills_dir=str(skills_dir))

@@ -25,7 +25,7 @@ from skill_invoker import SkillInvoker
 from devin_cli_adapter import DevinCliAdapter
 
 # Initialize skill invoker with SWE-1.6 model
-devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
+devin_cli_path = r"C:\Users\<username>\AppData\Local\devin\cli\bin\devin.exe"
 skill_invoker = SkillInvoker(
     harness_root=harness_root,
     devin_cli_path=devin_cli_path,
@@ -62,7 +62,7 @@ from skill_invoker import SkillInvoker
 from devin_cli_adapter import DevinCliAdapter
 
 # Initialize skill invoker with SWE-1.6 model
-devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
+devin_cli_path = r"C:\Users\<username>\AppData\Local\devin\cli\bin\devin.exe"
 skill_invoker = SkillInvoker(
     harness_root=harness_root,
     devin_cli_path=devin_cli_path,

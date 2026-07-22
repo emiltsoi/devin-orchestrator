@@ -38,7 +38,7 @@ def test_adversarial_review():
     """
 
     harness_root = Path(__file__).parent
-    devin_cli_path = "C:\\Users\\<username>\\AppData\\Local\\devin\\cli\\bin\\devin.exe"
+    devin_cli_path = str(Path.home() / "AppData/Local/devin/cli/bin/devin.exe")
 
     skill_invoker = SkillInvoker(
         harness_root, devin_cli_path=devin_cli_path, model="swe-1.6"
