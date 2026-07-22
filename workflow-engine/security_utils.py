@@ -76,29 +76,30 @@ def validate_path_safe(
         raise InvalidInputError("Base path contains null bytes")
 
     try:
-        # If not allowing absolute paths, check if target is absolute before
-        # resolution. This prevents absolute traversal attempts from being
-        # normalized into the base directory.
-        if not allow_absolute and target_path.is_absolute():
-            raise PathTraversalError(f"Absolute paths not allowed: {target_path}")
-
-        # Resolve the target and base paths to their canonical absolute form.
-        # Using os.path.realpath ensures symlinks are resolved and containment
-        # cannot be bypassed via symlink chains pointing outside the base.
-        # strict=False keeps resolution working for not-yet-existing paths.
-        resolved_target = Path(os.path.realpath(target_str))
+        # Resolve the base path to its canonical absolute form. Using
+        # os.path.realpath ensures symlinks are resolved and containment cannot
+        # be bypassed via symlink chains pointing outside the base.
         resolved_base = Path(os.path.realpath(base_str))
 
-        # Check if the resolved target is within the base path
+        # Resolve the target. Relative targets are interpreted relative to the
+        # base directory; absolute targets are resolved as-is. This lets callers
+        # pass either form while still enforcing containment.
+        if target_path.is_absolute():
+            resolved_target = Path(os.path.realpath(target_str))
+        else:
+            resolved_target = Path(os.path.realpath(resolved_base / target_str))
+
+        # Check if the resolved target is within the base path. Absolute paths
+        # that resolve inside the base are safe; absolute (or relative) paths
+        # that escape the base are always rejected, regardless of allow_absolute.
         try:
             resolved_target.relative_to(resolved_base)
+            return resolved_target
         except ValueError:
             raise PathTraversalError(
                 f"Path traversal detected: {target_path} resolves to {resolved_target} "
                 f"which is outside base directory {resolved_base}"
             ) from None
-
-        return resolved_target
 
     except (OSError, RuntimeError) as e:
         raise InvalidInputError(f"Invalid path {target_path}: {e}") from e

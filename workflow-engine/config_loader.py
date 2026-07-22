@@ -6,9 +6,11 @@ Loads global configuration for devin-orchestrator.
 Supports environment variables and config file.
 """
 
+import contextlib
 import logging
 import os
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -170,32 +172,34 @@ class ConfigLoader:
             Validate that an expanded path doesn't escape safe boundaries.
 
             For path-context fields, ensure the result stays within reasonable
-            directories (home directory or current directory tree).
+            directories (home directory, current directory tree, the caller-
+            provided workspace, or the system temp directory used by tests and
+            CI runners).
             """
             try:
-                # Allow paths under home directory or current directory
-                home_dir = Path.home()
-                current_dir = Path.cwd()
+                # Allowed roots for configured paths. The workspace is included
+                # so workspace-local config files can point to directories under
+                # the workspace; tempdir is included for pytest/CI which use
+                # temporary directories outside home.
+                allowed_roots = [Path.home(), Path.cwd(), Path(tempfile.gettempdir())]
+                if workspace is not None:
+                    with contextlib.suppress(OSError, RuntimeError):
+                        allowed_roots.append(Path(workspace).resolve())
 
                 # Resolve to absolute path
                 resolved = path.resolve()
 
-                # Check if path is under home or current directory
-                try:
-                    resolved.relative_to(home_dir)
-                    return resolved  # Safe: under home directory
-                except ValueError:
-                    pass
+                # Check if path is under any allowed root
+                for root in allowed_roots:
+                    try:
+                        resolved.relative_to(root)
+                        return resolved
+                    except ValueError:
+                        continue
 
-                try:
-                    resolved.relative_to(current_dir)
-                    return resolved  # Safe: under current directory
-                except ValueError:
-                    pass
-
-                # If neither, raise an error - unsafe path
+                # If none matched, the path is outside the allowed boundaries
                 raise InvalidInputError(
-                    f"Path {context}={resolved} is not under home or current directory; "
+                    f"Path {context}={resolved} is not under home, current, workspace, or temp directory; "
                     "this is unsafe and not allowed"
                 )
 

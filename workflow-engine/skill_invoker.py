@@ -191,13 +191,6 @@ class SkillInvoker:
             )
 
         effective_timeout = timeout or self.dispatch_timeout_seconds
-        if not self.devin_cli_path:
-            return SkillInvocationResult(
-                success=False,
-                session_id=None,
-                output=None,
-                error="Devin CLI path not configured",
-            )
 
         # Load skill definition and narrative using deterministic_tools
         from deterministic_tools import load_skill
@@ -271,6 +264,14 @@ class SkillInvoker:
                 session_id=session_id,
                 output=f"Simulated output for {skill_name} skill (demo mode)",
                 error=None,
+            )
+
+        if not self.devin_cli_path:
+            return SkillInvocationResult(
+                success=False,
+                session_id=None,
+                output=None,
+                error="Devin CLI path not configured",
             )
 
         try:
