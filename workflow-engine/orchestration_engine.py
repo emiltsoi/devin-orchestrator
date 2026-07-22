@@ -1828,13 +1828,23 @@ Edit this file with your input, then save to continue.
         gate_config = self._get_gate_config(gate_id, manifest)
         output = (stage_result.get("output") or "").lower()
 
-        conditions: list[dict[str, Any]] = [
-            {
-                "name": "demo_mode",
-                "triggered": bool(self.config.get("demo_mode")),
+        # demo_mode is a simulation override: it short-circuits all other
+        # bypass/escalation checks so automated tests and dry-runs do not
+        # block on gates.
+        if self.config.get("demo_mode"):
+            return {
                 "verdict": "approve",
-                "reason": "demo_mode is enabled; auto-approving for simulation",
-            },
+                "conditions": [
+                    {
+                        "name": "demo_mode",
+                        "triggered": True,
+                        "verdict": "approve",
+                        "reason": "demo_mode is enabled; auto-approving for simulation",
+                    }
+                ],
+            }
+
+        conditions: list[dict[str, Any]] = [
             {
                 "name": "mandatory_gate",
                 "triggered": bool(gate_config.get("mandatory")),
