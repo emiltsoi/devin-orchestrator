@@ -26,6 +26,11 @@ from pathlib import Path
 
 # Add local workflow-engine to Python path for imports
 WORKFLOW_ENGINE_DIR = Path(__file__).parent / "workflow-engine"
+if not WORKFLOW_ENGINE_DIR.is_dir():
+    raise FileNotFoundError(
+        f"workflow-engine directory not found at {WORKFLOW_ENGINE_DIR}. "
+        "Run install.py to copy the engine next to this script."
+    )
 sys.path.insert(0, str(WORKFLOW_ENGINE_DIR))
 
 from config_loader import ConfigLoader  # noqa: E402

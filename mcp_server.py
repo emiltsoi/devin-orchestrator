@@ -29,14 +29,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, IO
 
-import yaml
-
 logger = logging.getLogger(__name__)
 
 # Add workflow-engine to Python path so we can import ConfigLoader and
 # security_utils without requiring the harness to be installed as a package.
 WORKFLOW_ENGINE_DIR = Path(__file__).parent / "workflow-engine"
+if not WORKFLOW_ENGINE_DIR.is_dir():
+    raise FileNotFoundError(
+        f"workflow-engine directory not found at {WORKFLOW_ENGINE_DIR}. "
+        "Run install.py to copy the engine next to this script."
+    )
 sys.path.insert(0, str(WORKFLOW_ENGINE_DIR))
+
+try:
+    import yaml
+except ModuleNotFoundError as e:
+    raise SystemExit(
+        "The PyYAML package is required. Install it with: pip install PyYAML>=5.1"
+    ) from e
 
 from config_loader import ConfigLoader  # noqa: E402
 from security_utils import (  # noqa: E402

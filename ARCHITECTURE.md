@@ -296,95 +296,70 @@ coder_dispatch:
 User Request
      │
      ▼
-Workflow Selection (e.g., /gated-change)
+Workflow Selection (e.g., superpower)
      │
      ▼
-Session Init (Invoke-SessionInit.ps1)
+Session Init (session_init)
      │
-     ├─→ Create workdir: orchestrator/work/<session_id>/
-     ├─→ Auto-load: architect-rules.md, lessons.yaml, skills/README.md
+     ├─→ Create workdir: work/<session_id>/
      ├─→ Initialize artifacts: request.md, status.md, session-audit.md
-     └─→ Emit ack: "Loaded: architect-rules v<N>, <M> lessons, <S> skills"
+     └─→ Emit ack: "Loaded: rules, skills, workflows"
      │
      ▼
-Step 1: UNDERSTAND
+Step 0: Brainstorming (optional)
      │
-     ├─→ Skill: brainstorming (announce per Rule 38)
-     ├─→ KB retrieval (per scope)
-     ├─→ Context exploration
-     ├─→ Design dialogue with user
-     ├─→ Write requirement.md
-     └─→ User gate: approve requirement
+     ├─→ Skill: brainstorming
+     ├─→ Context: user request
+     ├─→ Output: design.md
+     └─→ Gate: none
      │
      ▼
-Step 2: BASELINE
+Step 1: Using Git Worktrees
      │
-     ├─→ Skill: test-driven-development
-     ├─→ Identify existing tests
-     ├─→ Run tests → green baseline
-     ├─→ Write test specification
-     ├─→ Dispatch Test-Author (via adapter)
-     └─→ Verify tests FAIL (TDD red)
+     ├─→ Skill: using-git-worktrees
+     ├─→ Context: design.md
+     ├─→ Output: worktree-info.md, baseline-test-results.md
+     └─→ Gate: g1_design_approval
      │
      ▼
-Step 3: DESIGN
+Step 2: Writing Plans
      │
      ├─→ Skill: writing-plans
-     ├─→ Produce design.md (approach, files, risks, KB impact)
-     └─→ User gate: approve design
+     ├─→ Context: design.md
+     ├─→ Output: plan.md
+     └─→ Gate: none
      │
      ▼
-Step 4: IMPLEMENT
+Step 3: Subagent-Driven Development
      │
      ├─→ Skill: subagent-driven-development
-     ├─→ Assemble coder prompt (design.md + FRAMEWORK + ACs)
-     ├─→ Dispatch Coder (via adapter)
-     ├─→ Validate output (quality bar)
-     └─→ Retry or escalate (Rule 17 budget)
+     ├─→ Context: plan.md, design.md
+     ├─→ Output: implementation.md, task-results.md
+     └─→ Gate: g2_plan_approval
      │
      ▼
-Step 5: VERIFY
+Step 4: Test-Driven Development
      │
-     ├─→ Skill: verification-before-completion
-     ├─→ Build (per actions/build.md)
-     ├─→ Run tests (per actions/test.md)
-     └─→ TDD green: new tests PASS, existing tests PASS
-     │
-     ▼
-Step 6: REVIEW (three-stage)
-     │
-     ├─→ Stage 1: Spec-Reviewer (design-intent, AC coverage, scope)
-     │   ├─→ Dispatch Spec-Reviewer (via adapter)
-     │   └─→ Verdict: PASS/FAIL
-     │
-     ├─→ Stage 2: Quality-Reviewer (idioms, anti-patterns, edge cases)
-     │   ├─→ Dispatch Quality-Reviewer (via adapter)
-     │   └─→ Verdict: APPROVED/FAIL-CRITICAL/FAIL-IMPORTANT
-     │
-     └─→ Stage 3: Human Verdict (merge gate per Rule 52)
-         ├─→ Invoke Invoke-HumanVerdict.ps1
-         ├─→ Rate findings (A/D/P/C/S)
-         ├─→ Capture KB candidates
-         └─→ Decision: APPROVE/APPROVE-WITH-FOLLOWUP/REJECT/DEFER
+     ├─→ Skill: test-driven-development
+     ├─→ Context: implementation.md
+     ├─→ Output: test-results.md, implementation-final.md
+     └─→ Gate: none
      │
      ▼
-Step 7: REPORT
+Step 5: Requesting Code Review
      │
-     ├─→ Write summary.md
-     ├─→ Write metrics.json
-     ├─→ Write retro.md (interruptions, rule violations, new lessons)
-     ├─→ KB-delta emission (Rule 61)
-     ├─→ Update orchestrator/metrics/
-     ├─→ Promote lessons (≥3 triggers → Architect Rule)
-     ├─→ Pin repo-specific facts
-     └─→ User gate: approve final product + rule/lesson/KB updates
+     ├─→ Skill: requesting-code-review
+     ├─→ Context: plan.md, implementation-final.md
+     ├─→ Output: review-findings.md
+     └─→ Gate: g3_review_approval
      │
      ▼
-Step 8: FINALIZE
+Step 6: Finishing a Development Branch
      │
-     ├─→ Commit session work-dir
-     ├─→ Merge or discard branch
-     └─→ Close session (session-registry.md)
+     ├─→ Skill: finishing-a-development-branch
+     ├─→ Context: test-results.md, review-findings.md
+     ├─→ Output: completion-summary.md, merge-decision.md
+     └─→ Gate: g4_completion_approval
 ```
 
 ## Generic Harness Interface

@@ -9,9 +9,9 @@ workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
 
 # Devin CLI configuration
 # Set DEVIN_CLI_PATH environment variable or update this path
-# Windows: C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
-# Linux/macOS: ~/.local/bin/devin
-devin_cli_path: ${DEVIN_CLI_PATH:-~/AppData/Local/devin/cli/bin/devin.exe}
+# Default assumes Linux/macOS. For Windows use:
+#   C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
+devin_cli_path: ${DEVIN_CLI_PATH:-~/.local/bin/devin}
 
 # Model configuration
 # Set DEVIN_DEFAULT_MODEL environment variable or update this value
@@ -62,10 +62,13 @@ session_work_dir: ~/.devin-orchestrator/work
 # Set DEVIN_GATE_MODE environment variable or update this value.
 gate_mode: ${DEVIN_GATE_MODE:-auto}
 
-# Optional gate bypass/escalation overrides (empty by default). If provided,
-# these are passed to the orchestrator for future use; the current default
-# condition set is implemented in orchestration_engine._evaluate_gate_bypass_conditions.
-# Possible escalation conditions include:
-#   demo_mode, mandatory_gate, stage_failure, reviewer_rejected,
-#   critical_security_findings, missing_or_empty_output, warnings_or_medium_confidence
-gate_bypass_conditions: {}
+# Gate bypass/escalation overrides. These are evaluated by
+# orchestration_engine._evaluate_gate_bypass_conditions alongside the built-in
+# default conditions. When a bypass condition is satisfied, a non-security gate
+# can be auto-approved in gate_mode: "auto".
+#
+# Supported bypass keys:
+#   confidence_high_non_security: true  # auto-approve when stage succeeds with HIGH confidence
+#   demo_mode: true                     # auto-approve all gates during simulation (also hard-coded)
+gate_bypass_conditions:
+  confidence_high_non_security: true

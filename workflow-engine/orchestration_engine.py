@@ -1904,6 +1904,28 @@ Edit this file with your input, then save to continue.
                 if severity.get(cond_verdict, 0) > severity.get(final_verdict, 0):
                     final_verdict = cond_verdict
 
+        # Config-driven bypass: auto-approve non-security gates when the
+        # preceding stage succeeded and reported HIGH confidence.
+        has_block = any(
+            c["triggered"] and c["verdict"] == "block" for c in conditions
+        )
+        bypass_config = self.config.get("gate_bypass_conditions") or {}
+        if (
+            not has_block
+            and bypass_config.get("confidence_high_non_security")
+            and stage_result.get("confidence") == "HIGH"
+            and stage_result.get("success") is not False
+        ):
+            final_verdict = "approve"
+            conditions.append(
+                {
+                    "name": "confidence_high_non_security",
+                    "triggered": True,
+                    "verdict": "approve",
+                    "reason": "stage succeeded with HIGH confidence and gate is non-security; config bypass auto-approves",
+                }
+            )
+
         return {"verdict": final_verdict, "conditions": conditions}
 
     def _create_gate_decision_file(
