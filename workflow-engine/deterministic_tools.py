@@ -250,6 +250,13 @@ def load_skill(skill_dir: Path, skill_name: str) -> dict[str, Any]:
 
     import yaml
 
+    # Validate skill name to prevent path traversal before interpolating
+    # into filesystem paths. This is a defense-in-depth check; callers
+    # should already validate at higher layers (MCP tool entry, SkillInvoker).
+    from security_utils import validate_skill_name
+
+    skill_name = validate_skill_name(skill_name)
+
     # Check for single file format (new)
     skill_md = skill_dir / f"{skill_name}.md"
     skill_md_subdir = skill_dir / skill_name / f"{skill_name}.md"

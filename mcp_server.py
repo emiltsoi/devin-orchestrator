@@ -27,7 +27,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, IO
+from typing import IO, Any
 
 logger = logging.getLogger(__name__)
 
@@ -1402,14 +1402,24 @@ class McpServer:
         except InvalidInputError as e:
             return [self._text_content(f"Invalid timeout: {e}")]
 
+        # Validate skill name to prevent path traversal. This is the single
+        # validation point at the MCP tool entry for the run_skill chain.
+        try:
+            skill = arguments["skill"]
+        except (KeyError, TypeError) as e:
+            return [self._text_content(f"Invalid skill parameter: {e}")]
+        try:
+            skill_name = validate_skill_name(skill)
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid skill name: {e}")]
+
         orchestrator = StatelessOrchestrator(
             workspace=self.workspace,
             demo_mode=arguments.get("demo_mode", False),
             timeout=timeout,
         )
-        skill = arguments["skill"]
         request = arguments["request"]
-        result = orchestrator.run_skill(skill, request)
+        result = orchestrator.run_skill(skill_name, request)
         return [self._text_content(json.dumps(result, indent=2))]
 
     # --------------------------------------------------------------------- #

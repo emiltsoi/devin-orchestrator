@@ -23,6 +23,7 @@ from security_utils import (
     InvalidInputError,
     PathTraversalError,
     validate_path_safe,
+    validate_skill_name,
     validate_workflow_name,
 )
 from session_manager import create_session
@@ -486,6 +487,12 @@ class StatelessOrchestrator:
             Dictionary with session_id, workspace, success, output, error
         """
         try:
+            # Validate skill name to prevent path traversal. Even though the MCP
+            # layer and SkillInvoker validate this too, run_skill is a public
+            # method that can be called directly, so we enforce containment here
+            # as well for defense in depth.
+            skill_name = validate_skill_name(skill_name)
+
             # Create session with default format
             session_format = "SKILL-NNN"
             session_id, session_dir = create_session(self.config.session_work_dir, session_format)
