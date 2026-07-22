@@ -9,6 +9,7 @@ requiring callers to manage session IDs, prompt files, or internal paths.
 import json
 import logging
 import re
+import shutil
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,7 @@ class StatelessOrchestrator:
                        defaults to the value in config.yaml
         """
         self.config = ConfigLoader.load(workspace=workspace)
+        self.workspace = workspace
         self.demo_mode = demo_mode
         self.timeout = timeout
         self.gate_mode = gate_mode or getattr(self.config, "gate_mode", "auto")
@@ -97,6 +99,37 @@ class StatelessOrchestrator:
                 logger.info(f"Loaded {len(self.use_cases)} use cases from {use_cases_file}")
             except (FileNotFoundError, yaml.YAMLError, ValueError, KeyError) as e:
                 logger.warning(f"Failed to load use-cases.yaml: {e}")
+
+    def _seed_review_files(self, session_dir: Path, request: str) -> None:
+        """
+        Copy files listed in a review request (FILES_MODIFIED line) from the
+        workspace into the session directory so subagents inspect HEAD content.
+        """
+        if not self.workspace:
+            return
+
+        match = re.search(r"FILES_MODIFIED:\s*(.+?)(?:\n|$)", request)
+        if not match:
+            return
+
+        workspace_path = Path(self.workspace).resolve()
+        for raw_file in match.group(1).split(","):
+            relative = raw_file.strip()
+            if not relative:
+                continue
+            try:
+                source = validate_path_safe(
+                    workspace_path, workspace_path / relative, allow_absolute=True
+                )
+                if not source.is_file():
+                    continue
+                dest = validate_path_safe(
+                    session_dir, session_dir / source.name, allow_absolute=True
+                )
+                shutil.copy2(source, dest)
+                logger.info(f"Seeded review file: {dest}")
+            except (InvalidInputError, PathTraversalError, OSError) as e:
+                logger.warning(f"Failed to seed {raw_file}: {e}")
 
     def execute(self, request: str, intent: str = "auto") -> dict[str, Any]:
         """
@@ -300,6 +333,10 @@ class StatelessOrchestrator:
 
             # Write prompt file
             write_request_prompt(session_dir, request)
+
+            # Seed session with the modified files under review so subagents
+            # evaluate the HEAD version instead of stale base copies.
+            self._seed_review_files(session_dir, request)
 
             # Load workflow manifest. Resolve the manifest path against
             # workflows_dir and validate it stays safely under workflows_dir

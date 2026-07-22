@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import random
+import re
 import sys
 import time
 from enum import Enum
@@ -1503,11 +1504,38 @@ Edit this file with your input, then save to continue.
 
         review_output = result.output or existing_review or "Reviewer approved"
 
-        # Simple heuristic verdict parsing
+        # Parse the explicit overall assessment produced by swe-compliance.
+        # The review narrative uses headings like "Overall Quality Assessment:
+        # EXCELLENT/GOOD/ACCEPTABLE/POOR/BLOCKED" and lists "Critical Issues Found".
         review_lower = review_output.lower()
-        if any(
+
+        assessment_match = re.search(
+            r"overall quality assessment[:\s]+([a-z]+)", review_lower
+        )
+        critical_count = 0
+        critical_match = re.search(
+            r"critical issues? found[:\s]*(\d+)", review_lower
+        )
+        if critical_match:
+            critical_count = int(critical_match.group(1))
+
+        if assessment_match:
+            assessment = assessment_match.group(1).strip().rstrip(".")
+            if assessment in {"excellent", "good", "acceptable"}:
+                verdict = "PASS"
+                confidence = "HIGH" if assessment in {"excellent", "good"} else "MEDIUM"
+            elif assessment in {"poor", "blocked", "fail"}:
+                verdict = "FAIL"
+                confidence = "LOW"
+            else:
+                verdict = "PASS"
+                confidence = "MEDIUM"
+        elif critical_count > 0:
+            verdict = "FAIL"
+            confidence = "LOW"
+        elif any(
             word in review_lower
-            for word in ["fail", "rejected", "critical", "error", "invalid"]
+            for word in ["rejected", "block", "cannot proceed", "must fix"]
         ):
             verdict = "FAIL"
             confidence = "LOW"
