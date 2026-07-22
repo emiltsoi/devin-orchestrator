@@ -83,22 +83,34 @@ cp ~/.devin-orchestrator/workflows/code_review.manifest.yaml .devin/workflows/
 
 Note: This step is optional. The canonical source is `~/.devin-orchestrator/workflows/`. Copying to `.devin/workflows/` allows per-workspace overrides.
 
+## MCP Server
+
+After installation, start the stdio MCP server from the global install:
+
+```bash
+py -3.14 ~/.devin-orchestrator/mcp_server.py [--workspace <workspace>]
+```
+
+The server exposes devin-orchestrator as JSON-RPC tools. Connect any MCP-compatible client (Claude Desktop, Cursor, OpenClaw, etc.) and call tools such as:
+
+- `execute`, `implement`, `review`, `investigate`, `plan`, `run_workflow`, `run_skill`
+- `dispatch_skill`, `dispatch_devin`
+- `list_skills`, `get_skill`, `list_workflows`, `get_workflow`, `read_artifact`
+- `gate_decision`, `continue_workflow`
+
+See [MCP-CLIENTS.md](MCP-CLIENTS.md) for full client configuration examples.
+
 ## Usage
 
-### Cascade Workflow Execution
+### Via MCP Server (recommended)
 
-**Important:** Cascade uses the orchestrator-worker pattern. Cascade orchestrates the workflow and dispatches skills to Devin via the bash tool.
+Start the MCP server and use an MCP client to dispatch work. For example, a client can call `run_workflow` with a request to run the `superpower` workflow, or `dispatch_skill` to invoke a specific skill.
 
-When Cascade loads a workflow, it will:
-1. Read the manifest from `~/.devin-orchestrator/workflows/` (canonical) or `.devin/workflows/` (local override)
-2. Load the orchestrate-superpower skill
-3. For each stage: dispatch skill via `dispatch_skill.py` using the bash tool
-4. Reason through results and make triage decisions
-5. Handle gates and structural floor validation
+The orchestrator still follows the orchestrator-worker pattern: the MCP client is the orchestrator and Devin is the worker. All dispatch, gate, and audit calls go through the MCP server.
 
-**Cascade is the orchestrator, Devin is the worker.** Cascade dispatches to Devin via subprocess calls.
+### Direct dispatch scripts (legacy)
 
-### Example Dispatch
+If you are not using an MCP client, Cascade can still dispatch workers directly via subprocess calls:
 
 ```bash
 python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false true

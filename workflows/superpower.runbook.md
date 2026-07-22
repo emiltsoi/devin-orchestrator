@@ -522,6 +522,8 @@ Awaiting human guidance...
 
 ## 5. Deterministic Tool Calls
 
+When the harness is consumed through the MCP server, the orchestrator invokes these operations as MCP tools such as `run_workflow`, `dispatch_skill`, `dispatch_devin`, `gate_decision`, and `continue_workflow`. The server internally runs `session_init`, `validate_structural`, `record_gate`, `append_audit`, and `write_run_jsonl`.
+
 Cascade must call these deterministic tools at specific points to ensure reproducibility and auditability:
 
 | Tool | When to Call | Purpose |
