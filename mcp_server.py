@@ -18,6 +18,7 @@ arbitrary work_dir / workspace paths at call time.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import re
@@ -98,7 +99,7 @@ class McpServer:
             log_path = Path(message_log_path).expanduser()
             log_path.parent.mkdir(parents=True, exist_ok=True)
             self._message_log_path = log_path
-            self._message_log = open(
+            self._message_log = open(  # noqa: SIM115
                 log_path, "a", encoding="utf-8", buffering=1
             )
             logger.info("MCP message log: %s", log_path)
@@ -1538,10 +1539,8 @@ class McpServer:
                     self._write_message(response)
         finally:
             if self._message_log is not None:
-                try:
+                with contextlib.suppress(OSError):
                     self._message_log.close()
-                except OSError:
-                    pass
 
 
 def main() -> None:

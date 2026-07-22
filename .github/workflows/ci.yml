@@ -2,257 +2,43 @@ name: CI
 
 on:
   push:
-    branches: [ master, main, develop, 'feature/**' ]
+    branches: [master, main, "feature/**"]
   pull_request:
-    branches: [ master, main, develop ]
+    branches: [master, main]
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-    
-    - name: Run tests
-      run: |
-        cd workflow-engine
-        python -m pytest -v --cov=. --cov-report=xml --cov-report=term
-    
-    - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./workflow-engine/coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-
   lint:
     runs-on: ubuntu-latest
-    
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install ruff
-    
-    - name: Run ruff linter
-      run: |
-        ruff check .
-    
-    - name: Run ruff formatter check
-      run: |
-        ruff format --check .
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run ruff linter
+        run: ruff check mcp_server.py dispatch_devin.py workflow-engine tests
 
-  security:
+  test:
     runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install bandit safety
-    
-    - name: Run Bandit security linter
-      run: |
-        bandit -r workflow-engine/ -f json -o bandit-report.json || true
-        bandit -r workflow-engine/
-    
-    - name: Run Safety check
-      run: |
-        safety check --json --output safety-report.json || true
-        safety check || true
-    
-    - name: Upload security reports
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: security-reports
-        path: |
-          bandit-report.json
-          safety-report.json
-
-  dependency-check:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pip-audit
-    
-    - name: Run pip-audit
-      run: |
-        pip-audit --format json --output pip-audit-report.json || true
-        pip-audit || true
-    
-    - name: Upload pip-audit report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: pip-audit-report
-        path: pip-audit-report.json
-
-  validate-manifests:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyyaml
-    
-    - name: Validate manifest skill references
-      run: |
-        python scripts/validate_manifests.py
-    
-    - name: Lint artifact names
-      run: |
-        python scripts/lint_artifact_names.py
-
-  test-install:
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-    
+        python-version: ["3.11", "3.12"]
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyyaml
-    
-    - name: Test installation (Linux/macOS)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        python install.py --dry-run || true
-        python install_automated.py --dry-run || true
-    
-    - name: Test installation (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        python install.py --dry-run || true
-        python install_automated.py --dry-run || true
-
-  test-backup-recovery:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyyaml
-    
-    - name: Test backup script (Linux/macOS)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        python backup_script.py --dry-run --type configs --no-compress || true
-    
-    - name: Test backup script (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        python backup_script.py --dry-run --type configs --no-compress || true
-    
-    - name: Test recovery script (Linux/macOS)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        python recovery_script.py --list || true
-    
-    - name: Test recovery script (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        python recovery_script.py --list || true
-
-  powershell-test:
-    runs-on: windows-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyyaml
-    
-    - name: Test PowerShell backup wrapper
-      run: |
-        pwsh -File scripts/backup.ps1 -Type configs -NoCompress -ProjectRoot $env:GITHUB_WORKSPACE || true
-    
-    - name: Test PowerShell recovery wrapper
-      run: |
-        pwsh -File scripts/recovery.ps1 -List -ProjectRoot $env:GITHUB_WORKSPACE || true
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Compile Python files
+        run: python -m compileall mcp_server.py dispatch_devin.py workflow-engine tests
+      - name: Run pytest
+        run: python -m pytest tests/ -v

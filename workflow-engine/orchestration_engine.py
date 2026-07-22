@@ -259,8 +259,6 @@ class OrchestrationEngine:
                         "error": f"Failed to write gate decision: {str(e)}",
                     }
 
-        request_content = session_data.get("request", "")
-
         # Start/resume metrics tracking
         self.metrics.start_workflow(session_id, manifest["name"])
 
@@ -1530,10 +1528,7 @@ Edit this file with your input, then save to continue.
             else:
                 verdict = "PASS"
                 confidence = "MEDIUM"
-        elif critical_count > 0:
-            verdict = "FAIL"
-            confidence = "LOW"
-        elif any(
+        elif critical_count > 0 or any(
             word in review_lower
             for word in ["rejected", "block", "cannot proceed", "must fix"]
         ):
@@ -1811,9 +1806,9 @@ Edit this file with your input, then save to continue.
     def _evaluate_gate_bypass_conditions(
         self,
         gate_id: str,
-        stage_name: str,
-        session_dir: Path,
-        gate_decision_file: Path,
+        _stage_name: str,
+        _session_dir: Path,
+        _gate_decision_file: Path,
         manifest: dict[str, Any] | None,
         stage_result: dict[str, Any] | None,
     ) -> dict[str, Any]:
