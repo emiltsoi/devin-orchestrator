@@ -60,6 +60,7 @@ class StatelessOrchestrator:
         workspace: str | None = None,
         demo_mode: bool = False,
         timeout: int | None = None,
+        gate_mode: str | None = None,
     ):
         """
         Initialize the stateless orchestrator.
@@ -68,10 +69,13 @@ class StatelessOrchestrator:
             workspace: Optional workspace path for config loading
             demo_mode: If True, skip real Devin dispatches and simulate outputs
             timeout: Optional per-dispatch timeout in seconds (defaults to config)
+            gate_mode: Optional gate interaction mode (interactive|signal|auto);
+                       defaults to the value in config.yaml
         """
         self.config = ConfigLoader.load(workspace=workspace)
         self.demo_mode = demo_mode
         self.timeout = timeout
+        self.gate_mode = gate_mode or getattr(self.config, "gate_mode", "auto")
         self._load_use_cases()
 
     def _load_use_cases(self) -> None:
@@ -325,6 +329,8 @@ class StatelessOrchestrator:
                 config={
                     "demo_mode": self.demo_mode,
                     "dispatch_timeout_seconds": dispatch_timeout,
+                    "gate_mode": self.gate_mode,
+                    "workflows_dir": str(self.config.workflows_dir),
                 },
             )
             results = engine.execute_workflow(
@@ -376,6 +382,59 @@ class StatelessOrchestrator:
                 "success": False,
                 "output": None,
                 "error": f"Invalid workflow manifest: {str(e)}",
+            }
+
+    def continue_workflow(
+        self,
+        session_id: str,
+        gate_verdict: str | None = None,
+        gate_notes: str | None = None,
+        gate_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Resume a workflow that is paused at a gate.
+
+        Args:
+            session_id: Existing session identifier
+            gate_verdict: Optional verdict to write before resuming
+            gate_notes: Optional notes for the gate decision
+            gate_id: Optional explicit gate id
+
+        Returns:
+            Dictionary with session_id, workspace, success, output, error
+        """
+        try:
+            engine = OrchestrationEngine(
+                work_dir=self.config.session_work_dir,
+                config={
+                    "demo_mode": self.demo_mode,
+                    "dispatch_timeout_seconds": self.timeout or self.config.dispatch_timeout_seconds,
+                    "gate_mode": self.gate_mode,
+                    "workflows_dir": str(self.config.workflows_dir),
+                },
+            )
+            results = engine.continue_workflow(
+                session_id=session_id,
+                gate_verdict=gate_verdict,
+                gate_notes=gate_notes,
+                gate_id=gate_id,
+            )
+            session_dir = self.config.session_work_dir / session_id
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "success": results.get("final_status") == "completed",
+                "output": json.dumps(results, indent=2, default=_json_default),
+                "error": results.get("error") if results.get("final_status") != "completed" else None,
+            }
+        except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
+            logger.error(f"Failed to continue workflow {session_id}: {e}")
+            return {
+                "session_id": session_id,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"Failed to continue workflow: {str(e)}",
             }
 
     def run_skill(self, skill_name: str, request: str) -> dict[str, Any]:

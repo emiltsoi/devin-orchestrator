@@ -44,6 +44,8 @@ class GlobalConfig:
     # Optional agent skill injection: maps agent name -> list of skill names.
     agent_skills: dict[str, list[str]] | None = None
     dispatch_timeout_seconds: int = 300
+    gate_mode: str = "auto"
+    gate_bypass_conditions: dict[str, Any] | None = None
     # Log rotation settings
     log_max_bytes: int = 10 * 1024 * 1024  # 10 MB
     log_backup_count: int = 5
@@ -322,6 +324,23 @@ class ConfigLoader:
             )
             dispatch_timeout_seconds = 300
 
+        # Gate interaction mode: controls whether workflow gates block, signal,
+        # or auto-bypass when used from MCP or CLI.
+        gate_mode = os.getenv(
+            "DEVIN_GATE_MODE",
+            config_data.get("gate_mode", "auto"),
+        )
+        if gate_mode not in {"interactive", "signal", "auto"}:
+            logger.warning(
+                "Invalid gate_mode %r; falling back to 'auto'",
+                gate_mode,
+            )
+            gate_mode = "auto"
+
+        gate_bypass_conditions = config_data.get("gate_bypass_conditions")
+        if not isinstance(gate_bypass_conditions, dict):
+            gate_bypass_conditions = None
+
         # Fallback to current directory for testing (if global paths don't exist)
         if not skills_dir.exists():
             skills_dir = Path(__file__).parent.parent / "skills"
@@ -409,6 +428,8 @@ class ConfigLoader:
             model_overrides=model_overrides,
             agent_skills=agent_skills,
             dispatch_timeout_seconds=dispatch_timeout_seconds,
+            gate_mode=gate_mode,
+            gate_bypass_conditions=gate_bypass_conditions,
             log_max_bytes=log_max_bytes,
             log_backup_count=log_backup_count,
         )

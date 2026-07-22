@@ -212,6 +212,11 @@ class McpServer:
                             "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
                             "default": 300,
                         },
+                        "gate_mode": {
+                            "type": "string",
+                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
+                            "default": "auto",
+                        },
                     },
                     "required": ["request"],
                 },
@@ -235,6 +240,11 @@ class McpServer:
                             "type": "integer",
                             "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
                             "default": 300,
+                        },
+                        "gate_mode": {
+                            "type": "string",
+                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
+                            "default": "auto",
                         },
                     },
                     "required": ["request"],
@@ -260,6 +270,11 @@ class McpServer:
                             "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
                             "default": 300,
                         },
+                        "gate_mode": {
+                            "type": "string",
+                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
+                            "default": "auto",
+                        },
                     },
                     "required": ["request"],
                 },
@@ -283,6 +298,11 @@ class McpServer:
                             "type": "integer",
                             "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
                             "default": 300,
+                        },
+                        "gate_mode": {
+                            "type": "string",
+                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
+                            "default": "auto",
                         },
                     },
                     "required": ["request"],
@@ -331,8 +351,47 @@ class McpServer:
                             "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
                             "default": 300,
                         },
+                        "gate_mode": {
+                            "type": "string",
+                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
+                            "default": "auto",
+                        },
                     },
                     "required": ["workflow", "request"],
+                },
+            },
+            {
+                "name": "gate_decision",
+                "description": "Submit a human/agent decision for a workflow gate.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string"},
+                        "gate_id": {"type": "string"},
+                        "verdict": {
+                            "type": "string",
+                            "description": "approve | request_changes | block",
+                        },
+                        "notes": {"type": "string"},
+                    },
+                    "required": ["session_id", "gate_id", "verdict"],
+                },
+            },
+            {
+                "name": "continue_workflow",
+                "description": "Resume a workflow that is paused at a gate. Optionally supply a gate verdict.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string"},
+                        "gate_verdict": {
+                            "type": "string",
+                            "description": "Optional verdict to write before resuming (approve | request_changes | block)",
+                        },
+                        "gate_notes": {"type": "string"},
+                        "gate_id": {"type": "string"},
+                    },
+                    "required": ["session_id"],
                 },
             },
             {
@@ -1049,6 +1108,7 @@ class McpServer:
             workspace=self.workspace,
             demo_mode=arguments.get("demo_mode", False),
             timeout=timeout,
+            gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
         intent = arguments.get("intent", "auto")
@@ -1077,6 +1137,7 @@ class McpServer:
             workspace=self.workspace,
             demo_mode=arguments.get("demo_mode", False),
             timeout=timeout,
+            gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
         result = orchestrator.implement(request)
@@ -1104,6 +1165,7 @@ class McpServer:
             workspace=self.workspace,
             demo_mode=arguments.get("demo_mode", False),
             timeout=timeout,
+            gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
         result = orchestrator.review(request)
@@ -1131,6 +1193,7 @@ class McpServer:
             workspace=self.workspace,
             demo_mode=arguments.get("demo_mode", False),
             timeout=timeout,
+            gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
         result = orchestrator.investigate(request)
@@ -1178,6 +1241,7 @@ class McpServer:
             workspace=self.workspace,
             demo_mode=arguments.get("demo_mode", False),
             timeout=timeout,
+            gate_mode=arguments.get("gate_mode", "auto"),
         )
 
         # Validate workflow name to prevent path traversal / manifest injection.
@@ -1194,6 +1258,74 @@ class McpServer:
 
         request = arguments["request"]
         result = orchestrator.run_workflow(workflow_name, request)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_gate_decision(self, arguments: dict) -> list[dict]:
+        """
+        Write a gate decision to the session's gate decision file.
+
+        Args:
+            arguments: Tool arguments containing session_id, gate_id, verdict, notes
+
+        Returns:
+            List containing success message
+        """
+        from session_manager import resolve_session
+
+        session_id = arguments.get("session_id")
+        gate_id = arguments.get("gate_id")
+        verdict = arguments.get("verdict")
+        notes = arguments.get("notes", "")
+
+        if not all([session_id, gate_id, verdict]):
+            return [self._text_content("session_id, gate_id, and verdict are required")]
+
+        try:
+            session_dir = resolve_session(self.config.session_work_dir, session_id)
+        except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
+            return [self._text_content(f"Failed to resolve session: {e}")]
+
+        decision_file = session_dir / f"gate-{gate_id}-decision.md"
+        try:
+            decision_file.write_text(
+                f"verdict: {verdict}\nnotes: {notes}\n", encoding="utf-8"
+            )
+        except (OSError, PermissionError) as e:
+            return [self._text_content(f"Failed to write gate decision: {e}")]
+
+        return [
+            self._text_content(
+                f"Gate decision written for {gate_id}. "
+                f"Call continue_workflow with session_id {session_id} to resume."
+            )
+        ]
+
+    def _tool_continue_workflow(self, arguments: dict) -> list[dict]:
+        """
+        Resume a workflow that is paused at a gate.
+
+        Args:
+            arguments: Tool arguments containing session_id and optional gate verdict
+
+        Returns:
+            List containing continuation result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        session_id = arguments.get("session_id")
+        if not session_id:
+            return [self._text_content("session_id is required")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            gate_mode=arguments.get("gate_mode", "auto"),
+        )
+        result = orchestrator.continue_workflow(
+            session_id=session_id,
+            gate_verdict=arguments.get("gate_verdict"),
+            gate_notes=arguments.get("gate_notes"),
+            gate_id=arguments.get("gate_id"),
+        )
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_run_skill(self, arguments: dict) -> list[dict]:

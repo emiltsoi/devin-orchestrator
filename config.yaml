@@ -51,3 +51,21 @@ default_permission_mode: ${DEVIN_DEFAULT_PERMISSION_MODE:-dangerous}
 
 # Session configuration
 session_work_dir: ~/.devin-orchestrator/work
+
+# Gate interaction mode
+# Allowed values: "interactive", "signal", "auto"
+# - "interactive": block and wait for a decision file edit (legacy CLI behaviour)
+# - "signal": return immediately when a gate is reached and ask the calling agent
+#   to write a verdict to the gate decision file and call continue_workflow
+# - "auto": evaluate bypass conditions; auto-approve when none trigger, otherwise
+#   signal the calling agent. This is the recommended default for MCP use.
+# Set DEVIN_GATE_MODE environment variable or update this value.
+gate_mode: ${DEVIN_GATE_MODE:-auto}
+
+# Optional gate bypass/escalation overrides (empty by default). If provided,
+# these are passed to the orchestrator for future use; the current default
+# condition set is implemented in orchestration_engine._evaluate_gate_bypass_conditions.
+# Possible escalation conditions include:
+#   demo_mode, mandatory_gate, stage_failure, reviewer_rejected,
+#   critical_security_findings, missing_or_empty_output, warnings_or_medium_confidence
+gate_bypass_conditions: {}

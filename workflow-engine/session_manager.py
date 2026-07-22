@@ -136,11 +136,10 @@ def resolve_session(work_dir: Path, session_id: str) -> Path:
     # Validate session ID
     session_id = validate_session_id(session_id)
 
-    # Build the session directory path
-    session_dir = work_dir / session_id
-
-    # Validate the path is safe and within work_dir
-    session_dir = validate_path_safe(work_dir, session_dir, allow_absolute=False)
+    # Build the session directory path and validate it stays under work_dir.
+    # allow_absolute=True is safe here because the path is constructed from
+    # the validated session ID joined onto the base work_dir.
+    session_dir = validate_path_safe(work_dir, work_dir / session_id, allow_absolute=True)
 
     # Check if the session directory exists
     if not session_dir.exists():
