@@ -26,5 +26,3 @@ __pycache__/
 # Logs
 logs/
 *.log
-tmp_review_change.log.txt
-tmp_review_change_result.json
