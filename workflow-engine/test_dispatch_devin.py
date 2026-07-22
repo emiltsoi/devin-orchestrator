@@ -422,5 +422,37 @@ class TestAdapterConstructorAndInvoke:
         assert "Do the thing" in invoke["prompt"]
 
 
+class TestResolveRoleFileShortNameValidation:
+    """M-1: resolve_role_file must reject short names containing path
+    separators or traversal segments so they cannot resolve outside roles/."""
+
+    def test_traversal_short_name_rejected(self):
+        with pytest.raises(FileNotFoundError):
+            dispatch_devin.resolve_role_file("../evil")
+
+    def test_path_separator_short_name_rejected(self):
+        with pytest.raises(FileNotFoundError):
+            dispatch_devin.resolve_role_file("evil/role")
+
+    def test_dot_short_name_rejected(self):
+        with pytest.raises(FileNotFoundError):
+            dispatch_devin.resolve_role_file("evil.role")
+
+    def test_valid_short_name_resolves_under_roles(self, tmp_path, monkeypatch):
+        # Resolve against a tmp repo root so we don't depend on the real
+        # roles/ directory shipping a specific role.
+        roles_dir = tmp_path / "roles"
+        roles_dir.mkdir()
+        (roles_dir / "coder.md").write_text("# Coder\n", encoding="utf-8")
+
+        # Point __file__-relative resolution at the tmp root by monkeypatching
+        # Path(__file__).parent used inside resolve_role_file.
+        monkeypatch.setattr(
+            dispatch_devin, "__file__", str(tmp_path / "dispatch_devin.py")
+        )
+        resolved = dispatch_devin.resolve_role_file("coder")
+        assert resolved == roles_dir / "coder.md"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-q"])

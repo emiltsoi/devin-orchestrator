@@ -20,6 +20,7 @@ markdown file is also accepted.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -31,12 +32,32 @@ from config_loader import ConfigLoader  # noqa: E402
 from devin_cli_adapter import DevinCliAdapter  # noqa: E402
 from model_resolver import resolve_model  # noqa: E402
 
+# Safe characters allowed in a role short name. Path separators, dots, and
+# traversal segments are rejected so a short name cannot resolve outside the
+# roles/ directory.
+_ROLE_SHORT_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
 
 def resolve_role_file(role: str) -> Path:
-    """Resolve a role name or path to a markdown role file."""
+    """Resolve a role name or path to a markdown role file.
+
+    A full path to an existing markdown file is accepted directly. A short
+    name (e.g. ``coder``) is restricted to ``[a-zA-Z0-9_-]+`` and resolved to
+    ``roles/<role>.md`` under the repo root; path separators and traversal
+    segments are rejected.
+    """
     candidate = Path(role)
     if candidate.is_file():
         return candidate
+
+    # Short name: reject anything that looks like a path or traversal attempt
+    # before joining it into the roles directory.
+    if not _ROLE_SHORT_NAME_RE.match(role):
+        raise FileNotFoundError(
+            f"Invalid role name: {role!r} (only alphanumeric, '-' and '_' "
+            "are allowed in short names; path separators and traversal are "
+            "rejected)"
+        )
 
     role_path = Path(__file__).parent / "roles" / f"{role}.md"
     if not role_path.is_file():

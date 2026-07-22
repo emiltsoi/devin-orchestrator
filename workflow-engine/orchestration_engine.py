@@ -179,6 +179,10 @@ class OrchestrationEngine:
 
             # Load manifest
             manifest = load_manifest(manifest_path)
+            # Validate required structure so a malformed manifest (missing
+            # name/stages or per-stage skill/name) raises WorkflowManifestError
+            # instead of an uncaught KeyError downstream.
+            self._validate_manifest_structure(manifest, manifest_path)
             logger.info(
                 f"Loaded manifest from {manifest_path}: "
                 f"{manifest.get('name', 'unknown')}"
@@ -226,6 +230,46 @@ class OrchestrationEngine:
                 "error": f"System error loading manifest: {str(e)}",
                 "error_type": type(e).__name__,
             }
+
+    def _validate_manifest_structure(
+        self, manifest: Any, manifest_path: Path
+    ) -> None:
+        """Validate that a parsed manifest has the required structure.
+
+        Raises ``WorkflowManifestError`` if the manifest is not a mapping, is
+        missing the required ``name`` or ``stages`` keys, or any stage is
+        missing its ``name`` or ``skill`` key. This keeps downstream manifest
+        access (which uses direct subscripting) from raising uncaught
+        ``KeyError`` / ``TypeError`` exceptions.
+        """
+        if not isinstance(manifest, dict):
+            raise WorkflowManifestError(
+                f"Manifest {manifest_path} must be a mapping, got "
+                f"{type(manifest).__name__}"
+            )
+        missing = [k for k in ("name", "stages") if k not in manifest]
+        if missing:
+            raise WorkflowManifestError(
+                f"Manifest {manifest_path} missing required key(s): {missing}"
+            )
+        stages = manifest["stages"]
+        if not isinstance(stages, list):
+            raise WorkflowManifestError(
+                f"Manifest {manifest_path} 'stages' must be a list, got "
+                f"{type(stages).__name__}"
+            )
+        for index, stage in enumerate(stages):
+            if not isinstance(stage, dict):
+                raise WorkflowManifestError(
+                    f"Manifest {manifest_path} stage #{index} must be a "
+                    f"mapping, got {type(stage).__name__}"
+                )
+            stage_missing = [k for k in ("name", "skill") if k not in stage]
+            if stage_missing:
+                raise WorkflowManifestError(
+                    f"Manifest {manifest_path} stage #{index} missing "
+                    f"required key(s): {stage_missing}"
+                )
 
     def _init_workflow_session(
         self, session_id: str, request_content: str, manifest: dict[str, Any]

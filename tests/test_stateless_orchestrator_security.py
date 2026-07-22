@@ -142,5 +142,81 @@ class TestRunWorkflowMalformedManifest:
                 load_manifest(bad)
 
 
+class TestRunWorkflowMalformedManifestStructure:
+    """M-2: run_workflow must return a friendly error for manifests missing
+    required structure (name/stages/per-stage skill) instead of raising an
+    uncaught KeyError."""
+
+    def test_run_workflow_missing_stages_returns_friendly_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orchestrator = _make_orchestrator_with_workspace(tmpdir)
+
+            workflows_dir = Path(tmpdir) / "workflows"
+            (workflows_dir / "nostr.manifest.yaml").write_text(
+                "name: nostr\n", encoding="utf-8"
+            )
+
+            result = orchestrator.run_workflow("nostr", "do something")
+
+            assert result["success"] is False
+            err = result.get("error") or ""
+            assert err != ""
+            assert "manifest" in err.lower()
+
+    def test_run_workflow_missing_name_returns_friendly_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orchestrator = _make_orchestrator_with_workspace(tmpdir)
+
+            workflows_dir = Path(tmpdir) / "workflows"
+            (workflows_dir / "noname.manifest.yaml").write_text(
+                "stages:\n  - name: s1\n    skill: writing-plans\n",
+                encoding="utf-8",
+            )
+
+            result = orchestrator.run_workflow("noname", "do something")
+
+            assert result["success"] is False
+            err = result.get("error") or ""
+            assert err != ""
+            assert "manifest" in err.lower()
+
+    def test_run_workflow_stage_missing_skill_returns_friendly_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orchestrator = _make_orchestrator_with_workspace(tmpdir)
+
+            workflows_dir = Path(tmpdir) / "workflows"
+            (workflows_dir / "noskill.manifest.yaml").write_text(
+                "name: noskill\nstages:\n  - name: s1\n",
+                encoding="utf-8",
+            )
+
+            result = orchestrator.run_workflow("noskill", "do something")
+
+            assert result["success"] is False
+            err = result.get("error") or ""
+            assert err != ""
+            assert "manifest" in err.lower()
+
+    def test_validate_manifest_structure_raises_workflow_manifest_error(self):
+        """_validate_manifest_structure must raise WorkflowManifestError on
+        missing required keys."""
+        from deterministic_tools import WorkflowManifestError
+        from orchestration_engine import OrchestrationEngine
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            engine = OrchestrationEngine(work_dir=Path(tmpdir) / "work")
+            manifest_path = Path(tmpdir) / "bad.manifest.yaml"
+
+            with pytest.raises(WorkflowManifestError):
+                engine._validate_manifest_structure(
+                    {"name": "x"}, manifest_path
+                )
+            with pytest.raises(WorkflowManifestError):
+                engine._validate_manifest_structure(
+                    {"name": "x", "stages": [{"name": "s1"}]},
+                    manifest_path,
+                )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

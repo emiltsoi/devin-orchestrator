@@ -44,6 +44,11 @@ def _make_server_with_workspace(tmpdir: str) -> McpServer:
     )
     for sub in ("root", "skills", "workflows", "work"):
         (workspace / sub).mkdir(exist_ok=True)
+    # Provide a default role file under global_root/roles so dispatch_devin
+    # tests using the short name "coder" resolve to an existing role file.
+    roles_dir = workspace / "root" / "roles"
+    roles_dir.mkdir(exist_ok=True)
+    (roles_dir / "coder.md").write_text("# Coder\n\nYou are a coder.", encoding="utf-8")
     return McpServer(workspace=str(workspace))
 
 
@@ -530,6 +535,158 @@ class TestDispatchDevinOutputFileFromWorkDir:
             text = result[0]["text"]
             assert "OUTPUT-CONTENT" in text
             assert "OUTPUT FILE" in text
+
+
+class TestDispatchDevinRoleShortName:
+    """M-1: _tool_dispatch_devin must reject unsafe role short names and
+    resolve short names against global_root/roles before invoking the
+    subprocess, so a relative name cannot resolve outside roles/."""
+
+    def test_dispatch_devin_rejects_traversal_role_short_name(self, monkeypatch):
+        """A role short name containing path separators / traversal must be
+        rejected before the subprocess is invoked."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            server = _make_server_with_workspace(tmpdir)
+
+            work_dir = Path(tmpdir) / "root" / "proj"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
+
+            def fake_run(cmd, **kwargs):  # pragma: no cover - should not run
+                raise AssertionError("subprocess should not be invoked")
+
+            monkeypatch.setattr(subprocess, "run", fake_run)
+
+            result = server._tool_dispatch_devin(
+                {
+                    "role": "../evil",
+                    "prompt_file": "prompt.md",
+                    "work_dir": str(work_dir),
+                }
+            )
+
+            text = result[0]["text"]
+            assert "Invalid role name" in text
+
+    def test_dispatch_devin_rejects_path_separator_role_short_name(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            server = _make_server_with_workspace(tmpdir)
+
+            work_dir = Path(tmpdir) / "root" / "proj"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
+
+            def fake_run(cmd, **kwargs):  # pragma: no cover - should not run
+                raise AssertionError("subprocess should not be invoked")
+
+            monkeypatch.setattr(subprocess, "run", fake_run)
+
+            result = server._tool_dispatch_devin(
+                {
+                    "role": "evil/role",
+                    "prompt_file": "prompt.md",
+                    "work_dir": str(work_dir),
+                }
+            )
+
+            assert "Invalid role name" in result[0]["text"]
+
+    def test_dispatch_devin_short_name_resolved_under_roles_dir(self, monkeypatch):
+        """A valid short name must be resolved to global_root/roles/<role>.md
+        and the resolved absolute path passed to the subprocess."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            server = _make_server_with_workspace(tmpdir)
+
+            work_dir = Path(tmpdir) / "root" / "proj"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
+
+            captured: dict = {}
+
+            def fake_run(cmd, **kwargs):
+                captured["cmd"] = cmd
+                return subprocess.CompletedProcess(
+                    args=cmd, returncode=0, stdout="ok", stderr=""
+                )
+
+            monkeypatch.setattr(subprocess, "run", fake_run)
+
+            result = server._tool_dispatch_devin(
+                {
+                    "role": "coder",
+                    "prompt_file": "prompt.md",
+                    "work_dir": str(work_dir),
+                }
+            )
+
+            assert "Exit code: 0" in result[0]["text"]
+            role_arg = captured["cmd"][captured["cmd"].index("--role") + 1]
+            expected = str(Path(tmpdir) / "root" / "roles" / "coder.md")
+            assert role_arg == expected
+
+    def test_dispatch_devin_short_name_missing_role_file_rejected(self, monkeypatch):
+        """A short name with no matching role file under roles/ must be
+        rejected before invoking the subprocess."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            server = _make_server_with_workspace(tmpdir)
+
+            work_dir = Path(tmpdir) / "root" / "proj"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
+
+            def fake_run(cmd, **kwargs):  # pragma: no cover - should not run
+                raise AssertionError("subprocess should not be invoked")
+
+            monkeypatch.setattr(subprocess, "run", fake_run)
+
+            result = server._tool_dispatch_devin(
+                {
+                    "role": "ghost",
+                    "prompt_file": "prompt.md",
+                    "work_dir": str(work_dir),
+                }
+            )
+
+            assert "Role file not found" in result[0]["text"]
+
+
+class TestReadMessageNdjsonLengthLimit:
+    """M-3: _read_message must reject NDJSON lines exceeding MAX_MESSAGE_SIZE."""
+
+    def _make_server(self, tmpdir):
+        server = _make_server_with_workspace(tmpdir)
+        # Use a tiny in-memory binary stdin so we can feed oversized lines.
+        return server
+
+    def test_oversized_ndjson_line_returns_parse_error(self, monkeypatch):
+        import io
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            server = self._make_server(tmpdir)
+
+            # Build a line larger than MAX_MESSAGE_SIZE with no newline.
+            oversized = b"x" * (server.MAX_MESSAGE_SIZE + 16)
+            server.stdin = io.BytesIO(oversized)
+
+            result = server._read_message()
+
+            assert result is not None
+            assert "error" in result
+            assert "exceeds maximum" in result["error"]["message"]
+
+    def test_valid_small_ndjson_line_parses(self, monkeypatch):
+        import io
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            server = self._make_server(tmpdir)
+
+            payload = b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n'
+            server.stdin = io.BytesIO(payload)
+
+            result = server._read_message()
+
+            assert result is not None
+            assert result.get("method") == "ping"
 
 
 if __name__ == "__main__":

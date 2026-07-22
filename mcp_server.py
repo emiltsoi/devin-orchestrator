@@ -815,20 +815,35 @@ class McpServer:
             except InvalidInputError as e:
                 return [self._text_content(f"Invalid output_file: {e}")]
 
-        # Validate role is either a short name or a path under global_root/roles
+        # Validate role is either a short name or a path under global_root/roles.
+        # Short names are restricted to safe characters (no path separators or
+        # traversal) and resolved to global_root/roles/<role>.md before being
+        # passed to the subprocess, so dispatch_devin.py never receives a raw
+        # relative name that could resolve against CWD or escape roles/.
         role = arguments["role"]
+        roles_dir = self.config.global_root / "roles"
         role_path = Path(role)
         if role_path.is_absolute():
             # If absolute, must be under global_root/roles
-            roles_dir = self.config.global_root / "roles"
             try:
-                role_path = validate_path_safe(roles_dir, role_path, allow_absolute=True)
-            except InvalidInputError as e:
+                resolved_role = validate_path_safe(
+                    roles_dir, role_path, allow_absolute=True
+                )
+            except (InvalidInputError, PathTraversalError) as e:
                 return [self._text_content(f"Invalid role path: {e}")]
         else:
-            # Short name - validate it contains only safe characters
+            # Short name - validate it contains only safe characters (no path
+            # separators, dots, or traversal segments).
             if not re.match(r"^[a-zA-Z0-9_-]+$", role):
                 return [self._text_content(f"Invalid role name: {role}")]
+            try:
+                resolved_role = validate_path_safe(
+                    roles_dir, roles_dir / f"{role}.md", allow_absolute=True
+                )
+            except (InvalidInputError, PathTraversalError) as e:
+                return [self._text_content(f"Invalid role name: {e}")]
+        if not resolved_role.is_file():
+            return [self._text_content(f"Role file not found: {resolved_role}")]
 
         script = Path(__file__).parent / "dispatch_devin.py"
         cmd = [sys.executable, str(script)]
@@ -838,11 +853,11 @@ class McpServer:
             cmd.extend(["--agent", str(arguments["agent"])])
         if arguments.get("phase"):
             cmd.extend(["--phase", str(arguments["phase"])])
-        cmd.extend(["--role", str(role)])
+        cmd.extend(["--role", str(resolved_role)])
         cmd.extend(["--prompt-file", str(prompt_file)])
         cmd.extend(["--work-dir", str(work_dir)])
-        if arguments.get("output_file"):
-            cmd.extend(["--output-file", str(arguments["output_file"])])
+        if validated_output_file is not None:
+            cmd.extend(["--output-file", str(validated_output_file)])
         for ctx in arguments.get("focused_context", []):
             cmd.extend(["--focused-context", str(ctx)])
 
@@ -1216,9 +1231,23 @@ class McpServer:
         # Auto-detect framing: NDJSON (one JSON object per line, MCP 2025-11-25)
         # or LSP-style Content-Length headers (older MCP / TypeScript SDK).
         while True:
-            line = self.stdin.readline()
+            # Bound the line read so a missing newline cannot cause unbounded
+            # memory consumption on the stdio transport. readline(n) returns at
+            # most n bytes; if the line is longer than the limit it will be
+            # returned without a trailing newline.
+            line = self.stdin.readline(self.MAX_MESSAGE_SIZE + 1)
             if not line:
                 return None
+            if len(line) > self.MAX_MESSAGE_SIZE and b"\n" not in line:
+                logger.error(
+                    "NDJSON line exceeds maximum message size %d",
+                    self.MAX_MESSAGE_SIZE,
+                )
+                return self._error(
+                    {"id": None},
+                    -32700,
+                    f"Message size exceeds maximum {self.MAX_MESSAGE_SIZE}",
+                )
             stripped = line.strip()
             if not stripped:
                 continue
