@@ -22,7 +22,7 @@ For each stage in the manifest:
 - If `skip_brainstorming` is true and stage is brainstorming: skip stage
 - If stage is skipped: create placeholder artifacts and continue
 - Load skill definition and narrative
-- **Dispatch skill using dispatch_skill.py to call Devin**
+- **Dispatch skill using the devin-orchestrator MCP tool (`mcp0_dispatch_skill` or `dispatch_skill`) to call Devin**
 - Read output artifacts
 - Validate structural floor (no TODO, no placeholders, non-empty)
 - Reason about results

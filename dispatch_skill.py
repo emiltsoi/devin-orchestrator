@@ -13,8 +13,11 @@ from bash to dispatch skills to Devin.
 # ruff: noqa: E402
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Add workflow-engine to Python path using script location
 # This works regardless of installation location
@@ -35,6 +38,7 @@ else:
 from config_loader import ConfigLoader
 from security_utils import (
     InvalidInputError,
+    validate_path_safe,
     validate_session_id,
     validate_skill_name,
     validate_workspace_path,
