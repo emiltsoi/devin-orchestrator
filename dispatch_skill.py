@@ -2,11 +2,12 @@
 """
 Dispatch skill to Devin via skill_invoker
 
-This script is a lightweight wrapper for skill_invoker.invoke_skill() that can be called
-from bash to dispatch skills to Devin. This allows Cascade to dispatch skills using the bash tool.
+If you are an agent connected to the devin-orchestrator MCP server, use the
+`mcp0_dispatch_skill` MCP tool instead of this script. This script is a legacy
+CLI fallback for environments without the MCP server.
 
-The wrapper is necessary because Cascade cannot import Python modules directly, but can use
-the bash tool to execute scripts.
+This script is a lightweight wrapper for skill_invoker.invoke_skill() that can be called
+from bash to dispatch skills to Devin.
 """
 
 # ruff: noqa: E402

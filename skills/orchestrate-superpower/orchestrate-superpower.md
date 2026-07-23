@@ -1,11 +1,13 @@
 ---
 name: orchestrate-superpower
-description: "Use when orchestrating a multi-stage superpower workflow that dispatches each stage skill to Devin via dispatch_skill.py."
+description: "Use when orchestrating a multi-stage superpower workflow that dispatches each stage skill to Devin. Prefer the mcp0_dispatch_skill MCP tool; fall back to the dispatch_skill.py script only when MCP tools are unavailable."
 ---
 
 # Orchestrate Superpower Workflow
 
-You are the orchestrator. Your job is to load the superpower manifest and execute each stage using dispatch_skill.py to dispatch Devin, reasoning through results and making triage decisions.
+You are the orchestrator. Your job is to load the superpower manifest and execute each stage by dispatching the stage skill to Devin, reasoning through results and making triage decisions.
+
+If you are connected via the devin-orchestrator MCP server, use the `mcp0_dispatch_skill` tool (or `dispatch_skill` if your client does not prefix tool names). Only fall back to the `dispatch_skill.py` script if you do not have MCP tools available.
 
 ## Process
 
@@ -44,9 +46,32 @@ if manifest.get('skip_brainstorming', False) and stage['name'] == 'brainstorming
 ```
 
 ### 3. Skill Invocation (IMPORTANT)
-You MUST use the dispatch_skill.py script to dispatch Devin. Do NOT execute the skill yourself - dispatch it to Devin.
+You MUST dispatch each stage to Devin. Do NOT execute the skill yourself - dispatch it to Devin.
 
-Use the bash tool to call dispatch_skill.py:
+**Preferred method:** If the devin-orchestrator MCP tools are available, use `mcp0_dispatch_skill` (or `dispatch_skill` if your client does not prefix tool names) with these arguments:
+- `skill_name`: name of the skill to dispatch (e.g. `brainstorming`, `writing-plans`)
+- `session_id`: session identifier (e.g. `SUPERPOWER-001`)
+- `workspace`: path to the session directory
+- `is_reviewer`: `true` if this is a reviewer stage (e.g. `requesting-code-review`), otherwise `false`
+- `demo_mode`: `true` for testing (simulated dispatch), `false` for production (real Devin dispatch)
+- `config_overrides`: optional JSON object with overrides (e.g. `{"interactive_mode": true}`)
+
+Example MCP tool call:
+```json
+{
+  "name": "mcp0_dispatch_skill",
+  "arguments": {
+    "skill_name": "brainstorming",
+    "session_id": "SUPERPOWER-001",
+    "workspace": "C:/Users/<username>/.devin-orchestrator/work/SUPERPOWER-001",
+    "is_reviewer": false,
+    "demo_mode": true,
+    "config_overrides": {"interactive_mode": true}
+  }
+}
+```
+
+**Fallback method:** If you do not have MCP tool access, use the `dispatch_skill.py` script via bash:
 ```bash
 python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]
 ```
@@ -56,13 +81,7 @@ Example:
 python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false true
 ```
 
-Parameters:
-- skill_name: Name of the skill to dispatch (e.g., brainstorming, writing-plans)
-- session_id: Session identifier (e.g., SUPERPOWER-001)
-- workspace: Path to session directory
-- is_reviewer: true if this is a reviewer stage (requesting-code-review), false otherwise
-- demo_mode: true for testing (simulated dispatch), false for production (real Devin dispatch)
-- config_overrides: Optional JSON string with configuration overrides (e.g., '{"interactive_mode": true}')
+The tool/script returns JSON output with success, session_id, output, and error fields.
 
 ### 3.1. Managing Interactive vs Non-Interactive Mode
 
@@ -72,20 +91,8 @@ The brainstorming skill supports two modes:
 
 **How to determine which mode to use:**
 - Check the orchestrate-superpower skill configuration for `interactive_mode` setting
-- If `interactive_mode: true` in configuration, pass `{"interactive_mode": true}` as config_overrides to brainstorming
-- If `interactive_mode: false` (default), pass `{"interactive_mode": false}` or omit config_overrides
-
-**Example dispatch with interactive mode:**
-```bash
-python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false false '{"interactive_mode": true}'
-```
-
-**Example dispatch with non-interactive mode (default):**
-```bash
-python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false false
-```
-
-The script returns JSON output with success, session_id, output, and error fields.
+- If `interactive_mode: true` in configuration, pass `{"interactive_mode": true}` as `config_overrides` to `mcp0_dispatch_skill` (or the script)
+- If `interactive_mode: false` (default), pass `{"interactive_mode": false}` or omit `config_overrides`
 
 ### 4. Structural Floor Validation
 Check each output artifact:
@@ -123,7 +130,7 @@ If stage has a gate:
 
 ## Important
 - You are the orchestrator, not a mechanical script
-- **You MUST use dispatch_skill.py via bash tool to dispatch Devin for each stage**
+- **You MUST dispatch each stage using the devin-orchestrator MCP tools (e.g. `mcp0_dispatch_skill`) when available; otherwise use the `dispatch_skill.py` script via bash**
 - Do NOT execute skills yourself - dispatch them to Devin
 - Reason through each stage's results
 - Make intelligent triage decisions

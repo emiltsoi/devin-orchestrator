@@ -132,7 +132,9 @@ def install(global_root: Path | None = None, source_dir: Path | None = None, dry
         print("  - Workflow engine is available at: " + str(target_engine))
         print("  - Config is available at: " + str(target_config))
         print()
-        print("For Cascade integration, use the dispatch_skill.py script:")
+        print("For agent integration, prefer the devin-orchestrator MCP tools")
+        print("  (e.g. mcp0_dispatch_devin, mcp0_dispatch_skill, mcp0_implement, mcp0_run_workflow).")
+        print("Use the legacy scripts only as a fallback when MCP tools are not available:")
         print("  python " + str(global_root / "dispatch_skill.py") + " <skill> <session_id> <workspace> <is_reviewer> <focused_context>")
 
 

@@ -12,9 +12,9 @@ checklist:
   - id: model_selection
     description: Model selection — choose appropriate model for each task
   - id: dispatch_implementer
-    description: Dispatch implementer subagent per task with isolated context
+    description: Dispatch implementer subagent per task using the mcp0_dispatch_devin MCP tool (or dispatch_devin.py script fallback) with isolated context
   - id: task_review
-    description: Task review — spec compliance + code quality review after each task
+    description: Task review — dispatch reviewer subagent via mcp0_dispatch_devin (or dispatch_devin.py / dispatch_skill.py fallback) for spec compliance + code quality
   - id: handle_reviewer_items
     description: Handle reviewer items — address ⚠️ items from review
   - id: file_handoffs
@@ -24,7 +24,7 @@ checklist:
   - id: broad_final_review
     description: Broad final review — whole-branch review at the end
 terminal_state: test-driven-development
-announcement: "Using the subagent-driven-development skill to execute the implementation plan task-by-task."
+announcement: "Using the subagent-driven-development skill to execute the implementation plan task-by-task. Prefer the dispatch_devin MCP tool; fall back to the dispatch_devin.py / dispatch_skill.py scripts if MCP tools are unavailable."
 red_flags:
   - Reusing a subagent context across tasks
   - Skipping task review between tasks

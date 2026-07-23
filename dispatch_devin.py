@@ -2,10 +2,14 @@
 """
 Generic Devin dispatcher.
 
+If you are an agent connected to the devin-orchestrator MCP server, use the
+`mcp0_dispatch_devin` MCP tool instead of this script. This script is a legacy
+CLI entry point for environments without the MCP server.
+
 Dispatches a Devin run with a model, a predefined role markdown file, and a task
 prompt markdown file. Replaces one-off per-wave dispatch scripts.
 
-Usage example:
+Usage example (fallback only):
     py -3.14 dispatch_devin.py \
         --model glm-5-2 \
         --role coder \

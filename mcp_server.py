@@ -66,7 +66,7 @@ class McpServer:
 
     PROTOCOL_VERSION = "2024-11-05"
     SERVER_NAME = "devin-orchestrator"
-    SERVER_VERSION = "0.1.1"
+    SERVER_VERSION = "0.1.2"
     MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
     # Rate limiting: max 10 calls per tool per 60-second window
     RATE_LIMIT_MAX_CALLS = 10
@@ -176,7 +176,7 @@ class McpServer:
             },
             {
                 "name": "dispatch_devin",
-                "description": "Dispatch a focused, single-shot Devin worker. Best for targeted implementation fixes or reviews where you specify exact acceptance criteria, focused files, and an output file. For full feature development prefer `implement` or `run_workflow`; for process skills prefer `run_skill`.",
+                "description": "MCP tool: dispatch a focused, single-shot Devin worker. Best for targeted implementation fixes or reviews where you specify exact acceptance criteria, focused files, and an output file. For full feature development prefer `implement` or `run_workflow`; for process skills prefer `run_skill`. Do not run `dispatch_devin.py` directly; use this tool.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -212,7 +212,7 @@ class McpServer:
             },
             {
                 "name": "dispatch_skill",
-                "description": "Invoke a named skill as a Devin worker in a target workspace. This dispatches a fresh subagent to follow the skill; prefer `execute`, `implement`, or `dispatch_devin` for most tasks.",
+                "description": "MCP tool: invoke a named skill as a Devin worker in a target workspace. This dispatches a fresh subagent to follow the skill; prefer `execute`, `implement`, or `dispatch_devin` for most tasks. Do not run `dispatch_skill.py` directly; use this tool.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

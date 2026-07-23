@@ -17,6 +17,8 @@ The `tools/list` response is ordered from highest-level to lowest-level. Pick th
 
 **Avoid `run_skill` for implementation tasks.** `run_skill` is a low-level process-skill runner. For coding work, `implement`, `run_workflow`, or `dispatch_devin` carry the right context and produce focused results.
 
+**Note for agents:** The `py -3.14 install.py` and `py -3.14 mcp_server.py` commands below are for configuring the *MCP client* (Claude Desktop, Cursor, etc.). If you are already connected to the devin-orchestrator MCP server, use the MCP tools in `tools/list` instead of running these commands.
+
 ## Server installation
 
 Install the harness globally first:

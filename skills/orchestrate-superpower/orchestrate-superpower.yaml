@@ -1,7 +1,7 @@
 schema_version: 1
 name: orchestrate-superpower
-description: "Use when orchestrating a multi-stage superpower workflow that dispatches each stage skill to Devin via dispatch_skill.py."
-iron_law: "You MUST use dispatch_skill.py via bash tool to dispatch Devin for each stage. Do NOT execute skills yourself - dispatch them to Devin."
+description: "Use when orchestrating a multi-stage superpower workflow that dispatches each stage skill to Devin. Prefer the mcp0_dispatch_skill MCP tool; fall back to the dispatch_skill.py script only when MCP tools are unavailable."
+iron_law: "You MUST dispatch each stage to Devin. Prefer the mcp0_dispatch_skill MCP tool (or dispatch_skill if your client does not prefix tool names). If MCP tools are not available, use the dispatch_skill.py script via bash. Do NOT execute skills yourself."
 triggers:
   - superpower_workflow
   - multi_stage_orchestration
@@ -17,7 +17,7 @@ checklist:
   - id: skip_brainstorming_placeholder
     description: If skip_brainstorming and stage is brainstorming, create placeholder design.md and skip
   - id: dispatch_skill
-    description: Otherwise dispatch skill via bash tool calling dispatch_skill.py
+    description: Otherwise dispatch skill using the mcp0_dispatch_skill MCP tool (or dispatch_skill.py script if MCP tools are unavailable)
   - id: pass_config_overrides
     description: Pass config_overrides for brainstorming if interactive_mode is true
   - id: validate_artifacts
@@ -29,7 +29,7 @@ checklist:
   - id: continue_or_stop
     description: Continue to next stage if triage decision is proceed; stop if escalate or gate blocks
 terminal_state: complete
-announcement: "Using the orchestrate-superpower skill to orchestrate the superpower workflow via dispatch_skill.py."
+announcement: "Using the orchestrate-superpower skill to orchestrate the superpower workflow. Prefer the dispatch_skill MCP tool; fall back to dispatch_skill.py script if MCP tools are unavailable."
 red_flags:
   - Executing stage skills yourself instead of dispatching to Devin
   - Skipping structural floor validation

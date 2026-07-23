@@ -42,7 +42,7 @@ Choose the appropriate model for each task:
 - **SWE-1.6 (free tier):** Leaf modules, mechanical tasks, tight specs
 - **Higher-quality model:** Architecture, cross-cutting work, judgment tasks
 
-Use the decision matrix encoded in `dispatch_devin.py` / `dispatch_skill.py` and the model routing configured in `config.yaml` (`model_overrides` → `models` → `model_profile` → `default_model`, resolved by `resolve_model(agent, phase, config)`).
+Use the devin-orchestrator MCP tool `mcp0_dispatch_devin` (or `mcp0_dispatch_skill` for skill-based dispatch) to dispatch each subagent, applying the model routing configured in `config.yaml` (`model_overrides` → `models` → `model_profile` → `default_model`, resolved by `resolve_model(agent, phase, config)`). If you do not have MCP tool access, fall back to the `dispatch_devin.py` / `dispatch_skill.py` scripts.
 
 ### Handling Implementer Status
 
@@ -130,8 +130,8 @@ Report: PASS/BLOCK with findings.
 
 1. Load plan from `plan.md`
 2. For each task in plan:
-   a. Dispatch implementer subagent
-   b. If SUCCESS, dispatch reviewer subagent
+   a. Dispatch implementer subagent via `mcp0_dispatch_devin` (or `dispatch_devin.py` script fallback)
+   b. If SUCCESS, dispatch reviewer subagent via `mcp0_dispatch_devin` with a reviewer role (or `dispatch_devin.py` / `dispatch_skill.py` fallback)
    c. If reviewer BLOCK, fix and retry
    d. Mark task complete
 3. After all tasks, do broad final review

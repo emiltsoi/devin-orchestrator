@@ -2,6 +2,21 @@
 
 This guide provides step-by-step instructions for agents (Cascade, Devin, etc.) to install and deploy devin-orchestrator.
 
+## For agents already connected to the devin-orchestrator MCP server
+
+If the devin-orchestrator MCP server is loaded in your environment, **do not run the bash/Python commands in this guide**. Use the MCP tools instead:
+
+- `mcp0_execute` — auto-route by intent
+- `mcp0_implement` — implement a feature/bug-fix
+- `mcp0_review` — code review
+- `mcp0_investigate` — root-cause analysis
+- `mcp0_plan` — create an implementation plan
+- `mcp0_run_workflow` — run a named workflow
+- `mcp0_run_skill` — process skills only (`brainstorming`, `writing-plans`, `systematic-debugging`)
+- `mcp0_dispatch_devin` / `mcp0_dispatch_skill` — focused single-shot dispatch
+
+The commands below are for one-time setup or for environments without the MCP server.
+
 ## Quick Installation
 
 ### Step 1: Clone Repository (if not already present)
