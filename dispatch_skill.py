@@ -11,6 +11,7 @@ from bash to dispatch skills to Devin.
 """
 
 # ruff: noqa: E402
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -42,17 +43,25 @@ from skill_invoker import SkillInvoker
 
 
 def main():
-    # Parse command line arguments
-    if len(sys.argv) < 4:
-        print("Usage: dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Dispatch a skill to Devin. Legacy CLI fallback for the mcp0_dispatch_skill tool."
+    )
+    parser.add_argument("skill_name", help="Name of the skill to dispatch")
+    parser.add_argument("session_id", help="Session identifier")
+    parser.add_argument("workspace", help="Workspace/session directory path")
+    parser.add_argument("is_reviewer", nargs="?", default="false", help="true if reviewer stage")
+    parser.add_argument("demo_mode", nargs="?", default="false", help="true for simulated dispatch")
+    parser.add_argument("config_overrides_json", nargs="?", default=None, help="JSON config overrides")
+    parser.add_argument("--focused-context", dest="focused_context", action="append", default=[], help="File paths to inject as focused context")
+    parser.add_argument("--output-file", dest="output_file", default=None, help="Path to write structured output report")
+    args = parser.parse_args()
 
-    skill_name = sys.argv[1]
-    session_id = sys.argv[2]
-    workspace = sys.argv[3]
-    is_reviewer = len(sys.argv) > 4 and sys.argv[4].lower() == 'true'
-    demo_mode = len(sys.argv) > 5 and sys.argv[5].lower() == 'true'
-    config_overrides_json = sys.argv[6] if len(sys.argv) > 6 else None
+    skill_name = args.skill_name
+    session_id = args.session_id
+    workspace = args.workspace
+    is_reviewer = args.is_reviewer.lower() == "true"
+    demo_mode = args.demo_mode.lower() == "true"
+    config_overrides_json = args.config_overrides_json
 
     # Load config first so we can constrain workspace validation to the
     # configured session work directory. Workspace-local config overrides
@@ -101,15 +110,40 @@ def main():
         context=context,
         workspace=workspace,
         is_reviewer=is_reviewer,
-        config_overrides=config_overrides
+        config_overrides=config_overrides,
+        focused_context=args.focused_context or None,
     )
+
+    # If an output file was requested, write the worker output there as well
+    output_file_path = None
+    if args.output_file:
+        try:
+            from security_utils import validate_path_safe
+            output_file = validate_path_safe(Path(workspace), Path(args.output_file), allow_absolute=True)
+            output_file.write_text(result.output or "", encoding="utf-8")
+            output_file_path = str(output_file)
+        except Exception as e:
+            logger.warning(f"Failed to write output_file: {e}")
+
+    # Build artifact list from workspace files if available
+    artifact_paths = []
+    workspace_path = Path(workspace)
+    if output_file_path:
+        artifact_paths.append(output_file_path)
+    if workspace_path.exists():
+        for f in sorted(workspace_path.iterdir()):
+            if f.is_file() and f.name not in {".session.json", "session.json"}:
+                artifact_paths.append(str(f))
 
     # Output result as JSON
     output = {
-        'success': result.success,
-        'session_id': result.session_id,
-        'output': result.output,
-        'error': result.error
+        "success": result.success,
+        "session_id": result.session_id,
+        "workspace": workspace,
+        "output": result.output,
+        "error": result.error,
+        "output_file": output_file_path,
+        "artifact_paths": artifact_paths,
     }
 
     print(json.dumps(output, indent=2))

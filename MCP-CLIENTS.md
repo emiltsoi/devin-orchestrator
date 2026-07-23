@@ -239,12 +239,92 @@ For troubleshooting and backtracing, the server can log every JSON-RPC request a
 
 `--message-log` with no value defaults to `~/.devin-orchestrator/logs/mcp-server.jsonl`. Each line contains `timestamp`, `direction` (`in`/`out`), and the message payload.
 
+## Stateless result contract
+
+All MCP tools return **structured, self-contained JSON** results. A stateless agent does not need to remember context between calls because the result contains everything needed to continue:
+
+- `session_id` — identifier for the session.
+- `workspace` — absolute path to the session/work directory.
+- `success` — `true` only when `final_status` is `completed`.
+- `final_status` — `completed | waiting_for_input | escalated | blocked | failed`.
+- `output` — human-readable text or a JSON summary.
+- `error` — error message when `success` is `false`.
+- `artifact_paths` — list of files produced during the run.
+- `output_file` — path to the requested structured report, if any.
+- `resume` — when the run pauses or escalates, a pre-filled ticket for the next MCP call:
+  - `tool` — the MCP tool to call next (`mcp0_gate_decision` or `mcp0_continue_workflow`).
+  - `arguments` — exact argument object for that tool.
+  - `then` — for gates, the follow-up call after `gate_decision`.
+
+### Focused context and output file
+
+High-level tools accept `focused_context` (list of file paths) and `output_file`:
+
+```json
+{
+  "name": "implement",
+  "arguments": {
+    "request": "Add a thumbnail cache with on-disk persistence to the picture browser.",
+    "focused_context": ["src/App.tsx", "src/Cache.ts"],
+    "output_file": "output/thumbnail-cache-report.md",
+    "gate_mode": "auto",
+    "timeout": 1200
+  }
+}
+```
+
+The files are copied into the session workspace so subagents can read them safely.
+
+### Resuming after a gate
+
+When `final_status` is `waiting_for_input`, the `resume` block tells you exactly what to call:
+
+```json
+{
+  "final_status": "waiting_for_input",
+  "session_id": "SUPERPOWER-042",
+  "resume": {
+    "tool": "mcp0_gate_decision",
+    "arguments": {
+      "session_id": "SUPERPOWER-042",
+      "gate_id": "g2_plan_approval",
+      "verdict": "approve|request_changes|block",
+      "notes": ""
+    },
+    "then": {
+      "tool": "mcp0_continue_workflow",
+      "arguments": {"session_id": "SUPERPOWER-042"}
+    }
+  }
+}
+```
+
+Fill in `verdict` and `notes`, call `mcp0_gate_decision`, then call `mcp0_continue_workflow`.
+
+### Resuming after an escalation
+
+When `final_status` is `escalated`, supply correction feedback and continue:
+
+```json
+{
+  "name": "continue_workflow",
+  "arguments": {
+    "session_id": "SUPERPOWER-042",
+    "feedback": "The plan is missing a test strategy; add unit tests for Cache.ts.",
+    "focused_context": ["src/Cache.ts"]
+  }
+}
+```
+
 ## Deployment notes
 
 - The MCP server uses the global `~/.devin-orchestrator/` skills and workflows by default.
 - Per-workspace overrides are read from `<workspace>/.devin-orchestrator/config.yaml` when a `workspace` or `work_dir` argument is passed.
 - `devin_cli_path` must be valid in `config.yaml` for the host running the server.
 - Workflow/orchestration tools (`execute`, `implement`, `review`, `investigate`, `run_workflow`) accept:
+  - `focused_context`: list of file paths to copy into the session for each stage.
+  - `output_file`: optional path (relative to the session) for a final summary report.
   - `gate_mode`: `interactive` (block and wait), `signal` (return immediately at gates), or `auto` (evaluate bypass conditions). Default is `auto`.
   - `demo_mode`: if `true`, simulate subagent dispatches instead of calling real Devin workers.
   - `timeout`: per-dispatch timeout in seconds.
+- `continue_workflow` accepts `correction_artifact` (path) or `feedback` (inline text) to retry an escalated stage.

@@ -101,6 +101,51 @@ class StatelessOrchestrator:
             except (FileNotFoundError, yaml.YAMLError, ValueError, KeyError) as e:
                 logger.warning(f"Failed to load use-cases.yaml: {e}")
 
+    def _seed_focused_context(
+        self, session_dir: Path, focused_context: list[str]
+    ) -> list[str]:
+        """
+        Copy focused context files from the project workspace into the session
+        directory and return their absolute paths inside the session.
+        """
+        if not self.workspace or not focused_context:
+            return []
+
+        workspace_path = Path(self.workspace).resolve()
+        seeded: list[str] = []
+        for raw_file in focused_context:
+            raw = raw_file.strip()
+            if not raw:
+                continue
+            try:
+                source = validate_path_safe(
+                    workspace_path, Path(raw), allow_absolute=True
+                )
+                if not source.is_file():
+                    logger.warning(f"Focused context file not found: {source}")
+                    continue
+                relative = source.relative_to(workspace_path)
+                dest = validate_path_safe(
+                    session_dir, session_dir / relative, allow_absolute=True
+                )
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, dest)
+                seeded.append(str(dest))
+                logger.info(f"Seeded focused context: {source} -> {dest}")
+            except (InvalidInputError, PathTraversalError, OSError, ValueError) as e:
+                logger.warning(f"Failed to seed focused context {raw}: {e}")
+        return seeded
+
+    def _list_session_artifacts(self, session_dir: Path) -> list[str]:
+        """List durable artifacts in the session directory, excluding temp files."""
+        if not session_dir.exists():
+            return []
+        artifacts: list[str] = []
+        for f in sorted(session_dir.rglob("*")):
+            if f.is_file() and not f.name.startswith("devin_prompt_"):
+                artifacts.append(str(f))
+        return artifacts
+
     def _seed_review_files(self, session_dir: Path, request: str) -> None:
         """
         Copy files listed in a review request (FILES_MODIFIED line) from the
@@ -132,7 +177,13 @@ class StatelessOrchestrator:
             except (InvalidInputError, PathTraversalError, OSError) as e:
                 logger.warning(f"Failed to seed {raw_file}: {e}")
 
-    def execute(self, request: str, intent: str = "auto") -> dict[str, Any]:
+    def execute(
+        self,
+        request: str,
+        intent: str = "auto",
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
+    ) -> dict[str, Any]:
         """
         Execute a request with automatic or explicit intent routing.
 
@@ -140,9 +191,11 @@ class StatelessOrchestrator:
             request: The user request to execute
             intent: The intent to use ("auto" for automatic routing, or one of
                    "implement", "review", "investigate", "plan")
+            focused_context: Optional file paths to focus the worker
+            output_file: Optional path for a final summary report
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
         if intent == "auto":
             # Simplified auto-routing: use keyword matching
@@ -150,13 +203,13 @@ class StatelessOrchestrator:
 
         # Route to the appropriate method
         if intent == "implement":
-            return self.implement(request)
+            return self.implement(request, focused_context=focused_context, output_file=output_file)
         elif intent == "review":
-            return self.review(request)
+            return self.review(request, focused_context=focused_context)
         elif intent == "investigate":
-            return self.investigate(request)
+            return self.investigate(request, focused_context=focused_context)
         elif intent == "plan":
-            return self.plan(request)
+            return self.plan(request, focused_context=focused_context, output_file=output_file)
         else:
             return {
                 "session_id": None,
@@ -164,6 +217,8 @@ class StatelessOrchestrator:
                 "success": False,
                 "output": None,
                 "error": f"Unknown intent: {intent}",
+                "artifact_paths": [],
+                "resume": None,
             }
 
     @staticmethod
@@ -256,64 +311,96 @@ class StatelessOrchestrator:
 
         return "implement"
 
-    def implement(self, request: str) -> dict[str, Any]:
+    def implement(
+        self,
+        request: str,
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
+    ) -> dict[str, Any]:
         """
         Execute an implementation request using the superpower workflow.
 
         Args:
             request: The implementation request
+            focused_context: Optional file paths to focus each stage
+            output_file: Optional path for final summary report
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("superpower", request)
+        return self.run_workflow("superpower", request, focused_context=focused_context, output_file=output_file)
 
-    def review(self, request: str) -> dict[str, Any]:
+    def review(
+        self,
+        request: str,
+        focused_context: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Execute a review request using the code_review workflow.
 
         Args:
             request: The review request
+            focused_context: Optional file paths to focus review stages
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("code_review", request)
+        return self.run_workflow("code_review", request, focused_context=focused_context)
 
-    def investigate(self, request: str) -> dict[str, Any]:
+    def investigate(
+        self,
+        request: str,
+        focused_context: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Execute an investigation request using the rca workflow.
 
         Args:
             request: The investigation request
+            focused_context: Optional file paths to focus investigation stages
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("rca", request)
+        return self.run_workflow("rca", request, focused_context=focused_context)
 
-    def plan(self, request: str) -> dict[str, Any]:
+    def plan(
+        self,
+        request: str,
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
+    ) -> dict[str, Any]:
         """
         Execute a planning request using the writing-plans skill.
 
         Args:
             request: The planning request
+            focused_context: Optional file paths to focus the planner
+            output_file: Optional path for the plan report
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, output_file
         """
-        return self.run_skill("writing-plans", request)
+        return self.run_skill("writing-plans", request, focused_context=focused_context, output_file=output_file)
 
-    def run_workflow(self, workflow_name: str, request: str) -> dict[str, Any]:
+    def run_workflow(
+        self,
+        workflow_name: str,
+        request: str,
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
+    ) -> dict[str, Any]:
         """
         Run a specific workflow with a request.
 
         Args:
             workflow_name: Name of the workflow to run
             request: The user request
+            focused_context: Optional list of file paths to inject into each stage
+            output_file: Optional path (relative to session) for final summary report
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
         try:
             # Validate workflow name to prevent path traversal / manifest
@@ -331,6 +418,10 @@ class StatelessOrchestrator:
 
             # Create session
             session_id, session_dir = create_session(self.config.session_work_dir, session_format)
+
+            # Seed focused context files into the session directory
+            if focused_context:
+                self._seed_focused_context(session_dir, focused_context)
 
             # Write prompt file
             write_request_prompt(session_dir, request)
@@ -375,15 +466,20 @@ class StatelessOrchestrator:
                 manifest_path=manifest_path,
                 session_id=session_id,
                 request_content=request,
+                focused_context=focused_context,
+                output_file=output_file,
             )
 
-            return {
-                "session_id": session_id,
-                "workspace": str(session_dir),
-                "success": results.get("final_status") == "completed",
-                "output": json.dumps(results, indent=2, default=_json_default),
-                "error": results.get("error") if results.get("final_status") != "completed" else None,
-            }
+            # Flatten engine results into a stateless response
+            result = dict(results)
+            result["session_id"] = session_id
+            result["workspace"] = str(session_dir)
+            result["success"] = results.get("final_status") == "completed"
+            result["error"] = results.get("error") if results.get("final_status") != "completed" else None
+            result["output"] = json.dumps(results, indent=2, default=_json_default)
+            if "artifact_paths" not in result:
+                result["artifact_paths"] = self._list_session_artifacts(session_dir)
+            return result
 
         except (InvalidInputError, ValueError) as e:
             logger.error(f"Validation error running workflow {workflow_name}: {e}")
@@ -428,18 +524,26 @@ class StatelessOrchestrator:
         gate_verdict: str | None = None,
         gate_notes: str | None = None,
         gate_id: str | None = None,
+        correction_artifact: str | None = None,
+        feedback: str | None = None,
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
     ) -> dict[str, Any]:
         """
-        Resume a workflow that is paused at a gate.
+        Resume a workflow that is paused at a gate or escalated.
 
         Args:
             session_id: Existing session identifier
             gate_verdict: Optional verdict to write before resuming
             gate_notes: Optional notes for the gate decision
             gate_id: Optional explicit gate id
+            correction_artifact: Optional correction artifact path
+            feedback: Optional inline feedback text
+            focused_context: Optional additional focused context
+            output_file: Optional path for final summary report
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
         try:
             engine = OrchestrationEngine(
@@ -456,15 +560,21 @@ class StatelessOrchestrator:
                 gate_verdict=gate_verdict,
                 gate_notes=gate_notes,
                 gate_id=gate_id,
+                correction_artifact=correction_artifact,
+                feedback=feedback,
+                focused_context=focused_context,
+                output_file=output_file,
             )
             session_dir = self.config.session_work_dir / session_id
-            return {
-                "session_id": session_id,
-                "workspace": str(session_dir),
-                "success": results.get("final_status") == "completed",
-                "output": json.dumps(results, indent=2, default=_json_default),
-                "error": results.get("error") if results.get("final_status") != "completed" else None,
-            }
+            result = dict(results)
+            result["session_id"] = session_id
+            result["workspace"] = str(session_dir)
+            result["success"] = results.get("final_status") == "completed"
+            result["error"] = results.get("error") if results.get("final_status") != "completed" else None
+            result["output"] = json.dumps(results, indent=2, default=_json_default)
+            if "artifact_paths" not in result:
+                result["artifact_paths"] = self._list_session_artifacts(session_dir)
+            return result
         except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
             logger.error(f"Failed to continue workflow {session_id}: {e}")
             return {
@@ -475,16 +585,24 @@ class StatelessOrchestrator:
                 "error": f"Failed to continue workflow: {str(e)}",
             }
 
-    def run_skill(self, skill_name: str, request: str) -> dict[str, Any]:
+    def run_skill(
+        self,
+        skill_name: str,
+        request: str,
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
+    ) -> dict[str, Any]:
         """
         Run a specific skill with a request.
 
         Args:
             skill_name: Name of the skill to run
             request: The user request
+            focused_context: Optional list of file paths to copy into the session
+            output_file: Optional path (relative to session) where the worker report is written
 
         Returns:
-            Dictionary with session_id, workspace, success, output, error
+            Dictionary with session_id, workspace, success, output, error, artifact_paths, output_file
         """
         try:
             # Validate skill name to prevent path traversal. Even though the MCP
@@ -496,6 +614,13 @@ class StatelessOrchestrator:
             # Create session with default format
             session_format = "SKILL-NNN"
             session_id, session_dir = create_session(self.config.session_work_dir, session_format)
+
+            # Seed focused context files into the session directory so the worker
+            # can access them without escaping the session sandbox.
+            seeded_context = self._seed_focused_context(session_dir, focused_context or [])
+
+            # Write request prompt file
+            write_request_prompt(session_dir, request)
 
             # Invoke skill. Pass the request in context so SkillInvoker builds
             # the full skill prompt (name, iron law, checklist, narrative).
@@ -512,8 +637,21 @@ class StatelessOrchestrator:
                 skill_name=skill_name,
                 context=context,
                 workspace=str(session_dir),
+                focused_context=seeded_context,
                 timeout=dispatch_timeout,
             )
+
+            # Write output report if requested
+            written_output_file: str | None = None
+            if output_file:
+                try:
+                    out_path = validate_path_safe(session_dir, session_dir / output_file, allow_absolute=True)
+                    out_path.write_text(result.output or "", encoding="utf-8")
+                    written_output_file = str(out_path)
+                except (InvalidInputError, PathTraversalError, OSError) as e:
+                    logger.warning(f"Failed to write output_file {output_file}: {e}")
+
+            artifact_paths = self._list_session_artifacts(session_dir)
 
             return {
                 "session_id": session_id,
@@ -521,6 +659,8 @@ class StatelessOrchestrator:
                 "success": result.success,
                 "output": result.output,
                 "error": result.error,
+                "output_file": written_output_file,
+                "artifact_paths": artifact_paths,
             }
 
         except (InvalidInputError, ValueError) as e:

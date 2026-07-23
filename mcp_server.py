@@ -66,7 +66,7 @@ class McpServer:
 
     PROTOCOL_VERSION = "2024-11-05"
     SERVER_NAME = "devin-orchestrator"
-    SERVER_VERSION = "0.1.2"
+    SERVER_VERSION = "0.1.3"
     MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
     # Rate limiting: max 10 calls per tool per 60-second window
     RATE_LIMIT_MAX_CALLS = 10
@@ -222,6 +222,15 @@ class McpServer:
                         "is_reviewer": {"type": "boolean", "default": False},
                         "demo_mode": {"type": "boolean", "default": False},
                         "config_overrides": {"type": "object", "default": {}},
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for the skill worker",
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Optional path where the worker should write its structured report",
+                        },
                         "timeout": {
                             "type": "integer",
                             "description": "Timeout in seconds",
@@ -303,6 +312,15 @@ class McpServer:
                             "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
                             "default": "auto",
                         },
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for the workflow stages",
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Optional path where the workflow should write a final summary report",
+                        },
                     },
                     "required": ["request"],
                 },
@@ -331,6 +349,11 @@ class McpServer:
                             "type": "string",
                             "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
                             "default": "auto",
+                        },
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for the workflow stages",
                         },
                     },
                     "required": ["request"],
@@ -361,6 +384,11 @@ class McpServer:
                             "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
                             "default": "auto",
                         },
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for the investigation",
+                        },
                     },
                     "required": ["request"],
                 },
@@ -379,6 +407,15 @@ class McpServer:
                             "type": "boolean",
                             "description": "If true, simulate Devin dispatches instead of running real agents",
                             "default": False,
+                        },
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for planning",
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Optional path where the plan should be written",
                         },
                     },
                     "required": ["request"],
@@ -412,6 +449,15 @@ class McpServer:
                             "type": "string",
                             "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
                             "default": "auto",
+                        },
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for each workflow stage",
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Optional path where the workflow should write a final summary report",
                         },
                     },
                     "required": ["workflow", "request"],
@@ -447,6 +493,24 @@ class McpServer:
                         },
                         "gate_notes": {"type": "string"},
                         "gate_id": {"type": "string"},
+                        "correction_artifact": {
+                            "type": "string",
+                            "description": "Optional path to a correction/feedback artifact to pass to the failing stage on resume",
+                        },
+                        "feedback": {
+                            "type": "string",
+                            "description": "Optional inline feedback text to write as a correction artifact on resume",
+                        },
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for the resuming workflow stages",
+                        },
+                        "gate_mode": {
+                            "type": "string",
+                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
+                            "default": "auto",
+                        },
                     },
                     "required": ["session_id"],
                 },
@@ -474,6 +538,15 @@ class McpServer:
                             "type": "integer",
                             "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
                             "default": 300,
+                        },
+                        "focused_context": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Paths to include as focused context for the skill worker",
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Optional path where the worker should write its structured report",
                         },
                     },
                     "required": ["skill", "request"],
@@ -577,8 +650,24 @@ Pick the highest-level tool that matches your task:
 6. run_workflow — run a specific named workflow.
 7. run_skill — process skills only (brainstorming, writing-plans, systematic-debugging).
 8. dispatch_devin — focused single-shot worker with prompt_file, focused_context, model, output_file.
+9. gate_decision / continue_workflow — resume a workflow paused at a gate or escalation.
 
-Do NOT use run_skill for implementation tasks. It has no focused_context and bypasses the workflow gates. For coding work, use implement, run_workflow, or dispatch_devin.
+Do NOT use run_skill for implementation tasks. For coding work, use implement, run_workflow, or dispatch_devin.
+
+## Stateless contract
+
+Every tool result is self-contained JSON with:
+- session_id, workspace, success, final_status, output, error
+- artifact_paths — files produced by the run
+- output_file — structured report path if requested
+- resume — when final_status is waiting_for_input, escalated, or blocked, a ticket with:
+  - tool: the next MCP tool to call
+  - arguments: exact args to pass (you only need to fill in verdict/notes/feedback)
+  - then: for gates, the follow-up call after gate_decision
+
+Always read the resume block first. If it tells you to call mcp0_gate_decision, do that, then call mcp0_continue_workflow. If it tells you to call mcp0_continue_workflow with feedback, supply the correction and continue.
+
+Use focused_context to pass exact file paths when you want the worker to see specific files. Use output_file when you want a final report written to a known path.
 """
         return {
             "jsonrpc": "2.0",
@@ -1074,13 +1163,28 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return [self._text_content(
                 f"Devin dispatch timed out after {timeout} seconds."
             )]
-        text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
-        if result.stderr:
-            text += f"\n\nSTDERR:\n{result.stderr}"
+        output_text = result.stdout
         if validated_output_file is not None and validated_output_file.exists():
-            text += f"\n\n--- OUTPUT FILE ({validated_output_file}) ---\n"
-            text += validated_output_file.read_text(encoding="utf-8")
-        return [self._text_content(text)]
+            output_text = validated_output_file.read_text(encoding="utf-8")
+
+        # Build an artifact list for the stateless caller
+        artifact_paths: list[str] = []
+        if validated_output_file is not None:
+            artifact_paths.append(str(validated_output_file))
+        for f in sorted(work_dir.rglob("*")):
+            if f.is_file():
+                artifact_paths.append(str(f))
+
+        parsed = {
+            "success": result.returncode == 0,
+            "exit_code": result.returncode,
+            "output": output_text or result.stdout,
+            "error": result.stderr or None,
+            "output_file": str(validated_output_file) if validated_output_file is not None else None,
+            "artifact_paths": artifact_paths,
+            "workspace": str(work_dir),
+        }
+        return [self._text_content(json.dumps(parsed, indent=2))]
 
     def _tool_dispatch_skill(self, arguments: dict) -> list[dict]:
         """
@@ -1130,6 +1234,32 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         except InvalidInputError as e:
             return [self._text_content(f"Invalid config_overrides: {e}")]
 
+        # Validate focused_context paths are under workspace
+        focused_context = arguments.get("focused_context", []) or []
+        validated_focused_context: list[str] = []
+        for ctx in focused_context:
+            try:
+                ctx_path = Path(ctx)
+                if ctx_path.is_absolute():
+                    validated = validate_path_safe(workspace, ctx_path, allow_absolute=True)
+                else:
+                    validated = validate_path_safe(workspace, workspace / ctx_path, allow_absolute=True)
+                validated_focused_context.append(str(validated))
+            except InvalidInputError as e:
+                return [self._text_content(f"Invalid focused_context path {ctx}: {e}")]
+
+        # Validate output_file is under workspace if provided
+        validated_output_file: Path | None = None
+        if arguments.get("output_file"):
+            try:
+                output_input = Path(arguments["output_file"])
+                if output_input.is_absolute():
+                    validated_output_file = validate_path_safe(workspace, output_input, allow_absolute=True)
+                else:
+                    validated_output_file = validate_path_safe(workspace, workspace / output_input, allow_absolute=True)
+            except InvalidInputError as e:
+                return [self._text_content(f"Invalid output_file: {e}")]
+
         script = Path(__file__).parent / "dispatch_skill.py"
         cmd = [
             sys.executable,
@@ -1142,6 +1272,10 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         ]
         if overrides:
             cmd.append(json.dumps(overrides))
+        for ctx in validated_focused_context:
+            cmd.extend(["--focused-context", str(ctx)])
+        if validated_output_file is not None:
+            cmd.extend(["--output-file", str(validated_output_file)])
 
         try:
             result = subprocess.run(
@@ -1156,6 +1290,17 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return [self._text_content(
                 f"Skill dispatch timed out after {timeout} seconds."
             )]
+
+        # Parse structured JSON output from dispatch_skill.py
+        stdout = result.stdout.strip()
+        if stdout:
+            try:
+                parsed = json.loads(stdout)
+                parsed["exit_code"] = result.returncode
+                return [self._text_content(json.dumps(parsed, indent=2))]
+            except json.JSONDecodeError:
+                pass
+
         text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
         if result.stderr:
             text += f"\n\nSTDERR:\n{result.stderr}"
@@ -1244,7 +1389,12 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         )
         request = arguments["request"]
         intent = arguments.get("intent", "auto")
-        result = orchestrator.execute(request, intent)
+        result = orchestrator.execute(
+            request,
+            intent,
+            focused_context=arguments.get("focused_context"),
+            output_file=arguments.get("output_file"),
+        )
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_implement(self, arguments: dict) -> list[dict]:
@@ -1272,7 +1422,11 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
-        result = orchestrator.implement(request)
+        result = orchestrator.implement(
+            request,
+            focused_context=arguments.get("focused_context"),
+            output_file=arguments.get("output_file"),
+        )
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_review(self, arguments: dict) -> list[dict]:
@@ -1300,7 +1454,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
-        result = orchestrator.review(request)
+        result = orchestrator.review(request, focused_context=arguments.get("focused_context"))
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_investigate(self, arguments: dict) -> list[dict]:
@@ -1328,7 +1482,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
-        result = orchestrator.investigate(request)
+        result = orchestrator.investigate(request, focused_context=arguments.get("focused_context"))
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_plan(self, arguments: dict) -> list[dict]:
@@ -1348,7 +1502,11 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             demo_mode=arguments.get("demo_mode", False),
         )
         request = arguments["request"]
-        result = orchestrator.plan(request)
+        result = orchestrator.plan(
+            request,
+            focused_context=arguments.get("focused_context"),
+            output_file=arguments.get("output_file"),
+        )
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_run_workflow(self, arguments: dict) -> list[dict]:
@@ -1389,7 +1547,12 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return [self._text_content(f"Invalid workflow name: {e}")]
 
         request = arguments["request"]
-        result = orchestrator.run_workflow(workflow_name, request)
+        result = orchestrator.run_workflow(
+            workflow_name,
+            request,
+            focused_context=arguments.get("focused_context"),
+            output_file=arguments.get("output_file"),
+        )
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_gate_decision(self, arguments: dict) -> list[dict]:
@@ -1457,6 +1620,10 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             gate_verdict=arguments.get("gate_verdict"),
             gate_notes=arguments.get("gate_notes"),
             gate_id=arguments.get("gate_id"),
+            correction_artifact=arguments.get("correction_artifact"),
+            feedback=arguments.get("feedback"),
+            focused_context=arguments.get("focused_context"),
+            output_file=arguments.get("output_file"),
         )
         return [self._text_content(json.dumps(result, indent=2))]
 
@@ -1528,7 +1695,12 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             timeout=timeout,
         )
         request = arguments["request"]
-        result = orchestrator.run_skill(skill_name, request)
+        result = orchestrator.run_skill(
+            skill_name,
+            request,
+            focused_context=arguments.get("focused_context"),
+            output_file=arguments.get("output_file"),
+        )
         return [self._text_content(json.dumps(result, indent=2))]
 
     # --------------------------------------------------------------------- #

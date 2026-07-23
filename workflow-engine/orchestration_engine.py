@@ -12,6 +12,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import sys
 import time
 from enum import Enum
@@ -97,6 +98,8 @@ class OrchestrationEngine:
         request_content: str,
         skip_brainstorming: bool | None = None,
         config_overrides: dict[str, Any] | None = None,
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
     ) -> dict[str, Any]:
         """
         Execute a complete workflow from manifest
@@ -107,6 +110,8 @@ class OrchestrationEngine:
             request_content: Initial request content
             skip_brainstorming: Override manifest skip_brainstorming setting
             config_overrides: Optional configuration overrides for skills
+            focused_context: Optional list of file paths to inject into each stage
+            output_file: Optional path (relative to session) for a final summary report
 
         Returns:
             Dictionary with execution results
@@ -125,9 +130,20 @@ class OrchestrationEngine:
         if error is not None:
             return error
 
-        # Persist manifest name in session.json so a later continue_workflow
-        # call can locate the manifest without requiring the caller to resupply it.
-        self._update_session_manifest(session_dir, manifest["name"])
+        # Persist manifest name and original inputs in session.json so a later
+        # continue_workflow call can resume without requiring the caller to resupply them.
+        self._update_session_inputs(
+            session_dir,
+            manifest["name"],
+            request_content,
+            focused_context or [],
+            output_file,
+        )
+
+        # Seed focused context files into the session directory so stage workers
+        # can access them without escaping the session sandbox.
+        if focused_context:
+            self._seed_focused_context(session_dir, focused_context)
 
         # Override skip_brainstorming if provided
         if skip_brainstorming is not None:
@@ -144,11 +160,40 @@ class OrchestrationEngine:
             "final_status": "unknown",
         }
         self._run_workflow_stages(
-            manifest, session_dir, session_id, config_overrides, results, resume=False
+            manifest,
+            session_dir,
+            session_id,
+            config_overrides,
+            results,
+            resume=False,
+            focused_context=focused_context or [],
         )
 
         if results["final_status"] == "unknown":
             results["final_status"] = "completed"
+
+        # Write final summary report if requested
+        if output_file and results["final_status"] == "completed":
+            self._write_output_file(session_dir, output_file, results)
+
+        # Enrich results with artifact paths and a stateless resume ticket
+        results["artifact_paths"] = self._list_session_artifacts(session_dir)
+        waiting_gate_id = self._find_waiting_gate_id(results) if results["final_status"] == "waiting_for_input" else None
+        failing_stage = None
+        if results["final_status"] in ("escalated", "blocked"):
+            for entry in reversed(results.get("stages", [])):
+                if entry.get("triage_decision") in ("ESCALATE", "RETRY") or entry.get("success") is False:
+                    failing_stage = entry.get("stage")
+                    break
+        results["resume"] = self._build_resume(
+            session_id,
+            session_dir,
+            results["final_status"],
+            failing_stage,
+            waiting_gate_id,
+            results.get("error"),
+            results.get("artifact_paths", []),
+        )
 
         # Finalize metrics, export, and monitoring
         self._finalize_workflow(session_id, session_dir, results)
@@ -162,9 +207,13 @@ class OrchestrationEngine:
         gate_notes: str | None = None,
         gate_id: str | None = None,
         config_overrides: dict[str, Any] | None = None,
+        correction_artifact: str | None = None,
+        feedback: str | None = None,
+        focused_context: list[str] | None = None,
+        output_file: str | None = None,
     ) -> dict[str, Any]:
         """
-        Resume a workflow that paused at a gate.
+        Resume a workflow that paused at a gate or escalated.
 
         If gate_verdict is provided, it is written to the appropriate gate
         decision file before the workflow resumes. The engine then re-runs
@@ -178,6 +227,10 @@ class OrchestrationEngine:
             gate_id: Optional explicit gate id; if omitted, the first waiting
                      gate found in session.json is used
             config_overrides: Optional configuration overrides for skills
+            correction_artifact: Optional path to a correction/feedback artifact
+            feedback: Optional inline feedback text to write as correction artifact
+            focused_context: Optional additional focused context for resume
+            output_file: Optional path for final summary report
 
         Returns:
             Dictionary with execution results
@@ -234,6 +287,17 @@ class OrchestrationEngine:
         if error is not None:
             return error
 
+        # Load original inputs if caller did not resupply them
+        original_request, original_focused_context, original_output_file = self._load_session_inputs(session_dir)
+        if focused_context is None:
+            focused_context = original_focused_context
+        if output_file is None:
+            output_file = original_output_file
+
+        # Seed focused context files into the session directory
+        if focused_context:
+            self._seed_focused_context(session_dir, focused_context)
+
         # Write the gate decision if provided
         if gate_verdict is not None:
             waiting_gate_id = gate_id or self._find_waiting_gate_id(session_data)
@@ -259,6 +323,19 @@ class OrchestrationEngine:
                         "error": f"Failed to write gate decision: {str(e)}",
                     }
 
+        # If inline feedback is supplied, write it as a correction artifact for the
+        # stage that needs to retry.
+        effective_correction_artifact = correction_artifact
+        if feedback:
+            correction_file = self._validate_artifact_path(
+                f"correction-resume-{session_id}.md", session_dir
+            )
+            try:
+                correction_file.write_text(feedback, encoding="utf-8")
+                effective_correction_artifact = str(correction_file)
+            except (OSError, PermissionError) as e:
+                logger.error(f"Failed to write feedback correction artifact: {e}")
+
         # Start/resume metrics tracking
         self.metrics.start_workflow(session_id, manifest["name"])
 
@@ -269,25 +346,187 @@ class OrchestrationEngine:
             "final_status": "unknown",
         }
         self._run_workflow_stages(
-            manifest, session_dir, session_id, config_overrides, results, resume=True
+            manifest,
+            session_dir,
+            session_id,
+            config_overrides,
+            results,
+            resume=True,
+            focused_context=focused_context or [],
+            correction_artifact=effective_correction_artifact,
         )
 
         if results["final_status"] == "unknown":
             results["final_status"] = "completed"
 
+        if output_file and results["final_status"] == "completed":
+            self._write_output_file(session_dir, output_file, results)
+
+        # Enrich results with artifact paths and a stateless resume ticket
+        results["artifact_paths"] = self._list_session_artifacts(session_dir)
+        waiting_gate_id = self._find_waiting_gate_id(results) if results["final_status"] == "waiting_for_input" else None
+        failing_stage = None
+        if results["final_status"] in ("escalated", "blocked"):
+            for entry in reversed(results.get("stages", [])):
+                if entry.get("triage_decision") in ("ESCALATE", "RETRY") or entry.get("success") is False:
+                    failing_stage = entry.get("stage")
+                    break
+        results["resume"] = self._build_resume(
+            session_id,
+            session_dir,
+            results["final_status"],
+            failing_stage,
+            waiting_gate_id,
+            results.get("error"),
+            results.get("artifact_paths", []),
+        )
+
         self._finalize_workflow(session_id, session_dir, results)
         return results
 
-    def _update_session_manifest(self, session_dir: Path, manifest_name: str) -> None:
-        """Write the manifest name into session.json for later continuation."""
+    def _update_session_inputs(
+        self,
+        session_dir: Path,
+        manifest_name: str,
+        request_content: str,
+        focused_context: list[str],
+        output_file: str | None,
+    ) -> None:
+        """Persist original inputs in session.json for later continuation."""
         session_file = session_dir / "session.json"
         try:
             session_data = json.loads(session_file.read_text(encoding="utf-8"))
-            session_data["manifest"] = manifest_name
+        except (OSError, json.JSONDecodeError):
+            session_data = {}
+        session_data["manifest"] = manifest_name
+        session_data["request_content"] = request_content
+        session_data["focused_context"] = focused_context
+        session_data["output_file"] = output_file
+        try:
             with open(session_file, "w", encoding="utf-8") as f:
                 json.dump(session_data, f, indent=2)
         except (OSError, json.JSONDecodeError) as e:
-            logger.warning(f"Failed to record manifest in session.json: {e}")
+            logger.warning(f"Failed to record inputs in session.json: {e}")
+
+    def _load_session_inputs(
+        self, session_dir: Path
+    ) -> tuple[str, list[str], str | None]:
+        """Load original inputs from session.json."""
+        session_file = session_dir / "session.json"
+        try:
+            session_data = json.loads(session_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"Failed to read session.json: {e}")
+            return "", [], None
+        return (
+            session_data.get("request_content", ""),
+            session_data.get("focused_context", []),
+            session_data.get("output_file", None),
+        )
+
+    def _seed_focused_context(self, session_dir: Path, focused_context: list[str]) -> list[str]:
+        """Copy focused context files into the session directory and return their paths."""
+        if not focused_context:
+            return []
+        seeded: list[str] = []
+        for raw_file in focused_context:
+            raw = raw_file.strip()
+            if not raw:
+                continue
+            try:
+                source = validate_path_safe(
+                    Path(self.work_dir), Path(raw), allow_absolute=True
+                )
+                if not source.is_file():
+                    logger.warning(f"Focused context file not found: {source}")
+                    continue
+                # Keep relative structure under session dir for clarity
+                dest = validate_path_safe(
+                    session_dir, session_dir / source.name, allow_absolute=True
+                )
+                shutil.copy2(source, dest)
+                seeded.append(str(dest))
+                logger.info(f"Seeded workflow focused context: {source} -> {dest}")
+            except (InvalidInputError, PathTraversalError, OSError, ValueError) as e:
+                logger.warning(f"Failed to seed focused context {raw}: {e}")
+        return seeded
+
+    def _write_output_file(
+        self, session_dir: Path, output_file: str, results: dict[str, Any]
+    ) -> None:
+        """Write a structured summary report to the requested output file."""
+        try:
+            out_path = validate_path_safe(
+                session_dir, session_dir / output_file, allow_absolute=True
+            )
+            summary = {
+                "session_id": results.get("session_id"),
+                "manifest": results.get("manifest"),
+                "final_status": results.get("final_status"),
+                "stages": [
+                    {
+                        "stage": s.get("stage"),
+                        "skill": s.get("skill"),
+                        "success": s.get("success"),
+                        "triage_decision": s.get("triage_decision"),
+                        "error": s.get("error"),
+                    }
+                    for s in results.get("stages", [])
+                ],
+            }
+            out_path.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+        except (InvalidInputError, PathTraversalError, OSError) as e:
+            logger.warning(f"Failed to write output_file {output_file}: {e}")
+
+    def _build_resume(
+        self,
+        session_id: str,
+        session_dir: Path,
+        final_status: str,
+        stage_name: str | None,
+        gate_id: str | None,
+        error: str | None,
+        artifact_paths: list[str],
+    ) -> dict[str, Any] | None:
+        """Build a stateless resume ticket for the calling agent."""
+        if final_status == "completed":
+            return None
+
+        resume: dict[str, Any] = {
+            "tool": "mcp0_continue_workflow",
+            "arguments": {
+                "session_id": session_id,
+            },
+        }
+
+        if final_status == "waiting_for_input" and gate_id:
+            resume["tool"] = "mcp0_gate_decision"
+            resume["arguments"] = {
+                "session_id": session_id,
+                "gate_id": gate_id,
+                "verdict": "approve|request_changes|block",
+                "notes": "",
+            }
+            resume["then"] = {
+                "tool": "mcp0_continue_workflow",
+                "arguments": {"session_id": session_id},
+            }
+        elif final_status in ("escalated", "blocked"):
+            resume["arguments"]["feedback"] = "<agent fills this with correction/feedback>"
+            if artifact_paths:
+                resume["arguments"]["correction_artifact"] = artifact_paths[-1]
+
+        return resume
+
+    def _list_session_artifacts(self, session_dir: Path) -> list[str]:
+        """List durable artifacts in the session directory, excluding temp files."""
+        if not session_dir.exists():
+            return []
+        artifacts: list[str] = []
+        for f in sorted(session_dir.rglob("*")):
+            if f.is_file() and not f.name.startswith("devin_prompt_"):
+                artifacts.append(str(f))
+        return artifacts
 
     def _find_waiting_gate_id(self, session_data: dict[str, Any]) -> str | None:
         """Find the most recent gate that is still waiting for input."""
@@ -475,6 +714,8 @@ class OrchestrationEngine:
         config_overrides: dict[str, Any] | None,
         results: dict[str, Any],
         resume: bool = False,
+        focused_context: list[str] | None = None,
+        correction_artifact: str | None = None,
     ) -> None:
         """
         Execute all stages in the manifest, updating results in place.
@@ -486,6 +727,8 @@ class OrchestrationEngine:
             config_overrides: Optional configuration overrides for skills
             results: Results dictionary to update in place
             resume: If True, skip stages already marked completed in session.json
+            focused_context: Optional file paths to inject into each stage
+            correction_artifact: Optional correction artifact for retry
         """
         for stage in manifest["stages"]:
             try:
@@ -496,6 +739,8 @@ class OrchestrationEngine:
                     session_id=session_id,
                     config_overrides=config_overrides,
                     resume=resume,
+                    focused_context=focused_context,
+                    correction_artifact=correction_artifact,
                 )
                 results["stages"].append(stage_result)
             except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
@@ -786,6 +1031,7 @@ class OrchestrationEngine:
         config_overrides: dict[str, Any] | None = None,
         correction_artifact: str | None = None,
         resume: bool = False,
+        focused_context: list[str] | None = None,
     ) -> dict[str, Any]:
         """
         Execute a single stage
@@ -798,6 +1044,7 @@ class OrchestrationEngine:
             config_overrides: Optional configuration overrides for skills
             correction_artifact: Optional path to correction artifact for retry loops
             resume: If True, skip stages already marked completed in session.json
+            focused_context: Optional file paths to inject into the stage worker
 
         Returns:
             Dictionary with stage execution results
@@ -871,6 +1118,7 @@ class OrchestrationEngine:
                     session_id,
                     config_overrides,
                     correction_artifact,
+                    focused_context,
                 )
                 if dispatch_error is not None:
                     return dispatch_error
@@ -1148,6 +1396,7 @@ Edit this file with your input, then save to continue.
         session_id: str,
         config_overrides: dict[str, Any] | None,
         correction_artifact: str | None,
+        focused_context: list[str] | None = None,
     ) -> tuple[SkillInvocationResult | None, dict[str, Any] | None]:
         """
         Dispatch skill invocation with error handling and metrics recording.
@@ -1166,6 +1415,7 @@ Edit this file with your input, then save to continue.
                 is_reviewer=stage.get("skill") == "requesting-code-review",
                 config_overrides=config_overrides,
                 correction_artifact=correction_artifact,
+                focused_context=focused_context,
                 timeout=self.config.get("dispatch_timeout_seconds"),
             )
             logger.info(
