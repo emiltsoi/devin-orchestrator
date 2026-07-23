@@ -1,0 +1,57 @@
+name: rca
+description: "Root Cause Analysis workflow - investigation-only workflow for analyzing incidents, bugs, or failures"
+version: 1.0.0
+schema_version: 1
+session_shape: rca
+
+stages:
+  - step: 0
+    name: gather_evidence
+    skill: systematic-debugging
+    description: "Gather evidence from logs, code, and reproduction steps"
+    required_artifacts: [incident_report, logs]
+    output_artifacts: [evidence.md]
+    gate: none
+
+  - step: 1
+    name: analyze_evidence
+    skill: systematic-debugging
+    description: "Analyze evidence to identify potential causes"
+    required_artifacts: [evidence.md]
+    output_artifacts: [analysis.md]
+    gate: none
+
+  - step: 2
+    name: identify_root_cause
+    skill: systematic-debugging
+    description: "Identify the root cause of the incident"
+    required_artifacts: [analysis.md]
+    output_artifacts: [root_cause.md]
+    gate: g1_root_cause_approval
+
+  - step: 3
+    name: propose_fixes
+    skill: systematic-debugging
+    description: "Propose fixes for the identified root cause"
+    required_artifacts: [root_cause.md]
+    output_artifacts: [fix_recommendations.md]
+    gate: none
+
+  - step: 4
+    name: verify_fixes
+    skill: verification-before-completion
+    description: "Verify that proposed fixes address the root cause"
+    required_artifacts: [fix_recommendations.md]
+    output_artifacts: [verification.md]
+    gate: g2_fix_approval
+
+gates:
+  - id: g1_root_cause_approval
+    name: Root Cause Approval
+    description: "Human approval of identified root cause before proposing fixes"
+    type: human
+
+  - id: g2_fix_approval
+    name: Fix Approval
+    description: "Human approval of fix recommendations before completion"
+    type: human
