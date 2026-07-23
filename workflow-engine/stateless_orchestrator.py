@@ -497,10 +497,10 @@ class StatelessOrchestrator:
             session_format = "SKILL-NNN"
             session_id, session_dir = create_session(self.config.session_work_dir, session_format)
 
-            # Write prompt file
-            write_request_prompt(session_dir, request)
-
-            # Invoke skill
+            # Invoke skill. Pass the request in context so SkillInvoker builds
+            # the full skill prompt (name, iron law, checklist, narrative).
+            # Do NOT override with custom_prompt=request; that strips the skill
+            # definition and produced broad, shallow passes.
             dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
             invoker = SkillInvoker(demo_mode=self.demo_mode)
             context = {
@@ -512,7 +512,6 @@ class StatelessOrchestrator:
                 skill_name=skill_name,
                 context=context,
                 workspace=str(session_dir),
-                custom_prompt=request,
                 timeout=dispatch_timeout,
             )
 

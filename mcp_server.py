@@ -66,7 +66,7 @@ class McpServer:
 
     PROTOCOL_VERSION = "2024-11-05"
     SERVER_NAME = "devin-orchestrator"
-    SERVER_VERSION = "0.1.0"
+    SERVER_VERSION = "0.1.1"
     MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
     # Rate limiting: max 10 calls per tool per 60-second window
     RATE_LIMIT_MAX_CALLS = 10
@@ -176,7 +176,7 @@ class McpServer:
             },
             {
                 "name": "dispatch_devin",
-                "description": "Dispatch a generic Devin run with a role and prompt file.",
+                "description": "Dispatch a focused, single-shot Devin worker. Best for targeted implementation fixes or reviews where you specify exact acceptance criteria, focused files, and an output file. For full feature development prefer `implement` or `run_workflow`; for process skills prefer `run_skill`.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -192,10 +192,10 @@ class McpServer:
                             "type": "string",
                             "description": "Workspace directory where Devin runs and writes outputs",
                         },
-                        "model": {"type": "string"},
-                        "agent": {"type": "string"},
-                        "phase": {"type": "string"},
-                        "output_file": {"type": "string"},
+                        "model": {"type": "string", "description": "Model to use for the worker (e.g. swe-1.6). Overrides default routing."},
+                        "agent": {"type": "string", "description": "Optional agent identifier or override."},
+                        "phase": {"type": "string", "description": "Optional workflow phase context."},
+                        "output_file": {"type": "string", "description": "Path where the worker writes a structured execution report."},
                         "focused_context": {
                             "type": "array",
                             "items": {"type": "string"},
@@ -212,7 +212,7 @@ class McpServer:
             },
             {
                 "name": "dispatch_skill",
-                "description": "Invoke a named skill in a target workspace.",
+                "description": "Invoke a named skill as a Devin worker in a target workspace. This dispatches a fresh subagent to follow the skill; prefer `execute`, `implement`, or `dispatch_devin` for most tasks.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -246,7 +246,7 @@ class McpServer:
             },
             {
                 "name": "execute",
-                "description": "Execute a request with automatic or explicit intent routing.",
+                "description": "Main entry point. Execute a request with automatic intent routing. Prefer this for general requests; the server will choose the appropriate workflow or skill.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -280,7 +280,7 @@ class McpServer:
             },
             {
                 "name": "implement",
-                "description": "Execute an implementation request using the superpower workflow.",
+                "description": "Implement a feature or fix using the full `superpower` workflow (brainstorming, worktrees, plan, subagent-driven development, tests, review, completion). Use this for any non-trivial code change.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -309,7 +309,7 @@ class McpServer:
             },
             {
                 "name": "review",
-                "description": "Execute a review request using the code_review workflow.",
+                "description": "Review code changes using the `code_review` workflow. Use for code diff review, PR review, or general code quality evaluation.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -338,7 +338,7 @@ class McpServer:
             },
             {
                 "name": "investigate",
-                "description": "Execute an investigation request using the rca workflow.",
+                "description": "Investigate an incident, bug, or failure using the `rca` workflow. Read-only; no git write operations.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -367,7 +367,7 @@ class McpServer:
             },
             {
                 "name": "plan",
-                "description": "Execute a planning request using the writing-plans skill.",
+                "description": "Create a detailed implementation plan using the `writing-plans` skill. Produces a plan.md with bite-sized tasks.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -386,7 +386,7 @@ class McpServer:
             },
             {
                 "name": "run_workflow",
-                "description": "Run a specific workflow with a request.",
+                "description": "Run a named workflow (superpower, code_review, rca, pr_review) with a request. Use when you need a specific workflow rather than the auto-routed `execute` tool.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -453,17 +453,17 @@ class McpServer:
             },
             {
                 "name": "run_skill",
-                "description": "Run a specific skill with a request.",
+                "description": "Run a process skill (e.g. brainstorming, writing-plans, systematic-debugging) in a fresh session. NOT for implementation or code-fix tasks; use `implement`, `run_workflow`, or `dispatch_devin` for those.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "skill": {
                             "type": "string",
-                            "description": "Name of the skill to run",
+                            "description": "Name of the process skill to run (e.g. brainstorming, writing-plans, systematic-debugging). Avoid implementation skills like executing-plans here; prefer implement/run_workflow/dispatch_devin.",
                         },
                         "request": {
                             "type": "string",
-                            "description": "The user request",
+                            "description": "The request to process. For broad implementation requests, the server may direct you to a more appropriate tool.",
                         },
                         "demo_mode": {
                             "type": "boolean",
@@ -495,6 +495,10 @@ class McpServer:
             return self._tools_list(request)
         if method == "tools/call":
             return self._tools_call(request)
+        if method == "prompts/list":
+            return self._prompts_list(request)
+        if method == "prompts/get":
+            return self._prompts_get(request)
         return self._error(request, -32601, f"Method not found: {method}")
 
     def _initialize(self, request: dict) -> dict:
@@ -503,7 +507,7 @@ class McpServer:
             "id": request.get("id"),
             "result": {
                 "protocolVersion": self.PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
+                "capabilities": {"tools": {}, "prompts": {}},
                 "serverInfo": {
                     "name": self.SERVER_NAME,
                     "version": self.SERVER_VERSION,
@@ -512,10 +516,81 @@ class McpServer:
         }
 
     def _tools_list(self, request: dict) -> dict:
+        tools = self._tool_specs()
+        # Order tools so agents see high-level/intent tools before low-level dispatch/skill tools.
+        tool_order = {
+            "execute": 0,
+            "implement": 1,
+            "review": 2,
+            "investigate": 3,
+            "plan": 4,
+            "run_workflow": 5,
+            "run_skill": 6,
+            "dispatch_devin": 7,
+            "dispatch_skill": 8,
+            "read_artifact": 9,
+            "list_skills": 10,
+            "get_skill": 11,
+            "list_workflows": 12,
+            "get_workflow": 13,
+            "gate_decision": 14,
+            "continue_workflow": 15,
+        }
+        tools.sort(key=lambda tool: tool_order.get(tool.get("name"), 100))
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
-            "result": {"tools": self._tool_specs()},
+            "result": {"tools": tools},
+        }
+
+    def _prompts_list(self, request: dict) -> dict:
+        """Return the list of available MCP prompts."""
+        return {
+            "jsonrpc": "2.0",
+            "id": request.get("id"),
+            "result": {
+                "prompts": [
+                    {
+                        "name": "devin-orchestrator-usage",
+                        "description": "Usage guide for the devin-orchestrator MCP server.",
+                    }
+                ]
+            },
+        }
+
+    def _prompts_get(self, request: dict) -> dict:
+        """Return the devin-orchestrator usage prompt content."""
+        params = request.get("params", {})
+        prompt_name = params.get("name")
+        if prompt_name != "devin-orchestrator-usage":
+            return self._error(request, -32602, f"Unknown prompt: {prompt_name}")
+
+        usage_text = """# Devin Orchestrator MCP Usage
+
+Pick the highest-level tool that matches your task:
+
+1. execute — main entry point; auto-routes by intent.
+2. implement — full superpower workflow for feature/bug-fix implementation.
+3. review — code_review workflow for code or PR review.
+4. investigate — rca workflow for root-cause analysis (read-only).
+5. plan — writing-plans skill to produce an implementation plan.
+6. run_workflow — run a specific named workflow.
+7. run_skill — process skills only (brainstorming, writing-plans, systematic-debugging).
+8. dispatch_devin — focused single-shot worker with prompt_file, focused_context, model, output_file.
+
+Do NOT use run_skill for implementation tasks. It has no focused_context and bypasses the workflow gates. For coding work, use implement, run_workflow, or dispatch_devin.
+"""
+        return {
+            "jsonrpc": "2.0",
+            "id": request.get("id"),
+            "result": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": {"type": "text", "text": usage_text},
+                    }
+                ]
+            },
         }
 
     def _tools_call(self, request: dict) -> dict:
@@ -1413,6 +1488,39 @@ class McpServer:
             skill_name = validate_skill_name(skill)
         except InvalidInputError as e:
             return [self._text_content(f"Invalid skill name: {e}")]
+
+        # run_skill is a low-level tool intended for process skills that do not
+        # require project context or focused artifacts. Implementation, review,
+        # and investigation skills should use the dedicated high-level tools or
+        # focused dispatch_devin so the worker gets the right files and criteria.
+        process_skills = {
+            "brainstorming",
+            "writing-plans",
+            "systematic-debugging",
+        }
+        if skill_name not in process_skills:
+            return [self._text_content(json.dumps(
+                {
+                    "success": False,
+                    "error": (
+                        f"run_skill is not the right tool for '{skill_name}'. "
+                        "It is intended for process skills only. "
+                        "For implementation use `implement`, `run_workflow`, or "
+                        "`dispatch_devin`. For review use `review` or "
+                        "`dispatch_devin` with a reviewer role. For investigation "
+                        "use `investigate` or `dispatch_devin` with a reviewer role."
+                    ),
+                    "skill": skill_name,
+                    "suggested_tools": [
+                        "implement",
+                        "run_workflow",
+                        "dispatch_devin",
+                        "review",
+                        "investigate",
+                    ],
+                },
+                indent=2,
+            ))]
 
         orchestrator = StatelessOrchestrator(
             workspace=self.workspace,

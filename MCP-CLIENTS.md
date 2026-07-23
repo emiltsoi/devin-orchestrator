@@ -2,6 +2,21 @@
 
 `mcp_server.py` exposes `devin-orchestrator` skills, workflows, and dispatch as an [MCP](https://modelcontextprotocol.io) server over stdio. Any MCP-compatible client can connect.
 
+## Choosing the right tool
+
+The `tools/list` response is ordered from highest-level to lowest-level. Pick the first tool that matches your task:
+
+1. **General / unsure:** `execute` — auto-routes to the right workflow or skill.
+2. **Implement a feature or fix:** `implement` — runs the full `superpower` workflow.
+3. **Review code or a PR:** `review` — runs the `code_review` workflow.
+4. **Investigate a bug or incident:** `investigate` — runs the `rca` workflow (read-only).
+5. **Create an implementation plan:** `plan` — runs the `writing-plans` skill.
+6. **Run a specific workflow:** `run_workflow` with a `workflow` name.
+7. **Run a process skill only** (`brainstorming`, `writing-plans`, `systematic-debugging`): `run_skill`.
+8. **Focused single-shot worker** with exact files and acceptance criteria: `dispatch_devin`.
+
+**Avoid `run_skill` for implementation tasks.** `run_skill` is a low-level process-skill runner. For coding work, `implement`, `run_workflow`, or `dispatch_devin` carry the right context and produce focused results.
+
 ## Server installation
 
 Install the harness globally first:
@@ -63,6 +78,18 @@ Most clients accept a command array:
 
 ## Available tools
 
+### High-level intent / workflow tools (preferred)
+- `execute` — auto-route by intent (`auto`, `implement`, `review`, `investigate`, `plan`)
+- `implement` — implement a feature or fix using the `superpower` workflow
+- `review` — review code using the `code_review` workflow
+- `investigate` — investigate an incident/bug using the `rca` workflow (read-only)
+- `plan` — create a `writing-plans` implementation plan
+- `run_workflow` — run any named workflow explicitly
+
+### Focused single-shot dispatch
+- `dispatch_devin` — dispatch a focused Devin worker with a role, prompt file, and optional `focused_context` / `output_file`
+- `dispatch_skill` — dispatch a Devin worker to execute a named skill in a workspace
+
 ### Discovery / read-only
 - `list_skills`
 - `get_skill`
@@ -70,49 +97,53 @@ Most clients accept a command array:
 - `get_workflow`
 - `read_artifact`
 
-### Low-level Devin dispatch
-- `dispatch_devin`
-- `dispatch_skill`
-
-### High-level intent / workflow tools
-- `execute` — auto-route by intent (`auto`, `implement`, `review`, `investigate`, `plan`)
-- `implement` — `superpower` workflow
-- `review` — `code_review` workflow
-- `investigate` — `rca` workflow
-- `plan` — `writing-plans` skill
-- `run_workflow` — run any workflow by name
-- `run_skill` — run any skill by name
-
-### Gate control
+### Low-level skill / gate control
+- `run_skill` — **process skills only** (`brainstorming`, `writing-plans`, `systematic-debugging`). Not for implementation; use `implement`, `run_workflow`, or `dispatch_devin` for coding tasks.
 - `gate_decision` — submit `approve` | `request_changes` | `block`
 - `continue_workflow` — resume a workflow paused at a gate
 
 ## Tool usage examples
 
-### Dispatch a skill
+### Implement a feature or fix
 
 ```json
 {
-  "name": "dispatch_skill",
+  "name": "implement",
   "arguments": {
-    "skill_name": "brainstorming",
-    "session_id": "SESSION-001",
-    "workspace": "C:/Users/<username>/OneDrive/Documents/Work/hermes-agent-a2a"
+    "request": "Add a thumbnail cache with on-disk persistence to the picture browser.",
+    "gate_mode": "auto",
+    "timeout": 1200
   }
 }
 ```
 
-### Dispatch a generic Devin run
+### Focused follow-up fix
+
+For small, focused changes, use `dispatch_devin` with a prompt file and `focused_context`:
 
 ```json
 {
   "name": "dispatch_devin",
   "arguments": {
     "role": "coder",
-    "prompt_file": "C:/Users/<username>/OneDrive/Documents/Work/hermes-agent-a2a/prompt.md",
+    "prompt_file": "C:/Users/<username>/OneDrive/Documents/Work/hermes-agent-a2a/prompt-followup.md",
     "work_dir": "C:/Users/<username>/OneDrive/Documents/Work/hermes-agent-a2a",
-    "output_file": "C:/Users/<username>/OneDrive/Documents/Work/hermes-agent-a2a/result.md",
-    "timeout": 1200
+    "focused_context": ["src/App.tsx", "src/zoom.ts", "tests/unit/zoom.test.ts"],
+    "output_file": "C:/Users/<username>/OneDrive/Documents/Work/hermes-agent-a2a/result-followup.md",
+    "model": "swe-1.6",
+    "timeout": 900
+  }
+}
+```
+
+### Dispatch a process skill
+
+```json
+{
+  "name": "run_skill",
+  "arguments": {
+    "skill": "brainstorming",
+    "request": "Explore how to add lazy image dimension loading to the picture browser."
   }
 }
 ```
