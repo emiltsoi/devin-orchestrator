@@ -55,7 +55,8 @@ def _stub_invoker(monkeypatch, captured: dict) -> None:
             captured["init_kwargs"] = kwargs
 
         def invoke_skill(self, *, skill_name, context, workspace,
-                         is_reviewer, config_overrides):
+                         is_reviewer, config_overrides, focused_context=None,
+                         correction_artifact=None):
             captured["workspace"] = workspace
             captured["skill_name"] = skill_name
             return SkillInvocationResult(

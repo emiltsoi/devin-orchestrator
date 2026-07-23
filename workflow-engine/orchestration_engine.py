@@ -187,7 +187,6 @@ class OrchestrationEngine:
                     break
         results["resume"] = self._build_resume(
             session_id,
-            session_dir,
             results["final_status"],
             failing_stage,
             waiting_gate_id,
@@ -373,7 +372,6 @@ class OrchestrationEngine:
                     break
         results["resume"] = self._build_resume(
             session_id,
-            session_dir,
             results["final_status"],
             failing_stage,
             waiting_gate_id,
@@ -481,7 +479,6 @@ class OrchestrationEngine:
     def _build_resume(
         self,
         session_id: str,
-        session_dir: Path,
         final_status: str,
         stage_name: str | None,
         gate_id: str | None,
@@ -512,7 +509,9 @@ class OrchestrationEngine:
                 "arguments": {"session_id": session_id},
             }
         elif final_status in ("escalated", "blocked"):
-            resume["arguments"]["feedback"] = "<agent fills this with correction/feedback>"
+            resume["arguments"]["feedback"] = error or "<agent fills this with correction/feedback>"
+            if stage_name:
+                resume["arguments"]["stage"] = stage_name
             if artifact_paths:
                 resume["arguments"]["correction_artifact"] = artifact_paths[-1]
 

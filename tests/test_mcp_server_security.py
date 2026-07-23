@@ -254,9 +254,10 @@ class TestDispatchDevinRelativePaths:
                 }
             )
 
-            text = result[0]["text"]
-            assert "Invalid prompt_file" not in text
-            assert "Exit code: 0" in text
+            data = json.loads(result[0]["text"])
+            assert "Invalid prompt_file" not in result[0]["text"]
+            assert data["success"] is True
+            assert data["exit_code"] == 0
             # The prompt file path passed to the subprocess must resolve under
             # work_dir, not CWD.
             prompt_arg = captured["cmd"][
@@ -289,10 +290,12 @@ class TestDispatchDevinRelativePaths:
                 }
             )
 
-            text = result[0]["text"]
-            assert "Invalid output_file" not in text
-            assert "Invalid prompt_file" not in text
-            assert "Exit code: 0" in text
+            data = json.loads(result[0]["text"])
+            assert "Invalid output_file" not in result[0]["text"]
+            assert "Invalid prompt_file" not in result[0]["text"]
+            assert data["success"] is True
+            assert data["exit_code"] == 0
+            assert data["output_file"] == str(work_dir / "out.log")
 
     def test_dispatch_devin_rejects_prompt_file_outside_work_dir(self, monkeypatch):
         """A relative prompt_file that escapes work_dir via traversal must be
@@ -532,9 +535,10 @@ class TestDispatchDevinOutputFileFromWorkDir:
                 }
             )
 
-            text = result[0]["text"]
-            assert "OUTPUT-CONTENT" in text
-            assert "OUTPUT FILE" in text
+            data = json.loads(result[0]["text"])
+            assert data["success"] is True
+            assert data["output"] == "OUTPUT-CONTENT"
+            assert data["output_file"] == str(work_dir / "out.log")
 
 
 class TestDispatchDevinRoleShortName:
@@ -619,7 +623,9 @@ class TestDispatchDevinRoleShortName:
                 }
             )
 
-            assert "Exit code: 0" in result[0]["text"]
+            data = json.loads(result[0]["text"])
+            assert data["success"] is True
+            assert data["exit_code"] == 0
             role_arg = captured["cmd"][captured["cmd"].index("--role") + 1]
             expected = str(Path(tmpdir) / "root" / "roles" / "coder.md")
             assert role_arg == expected
