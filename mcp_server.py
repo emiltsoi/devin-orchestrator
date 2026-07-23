@@ -647,12 +647,14 @@ Pick the highest-level tool that matches your task:
 3. review — code_review workflow for code or PR review.
 4. investigate — rca workflow for root-cause analysis (read-only).
 5. plan — writing-plans skill to produce an implementation plan.
-6. run_workflow — run a specific named workflow.
+6. run_workflow — run a specific named workflow. For the full superpower methodology, use `mcp0_run_workflow` with `workflow: "superpower"`.
 7. run_skill — process skills only (brainstorming, writing-plans, systematic-debugging).
 8. dispatch_devin — focused single-shot worker with prompt_file, focused_context, model, output_file.
-9. gate_decision / continue_workflow — resume a workflow paused at a gate or escalation.
+9. dispatch_skill — dispatch a single skill (only for manual stage dispatch when a resume ticket requires it).
+10. gate_decision / continue_workflow — resume a workflow paused at a gate or escalation.
 
 Do NOT use run_skill for implementation tasks. For coding work, use implement, run_workflow, or dispatch_devin.
+Do NOT dispatch superpower stages manually with dispatch_skill unless a resume ticket explicitly requires a per-stage dispatch.
 
 ## Stateless contract
 

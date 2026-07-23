@@ -87,7 +87,7 @@ After installation, these workflows are available:
 - `rca.manifest.yaml` - Root cause analysis workflow
 - `pr_review.manifest.yaml` - Pull request review workflow
 - `code_review.manifest.yaml` - Code review workflow
-- `devin-support.manifest.yaml` - Meta-workflow for orchestration
+- `devin-support.manifest.yaml` - Deprecated wrapper; use `mcp0_run_workflow('superpower')` directly
 
 ## Configuration
 

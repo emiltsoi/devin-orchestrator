@@ -1,10 +1,13 @@
 name: devin-support
-description: "Devin support workflow - Cascade orchestrates superpower workflow using skill_invoker"
+description: "DEPRECATED - use mcp0_run_workflow('superpower') directly. This one-stage wrapper loads the orchestrate-superpower skill, which now routes to mcp0_run_workflow('superpower')."
 version: 1.0.0
 schema_version: 1
 session_shape: devin-support
 source: devin-orchestrator
 installed: 2026-06-20
+
+deprecated: true
+replacement: "mcp0_run_workflow with workflow: superpower"
 
 stages:
   - name: orchestrate-superpower
@@ -14,4 +17,4 @@ stages:
     output_artifacts: []
     gate: none
 
-terminal_state: Superpower workflow orchestrated and executed by Cascade
+terminal_state: "Deprecated: use mcp0_run_workflow('superpower') directly"

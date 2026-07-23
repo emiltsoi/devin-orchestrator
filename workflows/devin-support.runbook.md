@@ -1,17 +1,18 @@
 # Devin Support Workflow Runbook
 
+> **DEPRECATED** — `devin-support` is a legacy one-stage wrapper around `orchestrate-superpower`. The `orchestrate-superpower` skill now routes to `mcp0_run_workflow('superpower')`, so you should call `mcp0_run_workflow('superpower')` directly for end-to-end superpower automation.
+
 **Source manifest:** `workflows/devin-support.manifest.yaml`
 **Schema version:** 1
 **Session shape:** devin-support
 
 ## 1. Overview
 
-The devin-support workflow is a meta-workflow where Cascade orchestrates the superpower workflow using the orchestrate-superpower skill. This is a single-stage workflow that delegates to the superpower workflow for execution. Key invariants:
+This runbook is retained for reference only. The preferred way to run the superpower workflow is `mcp0_run_workflow` with `workflow: "superpower"`. The engine runs all 7 stages, handles gates, and returns structured results. Only use per-stage dispatch when a `resume` ticket explicitly requires a manual stage dispatch.
 
-- Cascade orchestrates the superpower workflow via skill_invoker
-- No persistent artifacts are produced by this workflow (delegated to superpower)
-- No gates are present (delegated to superpower workflow gates)
-- The orchestrate-superpower skill handles the delegation to the superpower workflow
+- `mcp0_run_workflow('superpower')` is the canonical path
+- No persistent artifacts are produced by `devin-support` itself (all outputs come from the superpower workflow)
+- No gates are present on the wrapper stage (superpower workflow gates are handled by the engine)
 - **Canonical source deployment:** The canonical source of truth for workflow definitions is the `manifest.yaml` file. Runbooks are agent-facing companions that must maintain parity with the manifest. When deploying workflow changes, update the manifest first, then update the corresponding runbook to match.
 
 ## 2. Stage Sequence

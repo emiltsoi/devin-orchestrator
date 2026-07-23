@@ -119,16 +119,18 @@ py -3.14 {global_root.as_posix()}/dispatch_skill.py `
 
 ## Core skills
 
-- `orchestrate-superpower` — top-level workflow orchestration
+- For end-to-end superpower: use `mcp0_run_workflow('superpower')` (preferred)
 - `brainstorming`, `writing-plans` — planning
 - `subagent-driven-development`, `test-driven-development`, `executing-plans` — implementation
 - `code-review`, `requesting-code-review`, `receiving-code-review`, `adversarial-review` — review
 - `systematic-debugging`, `swe-compliance`, `using-git-worktrees` — support
+- `orchestrate-superpower` — legacy skill; now routes to `mcp0_run_workflow('superpower')` (deprecated)
 
 ## Core workflows
 
-- `superpower` — full gated methodology
-- `code_review`, `pr_review`, `rca`, `devin-support`
+- `superpower` — full gated methodology (use with `mcp0_run_workflow`)
+- `code_review`, `pr_review`, `rca`
+- `devin-support` — deprecated wrapper; use `mcp0_run_workflow('superpower')` directly
 
 ## Local overrides
 

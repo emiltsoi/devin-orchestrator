@@ -1,13 +1,11 @@
 ---
 name: orchestrate-superpower
-description: "Use when orchestrating a multi-stage superpower workflow that dispatches each stage skill to Devin. Prefer the mcp0_dispatch_skill MCP tool; fall back to the dispatch_skill.py script only when MCP tools are unavailable."
+description: "Use when a multi-stage superpower workflow is needed. Prefer mcp0_run_workflow('superpower') for end-to-end automation; only dispatch per stage manually when you need agent-level control over each stage."
 ---
 
 # Orchestrate Superpower Workflow
 
-You are the orchestrator. Your job is to load the superpower manifest and execute each stage by dispatching the stage skill to Devin, reasoning through results and making triage decisions.
-
-If you are connected via the devin-orchestrator MCP server, use the `mcp0_dispatch_skill` tool (or `dispatch_skill` if your client does not prefix tool names). Only fall back to the `dispatch_skill.py` script if you do not have MCP tools available.
+Your job is to run the full superpower methodology end-to-end. The engine can do this automatically; only orchestrate stage-by-stage manually when you need explicit control over each stage.
 
 ## Process
 
@@ -16,45 +14,52 @@ If you are connected via the devin-orchestrator MCP server, use the `mcp0_dispat
 - Parse stages, skills, gates, and artifacts
 - Understand the workflow structure
 
-### 2. Execute Stages
-For each stage in the manifest:
-- Check if stage is optional and should be skipped
-- If `skip_brainstorming` is true and stage is brainstorming: skip stage
-- If stage is skipped: create placeholder artifacts and continue
-- Load skill definition and narrative
-- **Dispatch skill using the devin-orchestrator MCP tool (`mcp0_dispatch_skill` or `dispatch_skill`) to call Devin**
-- Read output artifacts
-- Validate structural floor (no TODO, no placeholders, non-empty)
-- Reason about results
-- Make triage decision (proceed/retry/escalate)
-- Handle gate if present
+### 2. Preferred path: end-to-end with `mcp0_run_workflow`
+Call the devin-orchestrator MCP tool `mcp0_run_workflow` with `workflow: "superpower"`. The engine runs all 7 stages, handles gates, and returns a structured result.
 
-### 2.1. Skipping Brainstorming
-When the spec is already clear, you can skip brainstorming:
-- Set `skip_brainstorming: true` in the manifest
-- Or set it via environment/session context
-- When skipped: create a minimal design.md placeholder
-- Continue to next stage (using-git-worktrees)
+Arguments:
+- `workflow`: `"superpower"`
+- `request`: the feature or bug-fix request
+- `demo_mode`: `true` for simulation (no real Devin dispatches)
+- `gate_mode`: `"auto"` to auto-approve bypassable gates (recommended); `"signal"` to return a `resume` ticket for agent decisions; `"interactive"` to wait for human
+- `focused_context`: optional file paths to seed into every stage
+- `output_file`: optional path for a final summary report
 
-Skip logic:
-```python
-if manifest.get('skip_brainstorming', False) and stage['name'] == 'brainstorming':
-    # Create minimal design.md placeholder
-    design_placeholder = f"# Design\n\nSkipping brainstorming - spec is clear.\n\nRequest: {request_content}\n"
-    (session_dir / 'design.md').write_text(design_placeholder)
-    continue to next stage
+Example MCP tool call:
+```json
+{
+  "name": "mcp0_run_workflow",
+  "arguments": {
+    "workflow": "superpower",
+    "request": "Implement a stateless MCP dispatch contract for high-quality dispatches",
+    "demo_mode": true,
+    "gate_mode": "auto",
+    "output_file": "output/superpower-report.md"
+  }
+}
 ```
 
-### 3. Skill Invocation (IMPORTANT)
-You MUST dispatch each stage to Devin. Do NOT execute the skill yourself - dispatch it to Devin.
+Handle the result:
+- If `final_status` is `completed`, the workflow is done.
+- If `final_status` is `waiting_for_input`, `escalated`, or `blocked`, read the `resume` ticket and call the indicated next MCP tool (`mcp0_gate_decision`, `mcp0_continue_workflow`, etc.).
 
-**Preferred method:** If the devin-orchestrator MCP tools are available, use `mcp0_dispatch_skill` (or `dispatch_skill` if your client does not prefix tool names) with these arguments:
-- `skill_name`: name of the skill to dispatch (e.g. `brainstorming`, `writing-plans`)
-- `session_id`: session identifier (e.g. `SUPERPOWER-001`)
-- `workspace`: path to the session directory
-- `is_reviewer`: `true` if this is a reviewer stage (e.g. `requesting-code-review`), otherwise `false`
-- `demo_mode`: `true` for testing (simulated dispatch), `false` for production (real Devin dispatch)
-- `config_overrides`: optional JSON object with overrides (e.g. `{"interactive_mode": true}`)
+### 2.1. Skipping Brainstorming
+When the spec is already clear, pass `skip_brainstorming: true` to `mcp0_run_workflow`. The engine creates a minimal `design.md` placeholder and starts at `using-git-worktrees`.
+
+You can also set `skip_brainstorming: true` in `workflows/superpower.manifest.yaml` to make skipping the default.
+
+### 3. Fallback: Per-Stage Dispatch
+Only use this section if `mcp0_run_workflow` is unavailable or the workflow returned a `resume` ticket instructing you to dispatch a specific stage manually.
+
+For each stage in `workflows/superpower.manifest.yaml`:
+- Check if stage is optional and should be skipped
+- If `skip_brainstorming` is true and stage is `brainstorming`: skip stage and create placeholder `design.md`
+- Load skill definition and narrative
+- Dispatch the stage skill with `mcp0_dispatch_skill` (or `dispatch_skill` if your client does not prefix tool names)
+- Read output artifacts
+- Validate structural floor (no TODO, no placeholders, non-empty)
+- Reason about results and make triage decision (proceed/retry/escalate)
+- Handle gate if present
 
 Example MCP tool call:
 ```json
@@ -71,17 +76,12 @@ Example MCP tool call:
 }
 ```
 
-**Fallback method:** If you do not have MCP tool access, use the `dispatch_skill.py` script via bash:
+If you do not have MCP tool access, use the `dispatch_skill.py` script via bash:
 ```bash
 python ~/.devin-orchestrator/dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]
 ```
 
-Example:
-```bash
-python ~/.devin-orchestrator/dispatch_skill.py brainstorming SUPERPOWER-001 ~/.devin-orchestrator/work/SUPERPOWER-001 false true
-```
-
-The tool/script returns JSON output with success, session_id, output, and error fields.
+The tool/script returns JSON output with `success`, `session_id`, `output`, `error`, `output_file`, and `artifact_paths`.
 
 ### 3.1. Managing Interactive vs Non-Interactive Mode
 
@@ -129,10 +129,9 @@ If stage has a gate:
 - Append to session-audit.md after each stage
 
 ## Important
-- You are the orchestrator, not a mechanical script
-- **You MUST dispatch each stage using the devin-orchestrator MCP tools (e.g. `mcp0_dispatch_skill`) when available; otherwise use the `dispatch_skill.py` script via bash**
-- Do NOT execute skills yourself - dispatch them to Devin
-- Reason through each stage's results
-- Make intelligent triage decisions
+- **Prefer `mcp0_run_workflow` with `workflow: "superpower"` for end-to-end automation.**
+- Only dispatch per stage manually as a fallback or when the engine returns a `resume` ticket that requires it.
+- Do NOT execute skills yourself - let the engine run the workflow or dispatch skills to Devin
+- Reason through results and make intelligent triage decisions
 - Handle gates appropriately
 - Stop workflow if escalation needed
