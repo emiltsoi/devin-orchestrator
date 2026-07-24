@@ -476,6 +476,10 @@ class StatelessOrchestrator:
             result["workspace"] = str(session_dir)
             result["success"] = results.get("final_status") == "completed"
             result["error"] = results.get("error") if results.get("final_status") != "completed" else None
+            # The full engine result (including stages) is serialized into output.
+            # Remove the raw stages list from the top-level dict so the MCP layer
+            # can json.dumps the response without hitting TriageDecision enum objects.
+            result.pop("stages", None)
             result["output"] = json.dumps(results, indent=2, default=_json_default)
             if "artifact_paths" not in result:
                 result["artifact_paths"] = self._list_session_artifacts(session_dir)
@@ -571,6 +575,10 @@ class StatelessOrchestrator:
             result["workspace"] = str(session_dir)
             result["success"] = results.get("final_status") == "completed"
             result["error"] = results.get("error") if results.get("final_status") != "completed" else None
+            # The full engine result (including stages) is serialized into output.
+            # Remove the raw stages list from the top-level dict so the MCP layer
+            # can json.dumps the response without hitting TriageDecision enum objects.
+            result.pop("stages", None)
             result["output"] = json.dumps(results, indent=2, default=_json_default)
             if "artifact_paths" not in result:
                 result["artifact_paths"] = self._list_session_artifacts(session_dir)

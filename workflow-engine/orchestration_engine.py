@@ -182,7 +182,7 @@ class OrchestrationEngine:
         failing_stage = None
         if results["final_status"] in ("escalated", "blocked"):
             for entry in reversed(results.get("stages", [])):
-                if entry.get("triage_decision") in ("ESCALATE", "RETRY") or entry.get("success") is False:
+                if entry.get("triage_decision") in (TriageDecision.ESCALATE, TriageDecision.RETRY) or entry.get("success") is False:
                     failing_stage = entry.get("stage")
                     break
         results["resume"] = self._build_resume(
@@ -367,7 +367,7 @@ class OrchestrationEngine:
         failing_stage = None
         if results["final_status"] in ("escalated", "blocked"):
             for entry in reversed(results.get("stages", [])):
-                if entry.get("triage_decision") in ("ESCALATE", "RETRY") or entry.get("success") is False:
+                if entry.get("triage_decision") in (TriageDecision.ESCALATE, TriageDecision.RETRY) or entry.get("success") is False:
                     failing_stage = entry.get("stage")
                     break
         results["resume"] = self._build_resume(
