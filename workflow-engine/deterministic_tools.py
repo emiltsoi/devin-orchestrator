@@ -196,13 +196,16 @@ def update_status(session_dir: Path, stage: str, status: str, notes: str = "") -
 
 def create_placeholder_artifact(artifact_path: Path, content: str) -> None:
     """
-    Create a placeholder artifact when skipping a stage
+    Create a placeholder artifact when skipping a stage, but do not overwrite
+    an existing artifact (e.g., a pre-seeded plan file).
 
     Args:
         artifact_path: Path where artifact should be created
         content: Placeholder content
     """
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    if artifact_path.exists():
+        return
     artifact_path.write_text(content)
 
 

@@ -225,36 +225,6 @@ class McpServer:
                 },
             },
             {
-                "name": "dispatch_skill",
-                "description": "[DEPRECATED] Use `run_skill` (process skills) or `dispatch_devin` (focused single-shot) instead. Kept for backward compatibility.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "skill_name": {"type": "string"},
-                        "session_id": {"type": "string"},
-                        "workspace": {"type": "string"},
-                        "is_reviewer": {"type": "boolean", "default": False},
-                        "demo_mode": {"type": "boolean", "default": False},
-                        "config_overrides": {"type": "object", "default": {}},
-                        "focused_context": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Paths to include as focused context for the skill worker",
-                        },
-                        "output_file": {
-                            "type": "string",
-                            "description": "Optional path where the worker should write its structured report",
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Timeout in seconds",
-                            "default": 600,
-                        },
-                    },
-                    "required": ["skill_name", "session_id", "workspace"],
-                },
-            },
-            {
                 "name": "read_artifact",
                 "description": "Read a file from a workspace.",
                 "inputSchema": {
@@ -297,139 +267,14 @@ class McpServer:
                             "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
                             "default": "auto",
                         },
-                    },
-                    "required": ["request"],
-                },
-            },
-            {
-                "name": "implement",
-                "description": "[DEPRECATED] Alias for `execute` with intent=implement. Runs in the background; returns a session_id and next_step get_session_status immediately.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "request": {
+                        "plan_artifact": {
                             "type": "string",
-                            "description": "The implementation request",
+                            "description": "Optional path to an existing plan/design file to seed as design.md and skip brainstorming",
                         },
-                        "demo_mode": {
+                        "skip_brainstorming": {
                             "type": "boolean",
-                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "description": "If true, skip the brainstorming/planning stage",
                             "default": False,
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
-                            "default": 300,
-                        },
-                        "gate_mode": {
-                            "type": "string",
-                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
-                            "default": "auto",
-                        },
-                        "focused_context": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Paths to include as focused context for the workflow stages",
-                        },
-                        "output_file": {
-                            "type": "string",
-                            "description": "Optional path where the workflow should write a final summary report",
-                        },
-                    },
-                    "required": ["request"],
-                },
-            },
-            {
-                "name": "review",
-                "description": "[DEPRECATED] Alias for `execute` with intent=review. Runs in the background; returns a session_id and next_step get_session_status immediately.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "request": {
-                            "type": "string",
-                            "description": "The review request",
-                        },
-                        "demo_mode": {
-                            "type": "boolean",
-                            "description": "If true, simulate Devin dispatches instead of running real agents",
-                            "default": False,
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
-                            "default": 300,
-                        },
-                        "gate_mode": {
-                            "type": "string",
-                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
-                            "default": "auto",
-                        },
-                        "focused_context": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Paths to include as focused context for the workflow stages",
-                        },
-                    },
-                    "required": ["request"],
-                },
-            },
-            {
-                "name": "investigate",
-                "description": "[DEPRECATED] Alias for `execute` with intent=investigate. Runs in the background; returns a session_id and next_step get_session_status immediately.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "request": {
-                            "type": "string",
-                            "description": "The investigation request",
-                        },
-                        "demo_mode": {
-                            "type": "boolean",
-                            "description": "If true, simulate Devin dispatches instead of running real agents",
-                            "default": False,
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
-                            "default": 300,
-                        },
-                        "gate_mode": {
-                            "type": "string",
-                            "description": "Gate interaction mode (interactive, signal, auto). Defaults to auto for MCP.",
-                            "default": "auto",
-                        },
-                        "focused_context": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Paths to include as focused context for the investigation",
-                        },
-                    },
-                    "required": ["request"],
-                },
-            },
-            {
-                "name": "plan",
-                "description": "[DEPRECATED] Alias for `run_skill` with skill=writing-plans. Runs in the background; returns a session_id and next_step get_session_status immediately.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "request": {
-                            "type": "string",
-                            "description": "The planning request",
-                        },
-                        "demo_mode": {
-                            "type": "boolean",
-                            "description": "If true, simulate Devin dispatches instead of running real agents",
-                            "default": False,
-                        },
-                        "focused_context": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Paths to include as focused context for planning",
-                        },
-                        "output_file": {
-                            "type": "string",
-                            "description": "Optional path where the plan should be written",
                         },
                     },
                     "required": ["request"],
@@ -472,6 +317,15 @@ class McpServer:
                         "output_file": {
                             "type": "string",
                             "description": "Optional path where the workflow should write a final summary report",
+                        },
+                        "plan_artifact": {
+                            "type": "string",
+                            "description": "Optional path to an existing plan/design file to seed as design.md and skip brainstorming",
+                        },
+                        "skip_brainstorming": {
+                            "type": "boolean",
+                            "description": "If true, skip the brainstorming/planning stage",
+                            "default": False,
                         },
                     },
                     "required": ["workflow", "request"],
@@ -537,6 +391,32 @@ class McpServer:
                         },
                     },
                     "required": ["session_id"],
+                },
+            },
+            {
+                "name": "resume",
+                "description": "Resume a workflow using the resume object returned by a previous execute/run_workflow/continue_workflow result. The agent only needs to supply the resume block and optionally verdict/notes/feedback; for gates, both gate_decision and continue_workflow are handled automatically.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "resume": {
+                            "type": "object",
+                            "description": "The resume ticket from a previous result (tool, arguments, optional then)",
+                        },
+                        "verdict": {
+                            "type": "string",
+                            "description": "Optional approve | request_changes | block for a gate resume",
+                        },
+                        "notes": {
+                            "type": "string",
+                            "description": "Optional notes for a gate resume",
+                        },
+                        "feedback": {
+                            "type": "string",
+                            "description": "Optional correction feedback for an escalated workflow resume",
+                        },
+                    },
+                    "required": ["resume"],
                 },
             },
             {
@@ -654,20 +534,16 @@ class McpServer:
             "run_skill": 2,
             "dispatch_devin": 3,
             "continue_workflow": 4,
-            "gate_decision": 5,
-            "list_sessions": 6,
-            "get_session_status": 7,
-            "cancel_workflow": 8,
-            "read_artifact": 9,
-            "list_skills": 10,
-            "get_skill": 11,
-            "list_workflows": 12,
-            "get_workflow": 13,
-            "implement": 50,
-            "review": 51,
-            "investigate": 52,
-            "plan": 53,
-            "dispatch_skill": 54,
+            "resume": 5,
+            "gate_decision": 6,
+            "list_sessions": 7,
+            "get_session_status": 8,
+            "cancel_workflow": 9,
+            "read_artifact": 10,
+            "list_skills": 11,
+            "get_skill": 12,
+            "list_workflows": 13,
+            "get_workflow": 14,
         }
         tools.sort(key=lambda tool: tool_order.get(tool.get("name"), 100))
         return {
@@ -706,16 +582,17 @@ Pick the highest-level tool that matches your task:
 2. run_workflow — run a named workflow directly (superpower, code_review, rca).
 3. run_skill — process skills only (brainstorming, writing-plans, systematic-debugging). NOT for implementation or review.
 4. dispatch_devin — focused single-shot Devin worker with role, prompt_file, focused_context, model, output_file.
-5. continue_workflow — resume a workflow at a gate or after an escalation. If no feedback/correction/verdict is supplied and the session is not completed, it returns the resume ticket instead of re-running.
-6. gate_decision — submit an approve/request_changes/block verdict for a waiting gate.
-7. list_sessions — discover session IDs and their current statuses.
-8. get_session_status — inspect one session (manifest, current stage, status, artifacts).
-9. cancel_workflow — mark a session as cancelled and terminate any active workflow or Devin subprocess.
-10. list_workflows / get_workflow / list_skills / get_skill — discovery tools.
-11. read_artifact — read a file from a session or workspace.
+5. resume — resume a workflow using the resume object from a previous result. For gates, this submits the gate decision and continues in one call.
+6. continue_workflow — resume a workflow at a gate or after an escalation (low-level; prefer resume).
+7. gate_decision — submit an approve/request_changes/block verdict for a waiting gate (low-level; prefer resume).
+8. list_sessions — discover session IDs and their current statuses.
+9. get_session_status — inspect one session (manifest, current stage, status, artifacts).
+10. cancel_workflow — mark a session as cancelled and terminate any active workflow or Devin subprocess.
+11. list_workflows / get_workflow / list_skills / get_skill — discovery tools.
+12. read_artifact — read a file from a session or workspace.
 
 Do NOT use run_skill for implementation, review, or investigation. Use execute, run_workflow, or dispatch_devin.
-Do NOT call continue_workflow with only a session_id unless you want the resume ticket; it will NOT re-run a failing stage.
+For gates or escalations, copy the `resume` block from the result and call `resume`.
 
 ## Stateless contract
 
@@ -1411,126 +1288,6 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         }
         return [self._text_content(json.dumps(parsed, indent=2))]
 
-    def _tool_dispatch_skill(self, arguments: dict) -> list[dict]:
-        """
-        Invoke a named skill in a target workspace.
-
-        Args:
-            arguments: Tool arguments containing skill_name, session_id, workspace, etc.
-
-        Returns:
-            List containing dispatch result with exit code and output
-        """
-        # Validate workspace is under global_root
-        try:
-            workspace = validate_workspace_path(
-                arguments["workspace"], base_allowed_dir=self.config.global_root
-            )
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid workspace: {e}")]
-        except (KeyError, TypeError) as e:
-            return [self._text_content(f"Invalid workspace parameter: {e}")]
-
-        # Validate skill_name
-        try:
-            skill_name = validate_skill_name(arguments["skill_name"])
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid skill_name: {e}")]
-        except (KeyError, TypeError) as e:
-            return [self._text_content(f"Invalid skill_name parameter: {e}")]
-
-        # Validate session_id
-        try:
-            session_id = validate_session_id(arguments["session_id"])
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid session_id: {e}")]
-        except (KeyError, TypeError) as e:
-            return [self._text_content(f"Invalid session_id parameter: {e}")]
-
-        # Validate timeout
-        try:
-            timeout = self._validate_timeout(arguments.get("timeout"))
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid timeout: {e}")]
-
-        # Validate and parse config_overrides
-        try:
-            overrides = self._parse_config_overrides(arguments.get("config_overrides"))
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid config_overrides: {e}")]
-
-        # Validate focused_context paths are under workspace
-        focused_context = arguments.get("focused_context", []) or []
-        validated_focused_context: list[str] = []
-        for ctx in focused_context:
-            try:
-                ctx_path = Path(ctx)
-                if ctx_path.is_absolute():
-                    validated = validate_path_safe(workspace, ctx_path, allow_absolute=True)
-                else:
-                    validated = validate_path_safe(workspace, workspace / ctx_path, allow_absolute=True)
-                validated_focused_context.append(str(validated))
-            except InvalidInputError as e:
-                return [self._text_content(f"Invalid focused_context path {ctx}: {e}")]
-
-        # Validate output_file is under workspace if provided
-        validated_output_file: Path | None = None
-        if arguments.get("output_file"):
-            try:
-                output_input = Path(arguments["output_file"])
-                if output_input.is_absolute():
-                    validated_output_file = validate_path_safe(workspace, output_input, allow_absolute=True)
-                else:
-                    validated_output_file = validate_path_safe(workspace, workspace / output_input, allow_absolute=True)
-            except InvalidInputError as e:
-                return [self._text_content(f"Invalid output_file: {e}")]
-
-        script = Path(__file__).parent / "dispatch_skill.py"
-        cmd = [
-            sys.executable,
-            str(script),
-            str(skill_name),
-            str(session_id),
-            str(workspace),
-            str(arguments.get("is_reviewer", False)).lower(),
-            str(arguments.get("demo_mode", False)).lower(),
-        ]
-        if overrides:
-            cmd.append(json.dumps(overrides))
-        for ctx in validated_focused_context:
-            cmd.extend(["--focused-context", str(ctx)])
-        if validated_output_file is not None:
-            cmd.extend(["--output-file", str(validated_output_file)])
-
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
-        except subprocess.TimeoutExpired:
-            return [self._text_content(
-                f"Skill dispatch timed out after {timeout} seconds."
-            )]
-
-        # Parse structured JSON output from dispatch_skill.py
-        stdout = result.stdout.strip()
-        if stdout:
-            try:
-                parsed = json.loads(stdout)
-                parsed["exit_code"] = result.returncode
-                return [self._text_content(json.dumps(parsed, indent=2))]
-            except json.JSONDecodeError:
-                pass
-
-        text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
-        if result.stderr:
-            text += f"\n\nSTDERR:\n{result.stderr}"
-        return [self._text_content(text)]
-
     def _tool_read_artifact(self, arguments: dict) -> list[dict]:
         """
         Read a file from a workspace.
@@ -1609,99 +1366,13 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         return self._start_background_dispatch(
             "execute",
             arguments,
-            extra_args={"intent": intent, "request": request, "timeout": timeout},
-        )
-
-    def _tool_implement(self, arguments: dict) -> list[dict]:
-        """
-        Execute an implementation request using the superpower workflow.
-
-        Args:
-            arguments: Tool arguments containing request, demo_mode, timeout
-
-        Returns:
-            List containing implementation result
-        """
-        # Validate timeout
-        try:
-            timeout = self._validate_timeout(arguments.get("timeout"))
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid timeout: {e}")]
-
-        request = arguments["request"]
-        return self._start_background_dispatch(
-            "execute",
-            arguments,
-            extra_args={"intent": "implement", "request": request, "timeout": timeout},
-        )
-
-    def _tool_review(self, arguments: dict) -> list[dict]:
-        """
-        Execute a review request using the code_review workflow.
-
-        Args:
-            arguments: Tool arguments containing request, demo_mode, timeout
-
-        Returns:
-            List containing review result
-        """
-        # Validate timeout
-        try:
-            timeout = self._validate_timeout(arguments.get("timeout"))
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid timeout: {e}")]
-
-        request = arguments["request"]
-        return self._start_background_dispatch(
-            "execute",
-            arguments,
-            extra_args={"intent": "review", "request": request, "timeout": timeout},
-        )
-
-    def _tool_investigate(self, arguments: dict) -> list[dict]:
-        """
-        Execute an investigation request using the rca workflow.
-
-        Args:
-            arguments: Tool arguments containing request, demo_mode, timeout
-
-        Returns:
-            List containing investigation result
-        """
-        # Validate timeout
-        try:
-            timeout = self._validate_timeout(arguments.get("timeout"))
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid timeout: {e}")]
-
-        request = arguments["request"]
-        return self._start_background_dispatch(
-            "execute",
-            arguments,
-            extra_args={"intent": "investigate", "request": request, "timeout": timeout},
-        )
-
-    def _tool_plan(self, arguments: dict) -> list[dict]:
-        """
-        Execute a planning request using the writing-plans skill.
-
-        Args:
-            arguments: Tool arguments containing request, demo_mode
-
-        Returns:
-            List containing planning result
-        """
-        # Validate timeout
-        try:
-            timeout = self._validate_timeout(arguments.get("timeout"))
-        except InvalidInputError as e:
-            return [self._text_content(f"Invalid timeout: {e}")]
-
-        request = arguments["request"]
-        return self._start_background_dispatch(
-            "plan",
-            arguments,
-            extra_args={"request": request, "timeout": timeout},
+            extra_args={
+                "intent": intent,
+                "request": request,
+                "timeout": timeout,
+                "plan_artifact": arguments.get("plan_artifact"),
+                "skip_brainstorming": arguments.get("skip_brainstorming"),
+            },
         )
 
     def _tool_run_workflow(self, arguments: dict) -> list[dict]:
@@ -1736,7 +1407,13 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         return self._start_background_dispatch(
             "run_workflow",
             arguments,
-            extra_args={"workflow": workflow_name, "request": request, "timeout": timeout},
+            extra_args={
+                "workflow": workflow_name,
+                "request": request,
+                "timeout": timeout,
+                "plan_artifact": arguments.get("plan_artifact"),
+                "skip_brainstorming": arguments.get("skip_brainstorming"),
+            },
         )
 
     def _tool_gate_decision(self, arguments: dict) -> list[dict]:
@@ -1811,6 +1488,54 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
                 "timeout": timeout,
             },
         )
+
+    def _tool_resume(self, arguments: dict) -> list[dict]:
+        """
+        Resume a workflow using the resume object returned by a previous tool.
+
+        A stateless agent can copy the `resume` block from a workflow result,
+        optionally fill in `verdict`, `notes`, or `feedback`, and call this tool.
+        For gates, the gate decision is submitted and the follow-up
+        `continue_workflow` is invoked automatically.
+        """
+        resume = arguments.get("resume")
+        if not isinstance(resume, dict):
+            return [self._text_content(
+                "resume argument must be the resume object returned by a previous workflow tool"
+            )]
+
+        tool_name = resume.get("tool")
+        tool_args = dict(resume.get("arguments", {}))
+        if not tool_name:
+            return [self._text_content("resume.tool is missing")]
+
+        # Merge optional user overrides into the pre-filled arguments.
+        for key in ("verdict", "notes", "feedback"):
+            if key in arguments and arguments[key] not in (None, ""):
+                tool_args[key] = arguments[key]
+
+        # The resume object uses MCP tool names like mcp0_gate_decision; strip
+        # the prefix to find the internal handler.
+        internal_name = tool_name[len("mcp0_"):] if tool_name.startswith("mcp0_") else tool_name
+        method = getattr(self, f"_tool_{internal_name}", None)
+        if not callable(method):
+            return [self._text_content(f"Unknown resume tool: {tool_name}")]
+
+        result = method(tool_args)
+
+        # For gate decisions, automatically call the follow-up continue_workflow
+        # so the agent does not need to make a second call.
+        then = resume.get("then")
+        if internal_name == "gate_decision" and isinstance(then, dict):
+            then_tool = then.get("tool", "")
+            then_name = then_tool[len("mcp0_"):] if then_tool.startswith("mcp0_") else then_tool
+            then_method = getattr(self, f"_tool_{then_name}", None)
+            if callable(then_method):
+                then_args = dict(then.get("arguments", {}))
+                then_result = then_method(then_args)
+                return result + then_result
+
+        return result
 
     def _tool_list_sessions(self, _arguments: dict) -> list[dict]:
         """

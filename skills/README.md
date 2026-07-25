@@ -51,7 +51,6 @@ Each skill is defined in a subdirectory with two files:
 
 ### Orchestration Skills
 
-- **orchestrate-superpower** - Deprecated wrapper; use `mcp0_run_workflow('superpower')` directly for end-to-end automation
 - **using-devin-orchestrator** - Meta-skill invoked at the start of any orchestrated task to decide whether a devin-orchestrator skill should be invoked before acting
 
 ## Skill Schema

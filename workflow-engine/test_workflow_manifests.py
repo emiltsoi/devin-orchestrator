@@ -25,10 +25,8 @@ class TestWorkflowManifests(unittest.TestCase):
         # Available workflow manifests
         self.workflow_files = [
             "code_review.manifest.yaml",
-            "pr_review.manifest.yaml",
             "rca.manifest.yaml",
             "superpower.manifest.yaml",
-            "devin-support.manifest.yaml",
         ]
 
         # Available skills
@@ -78,13 +76,9 @@ class TestWorkflowManifests(unittest.TestCase):
 
     def test_workflow_manifests_required_fields(self):
         """Test that all workflow manifests have required fields"""
-        # devin-support is a special meta-workflow, exclude from strict validation
         required_fields = ["name", "description", "version", "stages"]
 
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -99,9 +93,6 @@ class TestWorkflowManifests(unittest.TestCase):
         stage_required_fields = ["name", "skill", "description"]
 
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -226,19 +217,16 @@ class TestWorkflowManifests(unittest.TestCase):
 
     def test_workflow_manifests_session_shape_valid(self):
         """Test that session_shape is valid when present"""
-        valid_session_shapes = ["feature", "bugfix", "rca", "review", "support"]
+        valid_session_shapes = ["feature", "bugfix", "rca", "review"]
 
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
 
             session_shape = manifest.get("session_shape")
             if session_shape:
-                # Allow workflow name as session_shape (code_review, pr_review, etc.)
+                # Allow workflow name as session_shape (code_review, superpower, etc.)
                 if session_shape not in valid_session_shapes:
                     # Check if it matches the workflow name (allowed pattern)
                     workflow_name = workflow_file.replace(".manifest.yaml", "")
@@ -286,9 +274,6 @@ class TestWorkflowManifests(unittest.TestCase):
     def test_workflow_manifests_schema_version_valid(self):
         """Test that schema_version is a valid integer"""
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -321,9 +306,6 @@ class TestWorkflowManifests(unittest.TestCase):
     def test_workflow_manifests_stage_descriptions_not_empty(self):
         """Test that stage descriptions are not empty"""
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)

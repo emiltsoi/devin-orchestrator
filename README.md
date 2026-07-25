@@ -58,10 +58,12 @@ Early prototype phase. Design documented in `ARCHITECTURE.md`.
 
 Primary MCP tools include:
 
-- `execute`, `implement`, `review`, `investigate`, `plan`, `run_workflow`, `run_skill` - high-level intent routing and workflow execution
-- `dispatch_skill`, `dispatch_devin` - low-level Devin worker dispatch
+- `execute`, `run_workflow`, `run_skill` - high-level intent routing and workflow/skill execution
+- `dispatch_devin` - focused single-shot Devin worker dispatch
+- `resume` - resume a gate or escalated workflow using the `resume` object from a previous result
+- `list_sessions`, `get_session_status`, `cancel_workflow` - session introspection and control
 - `list_skills`, `get_skill`, `list_workflows`, `get_workflow`, `read_artifact` - discovery and read-only helpers
-- `gate_decision`, `continue_workflow` - gate control and resume
+- `gate_decision`, `continue_workflow` - low-level gate control and resume
 
 See [MCP-CLIENTS.md](MCP-CLIENTS.md) for client configuration examples.
 

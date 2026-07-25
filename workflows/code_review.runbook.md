@@ -17,23 +17,24 @@ The code review workflow is a review-only workflow for evaluating code changes. 
 
 ## 2. Stage Sequence
 
-### Stage 0: Load Code
+### Stage 0: Load or Fetch Code
 
 **Skill:** `requesting-code-review`
 **Phase:** `step_0`
-**Required artifacts (output):** [code_context.md]
+**Required artifacts (output):** [code_context.md, diff.md]
 **Gate:** `none`
-**Injected context (worker dispatch):** [code_diff, files_to_review]
+**Injected context (worker dispatch):** [pr_url, code_diff, files_to_review, review_criteria]
 
 #### Dispatch Protocol
 1. Call deterministic tool: `session_init(session_id)` if first stage
 2. Build focused dispatch context:
-   - Load artifacts from: [code_diff, files_to_review]
+   - If `pr_url` is provided, fetch the PR details and diff
+   - Otherwise, load artifacts from: [code_diff, files_to_review]
    - Include correction artifact if retry: `correction-step_0-{attempt}.md`
 3. Dispatch to stateless Devin worker:
    - Skill: `requesting-code-review`
-   - Context: code_diff, files_to_review (focused only)
-   - Output: code_context.md
+   - Context: pr_url (if provided), code_diff, files_to_review, review_criteria (focused only)
+   - Output: code_context.md, diff.md
 4. Call deterministic tool: `validate_structural([code_context.md])`
    - FAIL → proceed to correction loop
    - PASS → proceed to semantic evaluation

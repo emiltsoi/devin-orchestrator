@@ -218,37 +218,6 @@ def test_dispatch_devin_builds_command(server):
     assert "glm-5-2" in cmd
 
 
-def test_dispatch_skill_builds_command(server):
-    workspace = server.config.global_root / "skill_ws"
-    workspace.mkdir()
-
-    with patch("mcp_server.subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
-            returncode=0, stdout='{"success": true}', stderr="", args=[]
-        )
-        response = server.handle(
-            {
-                "jsonrpc": "2.0",
-                "id": 9,
-                "method": "tools/call",
-                "params": {
-                    "name": "dispatch_skill",
-                    "arguments": {
-                        "skill_name": "brainstorming",
-                        "session_id": "S1",
-                        "workspace": str(workspace),
-                    },
-                },
-            }
-        )
-    assert response["result"]["isError"] is False
-    call_args = mock_run.call_args
-    cmd = call_args[0][0]
-    assert "brainstorming" in cmd
-    assert "S1" in cmd
-    assert str(workspace) in cmd
-
-
 def test_read_artifact(server, tmp_path):
     workspace = tmp_path / "workspace"
     artifact = workspace / "result.md"

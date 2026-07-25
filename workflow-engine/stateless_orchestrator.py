@@ -140,6 +140,19 @@ class StatelessOrchestrator:
                 logger.warning(f"Failed to seed focused context {raw}: {e}")
         return seeded
 
+    def _resolve_plan_artifact(self, plan_artifact: str) -> Path | None:
+        """Resolve a plan artifact path against the workspace or global root."""
+        raw = plan_artifact.strip()
+        if not raw:
+            return None
+        base = Path(self.workspace).resolve() if self.workspace else self.config.global_root
+        try:
+            source = validate_path_safe(base, Path(raw), allow_absolute=True)
+            return source
+        except (InvalidInputError, PathTraversalError, ValueError) as e:
+            logger.warning(f"Plan artifact path {raw} is not under {base}: {e}")
+            return None
+
     def _list_session_artifacts(self, session_dir: Path) -> list[str]:
         """List durable artifacts in the session directory, excluding temp files."""
         if not session_dir.exists():
@@ -188,6 +201,8 @@ class StatelessOrchestrator:
         focused_context: list[str] | None = None,
         output_file: str | None = None,
         ready_callback: Any | None = None,
+        plan_artifact: str | None = None,
+        skip_brainstorming: bool | None = None,
     ) -> dict[str, Any]:
         """
         Execute a request with automatic or explicit intent routing.
@@ -208,7 +223,14 @@ class StatelessOrchestrator:
 
         # Route to the appropriate method
         if intent == "implement":
-            return self.implement(request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
+            return self.implement(
+                request,
+                focused_context=focused_context,
+                output_file=output_file,
+                ready_callback=ready_callback,
+                plan_artifact=plan_artifact,
+                skip_brainstorming=skip_brainstorming,
+            )
         elif intent == "review":
             return self.review(request, focused_context=focused_context, ready_callback=ready_callback)
         elif intent == "investigate":
@@ -322,6 +344,8 @@ class StatelessOrchestrator:
         focused_context: list[str] | None = None,
         output_file: str | None = None,
         ready_callback: Any | None = None,
+        plan_artifact: str | None = None,
+        skip_brainstorming: bool | None = None,
     ) -> dict[str, Any]:
         """
         Execute an implementation request using the superpower workflow.
@@ -330,11 +354,21 @@ class StatelessOrchestrator:
             request: The implementation request
             focused_context: Optional file paths to focus each stage
             output_file: Optional path for final summary report
+            plan_artifact: Optional path to a pre-existing plan file
+            skip_brainstorming: If True, skip the brainstorming stage
 
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("superpower", request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
+        return self.run_workflow(
+            "superpower",
+            request,
+            focused_context=focused_context,
+            output_file=output_file,
+            ready_callback=ready_callback,
+            plan_artifact=plan_artifact,
+            skip_brainstorming=skip_brainstorming,
+        )
 
     def review(
         self,
@@ -399,6 +433,8 @@ class StatelessOrchestrator:
         focused_context: list[str] | None = None,
         output_file: str | None = None,
         ready_callback: Any | None = None,
+        plan_artifact: str | None = None,
+        skip_brainstorming: bool | None = None,
     ) -> dict[str, Any]:
         """
         Run a specific workflow with a request.
@@ -408,6 +444,9 @@ class StatelessOrchestrator:
             request: The user request
             focused_context: Optional list of file paths to inject into each stage
             output_file: Optional path (relative to session) for final summary report
+            plan_artifact: Optional path to a pre-existing plan file (e.g., design.md)
+            skip_brainstorming: If True, skip the brainstorming stage and use the
+                plan_artifact or an existing design.md
 
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
@@ -439,6 +478,20 @@ class StatelessOrchestrator:
             # Seed session with the modified files under review so subagents
             # evaluate the HEAD version instead of stale base copies.
             self._seed_review_files(session_dir, request)
+
+            # If a plan artifact is supplied, copy it into the session as design.md
+            # and force the brainstorming stage to be skipped.
+            if plan_artifact:
+                try:
+                    plan_path = self._resolve_plan_artifact(plan_artifact)
+                    if plan_path and plan_path.is_file():
+                        design_path = session_dir / "design.md"
+                        design_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(plan_path, design_path)
+                        skip_brainstorming = True
+                        logger.info(f"Seeded plan artifact: {plan_path} -> {design_path}")
+                except (InvalidInputError, PathTraversalError, OSError, ValueError) as e:
+                    logger.warning(f"Failed to seed plan artifact {plan_artifact}: {e}")
 
             # Let the caller return as soon as the session is established.
             if ready_callback:
@@ -482,6 +535,7 @@ class StatelessOrchestrator:
                 request_content=request,
                 focused_context=focused_context,
                 output_file=output_file,
+                skip_brainstorming=skip_brainstorming,
             )
 
             # Flatten engine results into a stateless response

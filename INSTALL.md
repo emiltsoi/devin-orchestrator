@@ -77,7 +77,6 @@ mkdir -p .devin/workflows
 # Copy workflow manifests (optional - for local overrides)
 cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
 cp ~/.devin-orchestrator/workflows/rca.manifest.yaml .devin/workflows/
-cp ~/.devin-orchestrator/workflows/pr_review.manifest.yaml .devin/workflows/
 cp ~/.devin-orchestrator/workflows/code_review.manifest.yaml .devin/workflows/
 ```
 
@@ -93,8 +92,10 @@ py -3.14 ~/.devin-orchestrator/mcp_server.py [--workspace <workspace>]
 
 The server exposes devin-orchestrator as JSON-RPC tools. Connect any MCP-compatible client (Claude Desktop, Cursor, OpenClaw, etc.) and call tools such as:
 
-- `execute`, `implement`, `review`, `investigate`, `plan`, `run_workflow`, `run_skill`
-- `dispatch_skill`, `dispatch_devin`
+- `execute`, `run_workflow`, `run_skill`
+- `dispatch_devin`
+- `resume`
+- `list_sessions`, `get_session_status`, `cancel_workflow`
 - `list_skills`, `get_skill`, `list_workflows`, `get_workflow`, `read_artifact`
 - `gate_decision`, `continue_workflow`
 

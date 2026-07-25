@@ -6,14 +6,11 @@ This guide provides step-by-step instructions for agents (Cascade, Devin, etc.) 
 
 If the devin-orchestrator MCP server is loaded in your environment, **do not run the bash/Python commands in this guide**. Use the MCP tools instead:
 
-- `mcp0_execute` — auto-route by intent
-- `mcp0_implement` — implement a feature/bug-fix
-- `mcp0_review` — code review
-- `mcp0_investigate` — root-cause analysis
-- `mcp0_plan` — create an implementation plan
-- `mcp0_run_workflow` — run a named workflow
-- `mcp0_run_skill` — process skills only (`brainstorming`, `writing-plans`, `systematic-debugging`)
-- `mcp0_dispatch_devin` / `mcp0_dispatch_skill` — focused single-shot dispatch
+- `execute` — auto-route by intent
+- `run_workflow` — run a named workflow
+- `run_skill` — process skills only (`brainstorming`, `writing-plans`, `systematic-debugging`)
+- `dispatch_devin` — focused single-shot Devin worker
+- `resume` — resume a gate or escalated workflow using the `resume` object from a previous result
 
 The commands below are for one-time setup or for environments without the MCP server.
 
@@ -85,9 +82,7 @@ Note: Copying to `.devin/workflows/` is optional. The canonical source is `~/.de
 After installation, these workflows are available:
 - `superpower.manifest.yaml` - Complete software development methodology
 - `rca.manifest.yaml` - Root cause analysis workflow
-- `pr_review.manifest.yaml` - Pull request review workflow
-- `code_review.manifest.yaml` - Code review workflow
-- `devin-support.manifest.yaml` - Deprecated wrapper; use `mcp0_run_workflow('superpower')` directly
+- `code_review.manifest.yaml` - Code review workflow (also handles pull requests)
 
 ## Configuration
 

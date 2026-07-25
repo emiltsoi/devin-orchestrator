@@ -59,9 +59,74 @@ Expose a server prompt `devin-orchestrator-usage` via MCP `prompts/list` and `pr
 - `run_skill` with a process skill produces a prompt containing the skill narrative and iron law.
 - `MCP-CLIENTS.md` documents the decision tree.
 
+### Step 6 — Improve stateless-agent ergonomics for `continue_workflow`
+
+The current `mcp0_continue_workflow` / `mcp0_gate_decision` split forces a stateless agent to remember `session_id`, gate id, stage, and the exact resume schema. The `SUPERPOWER-005` hang also shows that calling `continue_workflow` with only `session_id` re-runs the failing stage with no new feedback, producing long or non-blocking retries. Add:
+
+1. **Generic `mcp0_resume` tool** that accepts the whole `resume` object returned by a previous run and dispatches the correct underlying tool (`continue_workflow`, `gate_decision`, etc.). A stateless agent then only has to copy `resume` and fill in `verdict`/`notes`/`feedback`.
+2. **Smart `mcp0_continue_workflow` defaults:**
+   - If the session is `escalated`/`blocked` and no `feedback` or `correction_artifact` is supplied, return immediately with the resume ticket instead of re-executing the failing stage.
+   - Auto-detect the failing stage/gate from `session.json` so `gate_id` and `stage` arguments are optional.
+   - Add `timeout` and `demo_mode` parameters to `mcp0_continue_workflow` (currently missing).
+3. **Session introspection tools:** add `mcp0_list_sessions` and `mcp0_get_session_status` so an agent can discover `session_id`s and see `final_status`, current stage, and available next actions without reading files directly.
+4. **`mcp0_cancel_workflow`**: allow an agent to abort a stuck/hung session (e.g. the `SUPERPOWER-005` retry loop) without manually killing processes.
+5. **Self-contained resume responses:** every workflow tool result should include `done: bool` and `next_step: <action>` so a stateless agent can tell at a glance whether to call another tool or stop.
+6. **`run_workflow`/`implement` plan seeding:** accept a `plan_artifact` path and a `skip_brainstorming` flag so agents can hand an existing plan (e.g. `plan-review-fixes.md`) directly to `mcp0_run_workflow` instead of running `brainstorming` again.
+
+### Step 7 — Cleanup redundant workflows, skills, and MCP tools
+
+Based on the redundancy audit, the following items should be deprecated, merged, or removed.
+
+#### Workflows
+
+- **Delete `devin-support.manifest.yaml` / `devin-support.runbook.md`**
+  - Already marked deprecated; it is a one-stage wrapper around `orchestrate-superpower`, which itself routes to `mcp0_run_workflow('superpower')`.
+- **Merge `pr_review` into `code_review`**
+  - Only stage 0 differs (`pr_url` fetch vs. local `code_diff`/`files_to_review`).
+  - Add an optional `pr_url` input to `code_review.manifest.yaml`.
+  - Stage 0 branches on `pr_url` presence: fetch PR details + diff, or load local diff.
+  - Normalize stage 0 outputs to `code_context.md` + `diff.md` so stages 1-3 remain unchanged.
+  - Keep `pr_review` as a thin deprecated alias (or remove it after a transition period).
+
+#### Skills
+
+- **Delete `orchestrate-superpower` skill** (or deprecate)
+  - It duplicates the `superpower` workflow and the deprecated `devin-support` workflow.
+- **Clarify `executing-plans` vs. `subagent-driven-development`**
+  - `executing-plans` is for same-context execution; `subagent-driven-development` is for multi-subagent orchestration.
+  - Document the split in `skills/README.md` and hide `executing-plans` from generic dispatch unless explicitly requested.
+- **Review `requesting-code-review` / `receiving-code-review` / `swe-compliance` / `adversarial-review`**
+  - These are all reviewer-oriented roles. Decide on one canonical reviewer skill (`swe-compliance`) and one receiver (`receiving-code-review`); merge or deprecate the others.
+
+#### MCP tools
+
+- **Deprecate/remove `implement`, `review`, `investigate`, `plan`**
+  - They are aliases for `execute` with a fixed `intent` or for `run_workflow`/`run_skill`.
+  - Keep `execute`, `run_workflow`, and `run_skill` as the canonical tools.
+  - If aliases are needed, implement them as thin `execute` wrappers inside `mcp_server.py` without separate tool definitions.
+- **Deprecate/remove `dispatch_skill`**
+  - `dispatch_devin` covers focused single-shot Devin dispatch; `run_skill` covers process-skill execution in a fresh session.
+- **Replace `gate_decision` + `continue_workflow` with `mcp0_resume`**
+  - See Step 6.
+
+#### Ordering
+
+1. Merge `code_review`/`pr_review` and remove `devin-support` first (no MCP code changes).
+2. Remove deprecated MCP tool definitions (`implement`, `review`, etc.) and consolidate aliases.
+3. Remove `orchestrate-superpower` skill once `devin-support` is gone.
+4. Replace `gate_decision`/`continue_workflow` with `mcp0_resume`.
+
 ## Files to Edit
 
 - `mcp_server.py`
 - `workflow-engine/stateless_orchestrator.py`
+- `workflow-engine/orchestration_engine.py`
+- `workflows/code_review.manifest.yaml`
+- `workflows/code_review.runbook.md`
+- `workflows/pr_review.manifest.yaml` (deprecate or delete)
+- `workflows/pr_review.runbook.md` (deprecate or delete)
+- `.devin/workflows/devin-support.manifest.yaml` (delete)
+- `.devin/workflows/devin-support.runbook.md` (delete)
+- `skills/orchestrate-superpower/` (deprecate or delete)
 - `MCP-CLIENTS.md`
 - (Optional) `mcp_server.py` for prompts capability

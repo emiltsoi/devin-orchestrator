@@ -17,7 +17,7 @@ This forces the caller to understand harness internals. The new tools hide that 
 |---|---|---|
 | implement / build feature | `superpower` | `subagent-driven-development`, `test-driven-development` |
 | review code | `code_review` | `code-review`, `swe-compliance` |
-| review PR | `pr_review` | `requesting-code-review` |
+| review PR | `code_review` | `requesting-code-review`, `swe-compliance` |
 | investigate / debug | `rca` | `systematic-debugging` |
 | plan / design | - | `brainstorming`, `writing-plans` |
 | finish branch | - | `finishing-a-development-branch`, `verification-before-completion` |

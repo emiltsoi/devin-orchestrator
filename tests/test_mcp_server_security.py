@@ -416,35 +416,6 @@ class TestDispatchDevinTimeout:
             assert "timed out" in response["result"]["content"][0]["text"].lower()
 
 
-class TestDispatchSkillTimeout:
-    """I-1: _tool_dispatch_skill must not crash on subprocess.TimeoutExpired."""
-
-    def test_dispatch_skill_timeout_returns_graceful_error(self, monkeypatch):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            server = _make_server_with_workspace(tmpdir)
-
-            workspace = Path(tmpdir) / "root" / "proj"
-            workspace.mkdir(parents=True, exist_ok=True)
-
-            def fake_run(cmd, **kwargs):
-                raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
-
-            monkeypatch.setattr(subprocess, "run", fake_run)
-
-            result = server._tool_dispatch_skill(
-                {
-                    "skill_name": "my-skill",
-                    "session_id": "SESSION-001",
-                    "workspace": str(workspace),
-                    "timeout": 5,
-                }
-            )
-
-            text = result[0]["text"]
-            assert "timed out" in text.lower()
-            assert "5" in text
-
-
 class TestListSkillsMalformedYaml:
     """I-2: _tool_list_skills must skip malformed skill YAML instead of crashing."""
 

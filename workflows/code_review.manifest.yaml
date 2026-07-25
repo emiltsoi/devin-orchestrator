@@ -1,6 +1,6 @@
 name: code_review
-description: "Code Review workflow - review-only workflow for evaluating code changes"
-version: 1.0.0
+description: "Code review workflow for local code changes or pull requests"
+version: 1.1.0
 schema_version: 1
 session_shape: code_review
 
@@ -8,16 +8,16 @@ stages:
   - step: 0
     name: load_code
     skill: requesting-code-review
-    description: "Load code diff and files to review"
-    required_artifacts: [code_diff, files_to_review]
-    output_artifacts: [code_context.md]
+    description: "Load or fetch the code under review. If pr_url is provided, fetch PR details and diff; otherwise load local code_diff and files_to_review. Always produce code_context.md and diff.md."
+    required_artifacts: [pr_url, code_diff, files_to_review, review_criteria]
+    output_artifacts: [code_context.md, diff.md]
     gate: none
 
   - step: 1
     name: review_spec_compliance
     skill: requesting-code-review
-    description: "Review code against spec and requirements"
-    required_artifacts: [code_context.md, review_criteria]
+    description: "Review code against spec, requirements, or PR description"
+    required_artifacts: [code_context.md, diff.md, review_criteria]
     output_artifacts: [spec_review.md]
     gate: none
 
@@ -25,7 +25,7 @@ stages:
     name: review_code_quality
     skill: swe-compliance
     description: "Review code quality, style, and best practices"
-    required_artifacts: [code_context.md, spec_review.md]
+    required_artifacts: [code_context.md, diff.md, spec_review.md]
     output_artifacts: [quality_review.md]
     gate: none
 

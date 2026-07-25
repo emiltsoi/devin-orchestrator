@@ -20,28 +20,13 @@ use_cases:
     session_id_format: RCA-NNN
     slash_command: /rca
 
-  - id: pr_review
-    name: Pull Request Review
-    type: review
-    workflow: pr_review
-    description: "Review-only workflow for evaluating pull requests. Read-only git operations."
-    input_required:
-      - pr_url
-      - diff
-      - pr_description
-    output:
-      - review_findings
-      - approval_decision
-    git_operations: read_only
-    session_id_format: PRREVIEW-NNN
-    slash_command: /pr-review
-
   - id: code_review
     name: Code Review
     type: review
     workflow: code_review
-    description: "Review-only workflow for evaluating code changes. Read-only git operations."
+    description: "Review-only workflow for evaluating code changes or pull requests. Read-only git operations."
     input_required:
+      - pr_url
       - code_diff
       - files_to_review
       - review_criteria

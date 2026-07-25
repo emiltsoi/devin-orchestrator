@@ -133,6 +133,8 @@ def main() -> int:
                 focused_context=focused_context,
                 output_file=args.get("output_file"),
                 ready_callback=ready_callback,
+                plan_artifact=args.get("plan_artifact"),
+                skip_brainstorming=args.get("skip_brainstorming"),
             )
         elif action == "run_workflow":
             result = orchestrator.run_workflow(
@@ -141,6 +143,8 @@ def main() -> int:
                 focused_context=focused_context,
                 output_file=args.get("output_file"),
                 ready_callback=ready_callback,
+                plan_artifact=args.get("plan_artifact"),
+                skip_brainstorming=args.get("skip_brainstorming"),
             )
         elif action == "run_skill":
             result = orchestrator.run_skill(
