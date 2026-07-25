@@ -133,9 +133,9 @@ def install(global_root: Path | None = None, source_dir: Path | None = None, dry
         print("  - Config is available at: " + str(target_config))
         print()
         print("For agent integration, prefer the devin-orchestrator MCP tools")
-        print("  (e.g. mcp0_dispatch_devin, mcp0_dispatch_skill, mcp0_implement, mcp0_run_workflow).")
+        print("  (e.g. mcp0_execute, mcp0_run_workflow, mcp0_run_skill, mcp0_dispatch_devin, mcp0_resume).")
         print("Use the legacy scripts only as a fallback when MCP tools are not available:")
-        print("  python " + str(global_root / "dispatch_skill.py") + " <skill> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides_json] [--focused-context PATH ...] [--output-file PATH]")
+        print("  python " + str(global_root / "dispatch_devin.py") + " <role> <prompt_file> <work_dir> [model] [--focused-context PATH ...] [--output-file PATH]")
 
 
 if __name__ == "__main__":
