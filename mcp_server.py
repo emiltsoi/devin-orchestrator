@@ -21,11 +21,16 @@ import argparse
 import contextlib
 import json
 import logging
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
@@ -88,10 +93,18 @@ class McpServer:
         self._framing: str | None = None  # "ndjson" or "content-length"
         # Rate limiting: track tool call timestamps per tool name
         self._tool_call_history: defaultdict[str, list[float]] = defaultdict(list)
+        self._tool_call_history_lock = threading.Lock()
+        self._send_lock = threading.Lock()
         self._message_log_path: Path | None = None
         self._message_log: IO[str] | None = None
+        self._message_log_lock = threading.Lock()
         if message_log_path is not None:
             self._open_message_log(message_log_path)
+        # Tool handlers that block on background dispatch run in this pool so
+        # the server can still service cancel_workflow / get_session_status calls.
+        self._executor = ThreadPoolExecutor(
+            max_workers=8, thread_name_prefix="mcp_tool_"
+        )
 
     def _open_message_log(self, message_log_path: str) -> None:
         """Open the NDJSON message log file, creating its directory if needed."""
@@ -126,7 +139,8 @@ class McpServer:
                 "direction": direction,
                 "message": message,
             }
-            self._message_log.write(json.dumps(entry, default=str) + "\n")
+            with self._message_log_lock:
+                self._message_log.write(json.dumps(entry, default=str) + "\n")
         except (OSError, TypeError) as e:
             logger.warning("Failed to write to MCP message log: %s", e)
 
@@ -212,7 +226,7 @@ class McpServer:
             },
             {
                 "name": "dispatch_skill",
-                "description": "MCP tool: invoke a named skill as a Devin worker in a target workspace. This dispatches a fresh subagent to follow the skill; prefer `execute`, `implement`, or `dispatch_devin` for most tasks. Do not run `dispatch_skill.py` directly; use this tool.",
+                "description": "[DEPRECATED] Use `run_skill` (process skills) or `dispatch_devin` (focused single-shot) instead. Kept for backward compatibility.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -255,7 +269,7 @@ class McpServer:
             },
             {
                 "name": "execute",
-                "description": "Main entry point. Execute a request with automatic intent routing. Prefer this for general requests; the server will choose the appropriate workflow or skill.",
+                "description": "Main entry point. Execute a request with automatic intent routing. Prefer this for general requests; the server will choose the appropriate workflow or skill. Runs in the background; returns a session_id and next_step get_session_status immediately.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -289,7 +303,7 @@ class McpServer:
             },
             {
                 "name": "implement",
-                "description": "Implement a feature or fix using the full `superpower` workflow (brainstorming, worktrees, plan, subagent-driven development, tests, review, completion). Use this for any non-trivial code change.",
+                "description": "[DEPRECATED] Alias for `execute` with intent=implement. Runs in the background; returns a session_id and next_step get_session_status immediately.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -327,7 +341,7 @@ class McpServer:
             },
             {
                 "name": "review",
-                "description": "Review code changes using the `code_review` workflow. Use for code diff review, PR review, or general code quality evaluation.",
+                "description": "[DEPRECATED] Alias for `execute` with intent=review. Runs in the background; returns a session_id and next_step get_session_status immediately.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -361,7 +375,7 @@ class McpServer:
             },
             {
                 "name": "investigate",
-                "description": "Investigate an incident, bug, or failure using the `rca` workflow. Read-only; no git write operations.",
+                "description": "[DEPRECATED] Alias for `execute` with intent=investigate. Runs in the background; returns a session_id and next_step get_session_status immediately.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -395,7 +409,7 @@ class McpServer:
             },
             {
                 "name": "plan",
-                "description": "Create a detailed implementation plan using the `writing-plans` skill. Produces a plan.md with bite-sized tasks.",
+                "description": "[DEPRECATED] Alias for `run_skill` with skill=writing-plans. Runs in the background; returns a session_id and next_step get_session_status immediately.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -423,7 +437,7 @@ class McpServer:
             },
             {
                 "name": "run_workflow",
-                "description": "Run a named workflow (superpower, code_review, rca, pr_review) with a request. Use when you need a specific workflow rather than the auto-routed `execute` tool.",
+                "description": "Run a named workflow (superpower, code_review, rca) with a request. Use `code_review` for both local code changes and pull requests. Use when you need a specific workflow rather than the auto-routed `execute` tool. Runs in the background; returns a session_id and next_step get_session_status immediately.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -482,7 +496,7 @@ class McpServer:
             },
             {
                 "name": "continue_workflow",
-                "description": "Resume a workflow that is paused at a gate. Optionally supply a gate verdict.",
+                "description": "Resume a workflow that is paused at a gate or escalated. If no feedback/correction/verdict is supplied and the session is not completed, it returns the resume ticket instead of re-running the same failing stage. Runs in the background; returns a session_id and next_step get_session_status immediately.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -501,6 +515,16 @@ class McpServer:
                             "type": "string",
                             "description": "Optional inline feedback text to write as a correction artifact on resume",
                         },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Maximum seconds to wait for each Devin dispatch (defaults to config)",
+                            "default": 300,
+                        },
+                        "demo_mode": {
+                            "type": "boolean",
+                            "description": "If true, simulate Devin dispatches instead of running real agents",
+                            "default": False,
+                        },
                         "focused_context": {
                             "type": "array",
                             "items": {"type": "string"},
@@ -517,13 +541,13 @@ class McpServer:
             },
             {
                 "name": "run_skill",
-                "description": "Run a process skill (e.g. brainstorming, writing-plans, systematic-debugging) in a fresh session. NOT for implementation or code-fix tasks; use `implement`, `run_workflow`, or `dispatch_devin` for those.",
+                "description": "Run a process skill (brainstorming, writing-plans, systematic-debugging) in a fresh session. NOT for implementation, review, or investigation; use `execute`, `run_workflow`, or `dispatch_devin` for those.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "skill": {
                             "type": "string",
-                            "description": "Name of the process skill to run (e.g. brainstorming, writing-plans, systematic-debugging). Avoid implementation skills like executing-plans here; prefer implement/run_workflow/dispatch_devin.",
+                            "description": "Name of the process skill to run (brainstorming, writing-plans, systematic-debugging). Avoid implementation/review/investigation skills here; use execute, run_workflow, or dispatch_devin for those.",
                         },
                         "request": {
                             "type": "string",
@@ -550,6 +574,39 @@ class McpServer:
                         },
                     },
                     "required": ["skill", "request"],
+                },
+            },
+            {
+                "name": "list_sessions",
+                "description": "List all workflow sessions in the work directory with their current status.",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
+            {
+                "name": "get_session_status",
+                "description": "Get the current status of a workflow session.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session identifier",
+                        }
+                    },
+                    "required": ["session_id"],
+                },
+            },
+            {
+                "name": "cancel_workflow",
+                "description": "Mark a workflow session as cancelled and terminate any active workflow or Devin subprocess by writing a cancel token and killing the recorded PIDs (devin and background dispatcher). Use this to stop a long-running execute/run_workflow/continue_workflow.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session identifier",
+                        }
+                    },
+                    "required": ["session_id"],
                 },
             },
         ]
@@ -593,21 +650,24 @@ class McpServer:
         # Order tools so agents see high-level/intent tools before low-level dispatch/skill tools.
         tool_order = {
             "execute": 0,
-            "implement": 1,
-            "review": 2,
-            "investigate": 3,
-            "plan": 4,
-            "run_workflow": 5,
-            "run_skill": 6,
-            "dispatch_devin": 7,
-            "dispatch_skill": 8,
+            "run_workflow": 1,
+            "run_skill": 2,
+            "dispatch_devin": 3,
+            "continue_workflow": 4,
+            "gate_decision": 5,
+            "list_sessions": 6,
+            "get_session_status": 7,
+            "cancel_workflow": 8,
             "read_artifact": 9,
             "list_skills": 10,
             "get_skill": 11,
             "list_workflows": 12,
             "get_workflow": 13,
-            "gate_decision": 14,
-            "continue_workflow": 15,
+            "implement": 50,
+            "review": 51,
+            "investigate": 52,
+            "plan": 53,
+            "dispatch_skill": 54,
         }
         tools.sort(key=lambda tool: tool_order.get(tool.get("name"), 100))
         return {
@@ -642,34 +702,35 @@ class McpServer:
 
 Pick the highest-level tool that matches your task:
 
-1. execute — main entry point; auto-routes by intent.
-2. implement — full superpower workflow for feature/bug-fix implementation.
-3. review — code_review workflow for code or PR review.
-4. investigate — rca workflow for root-cause analysis (read-only).
-5. plan — writing-plans skill to produce an implementation plan.
-6. run_workflow — run a specific named workflow. For the full superpower methodology, use `mcp0_run_workflow` with `workflow: "superpower"`.
-7. run_skill — process skills only (brainstorming, writing-plans, systematic-debugging).
-8. dispatch_devin — focused single-shot worker with prompt_file, focused_context, model, output_file.
-9. dispatch_skill — dispatch a single skill (only for manual stage dispatch when a resume ticket requires it).
-10. gate_decision / continue_workflow — resume a workflow paused at a gate or escalation.
+1. execute — main entry point; auto-routes by intent (implement, review, investigate, plan).
+2. run_workflow — run a named workflow directly (superpower, code_review, rca).
+3. run_skill — process skills only (brainstorming, writing-plans, systematic-debugging). NOT for implementation or review.
+4. dispatch_devin — focused single-shot Devin worker with role, prompt_file, focused_context, model, output_file.
+5. continue_workflow — resume a workflow at a gate or after an escalation. If no feedback/correction/verdict is supplied and the session is not completed, it returns the resume ticket instead of re-running.
+6. gate_decision — submit an approve/request_changes/block verdict for a waiting gate.
+7. list_sessions — discover session IDs and their current statuses.
+8. get_session_status — inspect one session (manifest, current stage, status, artifacts).
+9. cancel_workflow — mark a session as cancelled and terminate any active workflow or Devin subprocess.
+10. list_workflows / get_workflow / list_skills / get_skill — discovery tools.
+11. read_artifact — read a file from a session or workspace.
 
-Do NOT use run_skill for implementation tasks. For coding work, use implement, run_workflow, or dispatch_devin.
-Do NOT dispatch superpower stages manually with dispatch_skill unless a resume ticket explicitly requires a per-stage dispatch.
+Do NOT use run_skill for implementation, review, or investigation. Use execute, run_workflow, or dispatch_devin.
+Do NOT call continue_workflow with only a session_id unless you want the resume ticket; it will NOT re-run a failing stage.
 
 ## Stateless contract
 
 Every tool result is self-contained JSON with:
 - session_id, workspace, success, final_status, output, error
+- done — true when the workflow has completed
+- next_step — the next MCP tool to call, or null when done
 - artifact_paths — files produced by the run
 - output_file — structured report path if requested
-- resume — when final_status is waiting_for_input, escalated, or blocked, a ticket with:
+- resume — when not done, a ticket with:
   - tool: the next MCP tool to call
-  - arguments: exact args to pass (you only need to fill in verdict/notes/feedback)
-  - then: for gates, the follow-up call after gate_decision
+  - arguments: exact args to pass (fill in verdict/notes/feedback)
+  - then: for gates, the follow-up after gate_decision
 
-Always read the resume block first. If it tells you to call mcp0_gate_decision, do that, then call mcp0_continue_workflow. If it tells you to call mcp0_continue_workflow with feedback, supply the correction and continue.
-
-Use focused_context to pass exact file paths when you want the worker to see specific files. Use output_file when you want a final report written to a known path.
+Use focused_context to pass exact file paths. Use output_file to request a structured report.
 """
         return {
             "jsonrpc": "2.0",
@@ -690,22 +751,23 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         arguments = params.get("arguments", {})
 
         # Check rate limit for this tool
-        if not self._check_rate_limit(name):
-            content = [self._text_content(f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds.")]
-            is_error = True
-        else:
-            try:
-                content = self._run_tool(name, arguments)
-                is_error = False
-            except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
-                content = [self._text_content(f"Error: {e}")]
+        with self._tool_call_history_lock:
+            if not self._check_rate_limit(name):
+                content = [self._text_content(f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds.")]
                 is_error = True
-            except (KeyError, TypeError) as e:
-                content = [self._text_content(f"Invalid arguments: {e}")]
-                is_error = True
-            except (OSError, RuntimeError) as e:
-                content = [self._text_content(f"System error: {e}")]
-                is_error = True
+            else:
+                try:
+                    content = self._run_tool(name, arguments)
+                    is_error = False
+                except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
+                    content = [self._text_content(f"Error: {e}")]
+                    is_error = True
+                except (KeyError, TypeError) as e:
+                    content = [self._text_content(f"Invalid arguments: {e}")]
+                    is_error = True
+                except (OSError, RuntimeError) as e:
+                    content = [self._text_content(f"System error: {e}")]
+                    is_error = True
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
@@ -849,6 +911,167 @@ Use focused_context to pass exact file paths when you want the worker to see spe
     @staticmethod
     def _text_content(text: str) -> dict:
         return {"type": "text", "text": text}
+
+    def _start_background_dispatch(
+        self,
+        action: str,
+        arguments: dict[str, Any],
+        extra_args: dict[str, Any] | None = None,
+    ) -> list[dict]:
+        """
+        Start a long-running workflow/skill in a background process and return
+        an immediate status response. The background dispatcher writes a ready
+        file as soon as the session is created so the caller can poll
+        get_session_status or cancel the workflow without blocking the server.
+        """
+        dispatch_script = Path(__file__).with_name("dispatch_workflow.py")
+        if not dispatch_script.exists():
+            return [
+                self._text_content(
+                    json.dumps(
+                        {
+                            "success": False,
+                            "error": "dispatch_workflow.py not found; run install.py",
+                        },
+                        indent=2,
+                    )
+                )
+            ]
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="mcp_dispatch_"))
+        args_file = temp_dir / "args.json"
+        ready_file = temp_dir / "ready.json"
+
+        payload: dict[str, Any] = {
+            "action": action,
+            "workspace": self.workspace,
+            "demo_mode": arguments.get("demo_mode", False),
+            "timeout": arguments.get("timeout"),
+            "gate_mode": arguments.get("gate_mode", "auto"),
+            "request": arguments.get("request", ""),
+            "focused_context": arguments.get("focused_context"),
+            "output_file": arguments.get("output_file"),
+        }
+        if extra_args:
+            payload.update(extra_args)
+
+        try:
+            args_file.write_text(json.dumps(payload), encoding="utf-8")
+        except OSError as e:
+            return [
+                self._text_content(
+                    json.dumps(
+                        {"success": False, "error": f"Failed to write dispatch args: {e}"},
+                        indent=2,
+                    )
+                )
+            ]
+
+        # Use DEVNULL for stdin/stdout/stderr to avoid pipe-buffer deadlocks on
+        # long workflows and to keep the dispatcher from holding the MCP stdin
+        # pipe open.  The dispatcher writes its own session.json state and
+        # communicates readiness via the ready file.
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-u",
+                str(dispatch_script),
+                "--args-file",
+                str(args_file),
+                "--ready-file",
+                str(ready_file),
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # For continue_workflow the session already exists; record the dispatcher
+        # PID up front so cancel_workflow can kill the process before the ready
+        # file handshake completes.
+        session_id = extra_args.get("session_id") if extra_args else None
+        if session_id and self.config and self.config.session_work_dir:
+            try:
+                session_dir = self.config.session_work_dir / session_id
+                session_dir.mkdir(parents=True, exist_ok=True)
+                (session_dir / "workflow-pid.txt").write_text(
+                    json.dumps({"pid": proc.pid, "create_time": time.time()}),
+                    encoding="utf-8",
+                )
+            except OSError as e:
+                logger.warning(f"Failed to record dispatcher PID for {session_id}: {e}")
+
+        ready = self._wait_for_ready_file(ready_file, proc, timeout=15.0)
+        if ready is None:
+            self._terminate_process(proc)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return [
+                self._text_content(
+                    json.dumps(
+                        {
+                            "success": False,
+                            "error": "Timed out waiting for workflow to start",
+                        },
+                        indent=2,
+                    )
+                )
+            ]
+
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return [
+            self._text_content(
+                json.dumps(
+                    {
+                        "done": False,
+                        "next_step": "get_session_status",
+                        "session_id": ready.get("session_id"),
+                        "workspace": ready.get("workspace"),
+                        "message": (
+                            f"Started {action} in the background. "
+                            "Poll get_session_status for progress and use cancel_workflow to stop."
+                        ),
+                    },
+                    indent=2,
+                )
+            )
+        ]
+
+    @staticmethod
+    def _wait_for_ready_file(
+        ready_file: Path, proc: subprocess.Popen, timeout: float
+    ) -> dict[str, Any] | None:
+        """Poll for the background dispatcher's ready file and return its contents.
+
+        Also checks that the dispatcher process is still alive; if it exits
+        before the ready file appears, the caller is notified with an error
+        instead of waiting the full timeout.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                raise RuntimeError(
+                    f"Background dispatcher exited early with code {proc.returncode}"
+                )
+            if ready_file.exists():
+                try:
+                    return json.loads(ready_file.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    pass
+            time.sleep(0.1)
+        return None
+
+    @staticmethod
+    def _terminate_process(proc: subprocess.Popen) -> None:
+        """Best-effort terminate/kill of a Popen process."""
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=3)
+        except Exception:
+            pass
 
     def _tool_list_skills(self, _arguments: dict) -> list[dict]:
         """
@@ -1375,29 +1598,19 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         Returns:
             List containing execution result
         """
-        from stateless_orchestrator import StatelessOrchestrator
-
         # Validate timeout
         try:
             timeout = self._validate_timeout(arguments.get("timeout"))
         except InvalidInputError as e:
             return [self._text_content(f"Invalid timeout: {e}")]
 
-        orchestrator = StatelessOrchestrator(
-            workspace=self.workspace,
-            demo_mode=arguments.get("demo_mode", False),
-            timeout=timeout,
-            gate_mode=arguments.get("gate_mode", "auto"),
-        )
         request = arguments["request"]
         intent = arguments.get("intent", "auto")
-        result = orchestrator.execute(
-            request,
-            intent,
-            focused_context=arguments.get("focused_context"),
-            output_file=arguments.get("output_file"),
+        return self._start_background_dispatch(
+            "execute",
+            arguments,
+            extra_args={"intent": intent, "request": request, "timeout": timeout},
         )
-        return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_implement(self, arguments: dict) -> list[dict]:
         """
@@ -1409,27 +1622,18 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         Returns:
             List containing implementation result
         """
-        from stateless_orchestrator import StatelessOrchestrator
-
         # Validate timeout
         try:
             timeout = self._validate_timeout(arguments.get("timeout"))
         except InvalidInputError as e:
             return [self._text_content(f"Invalid timeout: {e}")]
 
-        orchestrator = StatelessOrchestrator(
-            workspace=self.workspace,
-            demo_mode=arguments.get("demo_mode", False),
-            timeout=timeout,
-            gate_mode=arguments.get("gate_mode", "auto"),
-        )
         request = arguments["request"]
-        result = orchestrator.implement(
-            request,
-            focused_context=arguments.get("focused_context"),
-            output_file=arguments.get("output_file"),
+        return self._start_background_dispatch(
+            "execute",
+            arguments,
+            extra_args={"intent": "implement", "request": request, "timeout": timeout},
         )
-        return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_review(self, arguments: dict) -> list[dict]:
         """
@@ -1441,23 +1645,18 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         Returns:
             List containing review result
         """
-        from stateless_orchestrator import StatelessOrchestrator
-
         # Validate timeout
         try:
             timeout = self._validate_timeout(arguments.get("timeout"))
         except InvalidInputError as e:
             return [self._text_content(f"Invalid timeout: {e}")]
 
-        orchestrator = StatelessOrchestrator(
-            workspace=self.workspace,
-            demo_mode=arguments.get("demo_mode", False),
-            timeout=timeout,
-            gate_mode=arguments.get("gate_mode", "auto"),
-        )
         request = arguments["request"]
-        result = orchestrator.review(request, focused_context=arguments.get("focused_context"))
-        return [self._text_content(json.dumps(result, indent=2))]
+        return self._start_background_dispatch(
+            "execute",
+            arguments,
+            extra_args={"intent": "review", "request": request, "timeout": timeout},
+        )
 
     def _tool_investigate(self, arguments: dict) -> list[dict]:
         """
@@ -1469,23 +1668,18 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         Returns:
             List containing investigation result
         """
-        from stateless_orchestrator import StatelessOrchestrator
-
         # Validate timeout
         try:
             timeout = self._validate_timeout(arguments.get("timeout"))
         except InvalidInputError as e:
             return [self._text_content(f"Invalid timeout: {e}")]
 
-        orchestrator = StatelessOrchestrator(
-            workspace=self.workspace,
-            demo_mode=arguments.get("demo_mode", False),
-            timeout=timeout,
-            gate_mode=arguments.get("gate_mode", "auto"),
-        )
         request = arguments["request"]
-        result = orchestrator.investigate(request, focused_context=arguments.get("focused_context"))
-        return [self._text_content(json.dumps(result, indent=2))]
+        return self._start_background_dispatch(
+            "execute",
+            arguments,
+            extra_args={"intent": "investigate", "request": request, "timeout": timeout},
+        )
 
     def _tool_plan(self, arguments: dict) -> list[dict]:
         """
@@ -1497,19 +1691,18 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         Returns:
             List containing planning result
         """
-        from stateless_orchestrator import StatelessOrchestrator
+        # Validate timeout
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
 
-        orchestrator = StatelessOrchestrator(
-            workspace=self.workspace,
-            demo_mode=arguments.get("demo_mode", False),
-        )
         request = arguments["request"]
-        result = orchestrator.plan(
-            request,
-            focused_context=arguments.get("focused_context"),
-            output_file=arguments.get("output_file"),
+        return self._start_background_dispatch(
+            "plan",
+            arguments,
+            extra_args={"request": request, "timeout": timeout},
         )
-        return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_run_workflow(self, arguments: dict) -> list[dict]:
         """
@@ -1521,20 +1714,11 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         Returns:
             List containing workflow execution result
         """
-        from stateless_orchestrator import StatelessOrchestrator
-
         # Validate timeout
         try:
             timeout = self._validate_timeout(arguments.get("timeout"))
         except InvalidInputError as e:
             return [self._text_content(f"Invalid timeout: {e}")]
-
-        orchestrator = StatelessOrchestrator(
-            workspace=self.workspace,
-            demo_mode=arguments.get("demo_mode", False),
-            timeout=timeout,
-            gate_mode=arguments.get("gate_mode", "auto"),
-        )
 
         # Validate workflow name to prevent path traversal / manifest injection.
         # Mirrors the pattern used in _tool_get_workflow. Workflow names allow
@@ -1549,13 +1733,11 @@ Use focused_context to pass exact file paths when you want the worker to see spe
             return [self._text_content(f"Invalid workflow name: {e}")]
 
         request = arguments["request"]
-        result = orchestrator.run_workflow(
-            workflow_name,
-            request,
-            focused_context=arguments.get("focused_context"),
-            output_file=arguments.get("output_file"),
+        return self._start_background_dispatch(
+            "run_workflow",
+            arguments,
+            extra_args={"workflow": workflow_name, "request": request, "timeout": timeout},
         )
-        return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_gate_decision(self, arguments: dict) -> list[dict]:
         """
@@ -1599,13 +1781,54 @@ Use focused_context to pass exact file paths when you want the worker to see spe
 
     def _tool_continue_workflow(self, arguments: dict) -> list[dict]:
         """
-        Resume a workflow that is paused at a gate.
+        Resume a workflow that is paused at a gate or escalated.
 
         Args:
-            arguments: Tool arguments containing session_id and optional gate verdict
+            arguments: Tool arguments containing session_id and optional gate verdict/feedback
 
         Returns:
             List containing continuation result
+        """
+        session_id = arguments.get("session_id")
+        if not session_id:
+            return [self._text_content("session_id is required")]
+
+        try:
+            timeout = self._validate_timeout(arguments.get("timeout"))
+        except InvalidInputError as e:
+            return [self._text_content(f"Invalid timeout: {e}")]
+
+        return self._start_background_dispatch(
+            "continue_workflow",
+            arguments,
+            extra_args={
+                "session_id": session_id,
+                "gate_verdict": arguments.get("gate_verdict"),
+                "gate_notes": arguments.get("gate_notes"),
+                "gate_id": arguments.get("gate_id"),
+                "correction_artifact": arguments.get("correction_artifact"),
+                "feedback": arguments.get("feedback"),
+                "timeout": timeout,
+            },
+        )
+
+    def _tool_list_sessions(self, _arguments: dict) -> list[dict]:
+        """
+        List all workflow sessions and their current status.
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=False,
+            timeout=self.DEFAULT_TIMEOUT_SECONDS,
+        )
+        sessions = orchestrator.list_sessions()
+        return [self._text_content(json.dumps(sessions, indent=2))]
+
+    def _tool_get_session_status(self, arguments: dict) -> list[dict]:
+        """
+        Get the current status of a single workflow session.
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1615,18 +1838,32 @@ Use focused_context to pass exact file paths when you want the worker to see spe
 
         orchestrator = StatelessOrchestrator(
             workspace=self.workspace,
-            gate_mode=arguments.get("gate_mode", "auto"),
+            demo_mode=False,
+            timeout=self.DEFAULT_TIMEOUT_SECONDS,
         )
-        result = orchestrator.continue_workflow(
-            session_id=session_id,
-            gate_verdict=arguments.get("gate_verdict"),
-            gate_notes=arguments.get("gate_notes"),
-            gate_id=arguments.get("gate_id"),
-            correction_artifact=arguments.get("correction_artifact"),
-            feedback=arguments.get("feedback"),
-            focused_context=arguments.get("focused_context"),
-            output_file=arguments.get("output_file"),
+        status = orchestrator.get_session_status(session_id)
+        return [self._text_content(json.dumps(status, indent=2))]
+
+    def _tool_cancel_workflow(self, arguments: dict) -> list[dict]:
+        """
+        Mark a workflow session as cancelled.
+
+        This writes a cancel token and forcibly terminates any active Devin
+        subprocess and the background workflow dispatcher process recorded for
+        the session, so it can reliably stop a long-running workflow.
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        session_id = arguments.get("session_id")
+        if not session_id:
+            return [self._text_content("session_id is required")]
+
+        orchestrator = StatelessOrchestrator(
+            workspace=self.workspace,
+            demo_mode=False,
+            timeout=self.DEFAULT_TIMEOUT_SECONDS,
         )
+        result = orchestrator.cancel_workflow(session_id)
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_run_skill(self, arguments: dict) -> list[dict]:
@@ -1639,8 +1876,6 @@ Use focused_context to pass exact file paths when you want the worker to see spe
         Returns:
             List containing skill execution result
         """
-        from stateless_orchestrator import StatelessOrchestrator
-
         # Validate timeout
         try:
             timeout = self._validate_timeout(arguments.get("timeout"))
@@ -1674,36 +1909,30 @@ Use focused_context to pass exact file paths when you want the worker to see spe
                     "error": (
                         f"run_skill is not the right tool for '{skill_name}'. "
                         "It is intended for process skills only. "
-                        "For implementation use `implement`, `run_workflow`, or "
-                        "`dispatch_devin`. For review use `review` or "
-                        "`dispatch_devin` with a reviewer role. For investigation "
-                        "use `investigate` or `dispatch_devin` with a reviewer role."
+                        "For implementation use `execute` (intent=implement) or "
+                        "`run_workflow` with workflow=superpower. For review use "
+                        "`execute` (intent=review) or `run_workflow` with "
+                        "workflow=code_review. For investigation use `execute` "
+                        "(intent=investigate) or `run_workflow` with workflow=rca. "
+                        "For one-off focused tasks use `dispatch_devin`."
                     ),
                     "skill": skill_name,
+                    "allowed_skills": list(process_skills),
                     "suggested_tools": [
-                        "implement",
+                        "execute",
                         "run_workflow",
                         "dispatch_devin",
-                        "review",
-                        "investigate",
                     ],
                 },
                 indent=2,
             ))]
 
-        orchestrator = StatelessOrchestrator(
-            workspace=self.workspace,
-            demo_mode=arguments.get("demo_mode", False),
-            timeout=timeout,
-        )
         request = arguments["request"]
-        result = orchestrator.run_skill(
-            skill_name,
-            request,
-            focused_context=arguments.get("focused_context"),
-            output_file=arguments.get("output_file"),
+        return self._start_background_dispatch(
+            "run_skill",
+            arguments,
+            extra_args={"skill": skill_name, "request": request, "timeout": timeout},
         )
-        return [self._text_content(json.dumps(result, indent=2))]
 
     # --------------------------------------------------------------------- #
     # stdio transport
@@ -1799,12 +2028,13 @@ Use focused_context to pass exact file paths when you want the worker to see spe
     def _write_message(self, message: dict) -> None:
         self._log_message("out", message)
         body = json.dumps(message).encode()
-        if self._framing == "ndjson":
-            self.stdout.write(body + b"\n")
-        else:
-            header = f"Content-Length: {len(body)}\r\n\r\n".encode()
-            self.stdout.write(header + body)
-        self.stdout.flush()
+        with self._send_lock:
+            if self._framing == "ndjson":
+                self.stdout.write(body + b"\n")
+            else:
+                header = f"Content-Length: {len(body)}\r\n\r\n".encode()
+                self.stdout.write(header + body)
+            self.stdout.flush()
 
     def run(self) -> None:
         try:
@@ -1816,13 +2046,33 @@ Use focused_context to pass exact file paths when you want the worker to see spe
                 if "error" in request:
                     self._write_message(request)
                     continue
-                response = self.handle(request)
-                if response is not None:
-                    self._write_message(response)
+                # Run tool handlers in a thread pool so a long-running dispatch
+                # doesn't block the single stdio reader thread.
+                future = self._executor.submit(self._handle_request, request)
+                future.add_done_callback(self._write_response)
         finally:
+            self._executor.shutdown(wait=False, cancel_futures=True)
             if self._message_log is not None:
                 with contextlib.suppress(OSError):
                     self._message_log.close()
+
+    def _handle_request(self, request: dict) -> dict | None:
+        """Call handle and return a JSON-RPC error if an unhandled exception occurs."""
+        try:
+            return self.handle(request)
+        except Exception as e:
+            logger.exception("Unhandled error handling request: %s", request)
+            return self._error(request, -32603, f"Internal error: {e}")
+
+    def _write_response(self, future) -> None:
+        """Write the result of an executor future to stdout."""
+        try:
+            response = future.result()
+        except Exception as e:
+            logger.exception("Tool handler raised an exception")
+            response = self._error({}, -32603, f"Internal error: {e}")
+        if response is not None:
+            self._write_message(response)
 
 
 def main() -> None:

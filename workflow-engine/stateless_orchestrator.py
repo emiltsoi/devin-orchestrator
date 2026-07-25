@@ -8,8 +8,12 @@ requiring callers to manage session IDs, prompt files, or internal paths.
 
 import json
 import logging
+import os
 import re
 import shutil
+import signal
+import subprocess
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -183,6 +187,7 @@ class StatelessOrchestrator:
         intent: str = "auto",
         focused_context: list[str] | None = None,
         output_file: str | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Execute a request with automatic or explicit intent routing.
@@ -203,13 +208,13 @@ class StatelessOrchestrator:
 
         # Route to the appropriate method
         if intent == "implement":
-            return self.implement(request, focused_context=focused_context, output_file=output_file)
+            return self.implement(request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
         elif intent == "review":
-            return self.review(request, focused_context=focused_context)
+            return self.review(request, focused_context=focused_context, ready_callback=ready_callback)
         elif intent == "investigate":
-            return self.investigate(request, focused_context=focused_context)
+            return self.investigate(request, focused_context=focused_context, ready_callback=ready_callback)
         elif intent == "plan":
-            return self.plan(request, focused_context=focused_context, output_file=output_file)
+            return self.plan(request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
         else:
             return {
                 "session_id": None,
@@ -316,6 +321,7 @@ class StatelessOrchestrator:
         request: str,
         focused_context: list[str] | None = None,
         output_file: str | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Execute an implementation request using the superpower workflow.
@@ -328,12 +334,13 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("superpower", request, focused_context=focused_context, output_file=output_file)
+        return self.run_workflow("superpower", request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
 
     def review(
         self,
         request: str,
         focused_context: list[str] | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Execute a review request using the code_review workflow.
@@ -345,12 +352,13 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("code_review", request, focused_context=focused_context)
+        return self.run_workflow("code_review", request, focused_context=focused_context, ready_callback=ready_callback)
 
     def investigate(
         self,
         request: str,
         focused_context: list[str] | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Execute an investigation request using the rca workflow.
@@ -362,13 +370,14 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("rca", request, focused_context=focused_context)
+        return self.run_workflow("rca", request, focused_context=focused_context, ready_callback=ready_callback)
 
     def plan(
         self,
         request: str,
         focused_context: list[str] | None = None,
         output_file: str | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Execute a planning request using the writing-plans skill.
@@ -381,7 +390,7 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, output_file
         """
-        return self.run_skill("writing-plans", request, focused_context=focused_context, output_file=output_file)
+        return self.run_skill("writing-plans", request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
 
     def run_workflow(
         self,
@@ -389,6 +398,7 @@ class StatelessOrchestrator:
         request: str,
         focused_context: list[str] | None = None,
         output_file: str | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Run a specific workflow with a request.
@@ -429,6 +439,10 @@ class StatelessOrchestrator:
             # Seed session with the modified files under review so subagents
             # evaluate the HEAD version instead of stale base copies.
             self._seed_review_files(session_dir, request)
+
+            # Let the caller return as soon as the session is established.
+            if ready_callback:
+                ready_callback(session_id, session_dir)
 
             # Load workflow manifest. Resolve the manifest path against
             # workflows_dir and validate it stays safely under workflows_dir
@@ -532,6 +546,7 @@ class StatelessOrchestrator:
         feedback: str | None = None,
         focused_context: list[str] | None = None,
         output_file: str | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Resume a workflow that is paused at a gate or escalated.
@@ -549,6 +564,47 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
+        session_dir = self.config.session_work_dir / session_id
+
+        has_resume_input = bool(
+            gate_verdict or gate_notes or gate_id or correction_artifact or feedback
+        )
+
+        try:
+            session_path = session_dir / "session.json"
+            session_data: dict[str, Any] = {}
+            if session_path.exists():
+                session_data = json.loads(session_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"Could not read session state for {session_id}: {e}")
+            session_data = {}
+
+        status = session_data.get("status") or session_data.get("final_status") or "unknown"
+        artifact_paths = self._list_session_artifacts(session_dir)
+
+        if not has_resume_input and status != "completed":
+            # Nothing new to act on. Return the resume ticket immediately so a
+            # stateless agent does not block on the same failing stage.
+            resume = self._build_resume_from_session(
+                session_id, session_data, artifact_paths
+            )
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "success": False,
+                "output": None,
+                "error": f"Session {session_id} is {status}. No new feedback/correction/verdict provided; not re-running.",
+                "artifact_paths": artifact_paths,
+                "resume": resume,
+                "done": False,
+                "next_step": resume.get("tool") if resume else None,
+            }
+
+        # Notify the caller that the session is established so it can return
+        # while the engine runs in the background.
+        if ready_callback:
+            ready_callback(session_id, session_dir)
+
         try:
             engine = OrchestrationEngine(
                 work_dir=self.config.session_work_dir,
@@ -569,7 +625,6 @@ class StatelessOrchestrator:
                 focused_context=focused_context,
                 output_file=output_file,
             )
-            session_dir = self.config.session_work_dir / session_id
             result = dict(results)
             result["session_id"] = session_id
             result["workspace"] = str(session_dir)
@@ -581,17 +636,362 @@ class StatelessOrchestrator:
             result.pop("stages", None)
             result["output"] = json.dumps(results, indent=2, default=_json_default)
             if "artifact_paths" not in result:
-                result["artifact_paths"] = self._list_session_artifacts(session_dir)
+                result["artifact_paths"] = artifact_paths
+            result["done"] = results.get("final_status") == "completed"
+            result["next_step"] = self._next_step_from_results(results)
             return result
         except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
             logger.error(f"Failed to continue workflow {session_id}: {e}")
             return {
                 "session_id": session_id,
-                "workspace": None,
+                "workspace": str(session_dir),
                 "success": False,
                 "output": None,
                 "error": f"Failed to continue workflow: {str(e)}",
+                "done": False,
+                "next_step": None,
             }
+
+    def _build_resume_from_session(
+        self,
+        session_id: str,
+        session_data: dict[str, Any],
+        artifact_paths: list[str],
+    ) -> dict[str, Any]:
+        """Build a lightweight resume ticket directly from a session.json snapshot."""
+        status = session_data.get("status") or session_data.get("final_status") or "unknown"
+        stages = session_data.get("stages", [])
+        current_stage = None
+        if stages:
+            current_stage = stages[-1].get("stage")
+
+        waiting_gate = None
+        if status == "waiting_for_input" and stages:
+            for entry in reversed(stages):
+                stage = entry.get("stage", "")
+                if stage.startswith("gate_"):
+                    waiting_gate = stage
+                    current_stage = stage
+                    break
+
+        last_artifact = artifact_paths[-1] if artifact_paths else None
+
+        if status == "waiting_for_input" and waiting_gate:
+            return {
+                "tool": "mcp0_gate_decision",
+                "arguments": {
+                    "session_id": session_id,
+                    "gate_id": waiting_gate.replace("gate_", "", 1),
+                    "verdict": "approve|request_changes|block",
+                    "notes": "",
+                },
+                "then": {
+                    "tool": "mcp0_continue_workflow",
+                    "arguments": {"session_id": session_id},
+                },
+            }
+
+        resume: dict[str, Any] = {
+            "tool": "mcp0_continue_workflow",
+            "arguments": {"session_id": session_id},
+        }
+        if status in ("escalated", "blocked", "retrying") and current_stage:
+            resume["arguments"]["feedback"] = (
+                f"<Provide correction/feedback for the '{current_stage}' stage>"
+            )
+        if last_artifact:
+            resume["arguments"]["correction_artifact"] = last_artifact
+        return resume
+
+    def _next_step_from_results(self, results: dict[str, Any]) -> str | dict[str, Any] | None:
+        """Return a concise next action from engine results."""
+        if results.get("final_status") == "completed":
+            return None
+        resume = results.get("resume")
+        if resume:
+            return resume.get("tool")
+        return "mcp0_continue_workflow"
+
+    def get_session_status(self, session_id: str) -> dict[str, Any]:
+        """Return a concise status summary for a session."""
+        session_dir = self.config.session_work_dir / session_id
+        try:
+            session_path = session_dir / "session.json"
+            session_data = json.loads(session_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {
+                "session_id": session_id,
+                "exists": False,
+                "status": "unknown",
+            }
+
+        stages = session_data.get("stages", [])
+        last_stage = stages[-1] if stages else {}
+        return {
+            "session_id": session_id,
+            "exists": True,
+            "workspace": str(session_dir),
+            "status": session_data.get("status") or session_data.get("final_status") or "unknown",
+            "manifest": session_data.get("manifest"),
+            "current_stage": last_stage.get("stage"),
+            "stage_status": last_stage.get("status"),
+            "artifact_paths": self._list_session_artifacts(session_dir),
+        }
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        """List all sessions in the work directory with their current status."""
+        sessions: list[dict[str, Any]] = []
+        work_dir = self.config.session_work_dir
+        if not work_dir.exists():
+            return sessions
+
+        for path in sorted(work_dir.iterdir()):
+            if not path.is_dir():
+                continue
+            if not (path / "session.json").exists():
+                continue
+            status = self.get_session_status(path.name)
+            sessions.append(status)
+
+        return sessions
+
+    def cancel_workflow(self, session_id: str) -> dict[str, Any]:
+        """Mark a session as cancelled, signal any running Devin subprocess to stop, and return status."""
+        session_dir = self.config.session_work_dir / session_id
+        session_path = session_dir / "session.json"
+        try:
+            if not session_path.exists():
+                return {
+                    "session_id": session_id,
+                    "success": False,
+                    "error": f"Session {session_id} not found",
+                }
+            session_data = json.loads(session_path.read_text(encoding="utf-8"))
+            existing_status = session_data.get("final_status") or session_data.get("status")
+            if existing_status == "completed":
+                return {
+                    "session_id": session_id,
+                    "success": False,
+                    "error": f"Session {session_id} is already completed",
+                }
+
+            session_data["status"] = "cancelled"
+            session_data["final_status"] = "cancelled"
+            session_path.write_text(json.dumps(session_data, indent=2), encoding="utf-8")
+
+            # Signal any active Popen dispatch to stop polling and terminate.
+            cancel_token = session_dir / ".cancel"
+            try:
+                cancel_token.write_text("", encoding="utf-8")
+            except OSError as e:
+                logger.warning(f"Failed to write cancel token for {session_id}: {e}")
+
+            # Best-effort kill of the recorded PIDs (devin subprocess and the
+            # background workflow dispatcher). Verify process identity before
+            # killing to avoid terminating an unrelated process that has reused
+            # a recorded PID.
+            any_failed = False
+            any_killed = False
+            for pid_name in ("pid.txt", "workflow-pid.txt"):
+                pid_file = session_dir / pid_name
+                if not pid_file.exists():
+                    continue
+                try:
+                    pid, _, _ = self._read_pid_file(pid_file)
+                    if pid is None:
+                        continue
+                    terminated = self._kill_process(pid)
+                    if terminated:
+                        any_killed = True
+                    else:
+                        any_failed = True
+                except (OSError, ValueError) as e:
+                    logger.warning(f"Failed to read/terminate {pid_name} for {session_id}: {e}")
+
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "success": True,
+                "status": "cancelled",
+                "process_terminated": not any_failed,
+            }
+        except (OSError, json.JSONDecodeError) as e:
+            logger.error(f"Failed to cancel session {session_id}: {e}")
+            return {
+                "session_id": session_id,
+                "success": False,
+                "error": f"Failed to cancel session: {e}",
+            }
+
+    def _read_pid_file(
+        self, pid_file: Path
+    ) -> tuple[int | None, float | None, str | None]:
+        """Read a PID file.
+
+        Supports legacy files containing a plain PID integer and JSON files
+        written by the orchestrator that include a creation timestamp.
+        """
+        try:
+            text = pid_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            return (None, None, None)
+        if not text:
+            return (None, None, None)
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict):
+                pid = int(data["pid"])
+                create_time = (
+                    float(data["create_time"]) if "create_time" in data else None
+                )
+                return (pid, create_time, None)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            pass
+        try:
+            return (int(text), None, None)
+        except (ValueError, TypeError):
+            return (None, None, text)
+
+    def _get_process_commandline(
+        self, pid: int
+    ) -> tuple[list[str] | None, str | None]:
+        """Return argv list and command-line string for a process, or (None,None) if gone."""
+        if pid <= 0:
+            return (None, None)
+        if os.name == "nt":
+            # PowerShell's CIM provider is available on modern Windows and
+            # returns the full command line. WMIC is deprecated and often absent;
+            # tasklist only returns the image name, which is not enough to verify
+            # that the PID still belongs to our dispatcher.
+            for cmd, is_cmdline in (
+                (
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        f"(Get-CimInstance -ClassName Win32_Process -Filter 'ProcessId={pid}' -Property CommandLine | Select-Object -ExpandProperty CommandLine).Trim()",
+                    ],
+                    True,
+                ),
+                (
+                    [
+                        "wmic",
+                        "process",
+                        "where",
+                        f"ProcessId={pid}",
+                        "get",
+                        "CommandLine",
+                        "/value",
+                    ],
+                    True,
+                ),
+                # Last resort: confirm the process exists, but we cannot safely
+                # identify it.  Caller will treat (None, None) as "gone".
+                (["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], False),
+            ):
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        errors="replace",
+                        timeout=3,
+                        check=False,
+                    )
+                    output = result.stdout.strip()
+                    if not output:
+                        continue
+                    if cmd[1] == "-NoProfile":  # PowerShell
+                        if output:
+                            return (output.split(), output)
+                        continue
+                    if cmd[0] == "wmic":
+                        for line in output.splitlines():
+                            if line.startswith("CommandLine="):
+                                val = line[len("CommandLine="):].strip()
+                                if val:
+                                    return (val.split(), val)
+                        continue
+                    # tasklist: only proves existence.
+                    parts = output.split(",")
+                    if len(parts) >= 1:
+                        return (None, None)
+                except (OSError, subprocess.TimeoutExpired):
+                    continue
+        else:
+            try:
+                proc_dir = Path(f"/proc/{pid}")
+                if not proc_dir.exists():
+                    return (None, None)
+                cmdline_text = (proc_dir / "cmdline").read_text(
+                    encoding="utf-8", errors="replace"
+                )
+                parts = cmdline_text.split("\x00")
+                if parts and parts[-1] == "":
+                    parts = parts[:-1]
+                if parts:
+                    return (parts, " ".join(parts))
+            except (OSError, ValueError):
+                pass
+        return (None, None)
+
+    def _verify_process_identity(self, pid: int) -> tuple[bool, bool]:
+        """Return (exists, belongs_to_orchestrator) for the given PID."""
+        if pid <= 0 or pid == os.getpid():
+            return (False, False)
+        argv, cmdstr = self._get_process_commandline(pid)
+        if argv is None:
+            return (False, False)
+        markers = (
+            "devin",
+            "dispatch_workflow",
+            "dispatch_devin",
+            "devin-orchestrator",
+            "mcp_server.py",
+        )
+        check = cmdstr or " ".join(argv)
+        return (True, any(marker in check for marker in markers))
+
+    def _kill_process(self, pid: int) -> bool:
+        """Best-effort cross-platform kill of a process by PID."""
+        exists, ours = self._verify_process_identity(pid)
+        if not exists:
+            # Already gone; treat as success.
+            return True
+        if not ours:
+            logger.warning(
+                f"PID {pid} does not appear to be an orchestrator process; skipping kill"
+            )
+            return False
+        try:
+            if os.name == "nt":
+                # Windows: taskkill /F /T forcibly terminates the process tree.
+                result = subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/F", "/T"],
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    check=False,
+                    timeout=10,
+                )
+                return result.returncode == 0
+            # Unix-like: SIGTERM with grace period, then SIGKILL.
+            os.kill(pid, signal.SIGTERM)
+            time.sleep(0.5)
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return True
+            # SIGKILL is not defined on Windows; fall back to SIGTERM if needed.
+            sigkill = getattr(signal, "SIGKILL", signal.SIGTERM)
+            os.kill(pid, sigkill)
+            return True
+        except subprocess.TimeoutExpired:
+            logger.warning(f"taskkill timed out for PID {pid}")
+            return False
+        except (OSError, ValueError, AttributeError) as e:
+            logger.warning(f"Failed to kill process {pid}: {e}")
+            return False
 
     def run_skill(
         self,
@@ -599,6 +999,7 @@ class StatelessOrchestrator:
         request: str,
         focused_context: list[str] | None = None,
         output_file: str | None = None,
+        ready_callback: Any | None = None,
     ) -> dict[str, Any]:
         """
         Run a specific skill with a request.
@@ -623,12 +1024,36 @@ class StatelessOrchestrator:
             session_format = "SKILL-NNN"
             session_id, session_dir = create_session(self.config.session_work_dir, session_format)
 
+            # Let the caller return as soon as the session is established.
+            if ready_callback:
+                ready_callback(session_id, session_dir)
+
             # Seed focused context files into the session directory so the worker
             # can access them without escaping the session sandbox.
             seeded_context = self._seed_focused_context(session_dir, focused_context or [])
 
             # Write request prompt file
             write_request_prompt(session_dir, request)
+
+            # Record the start of this skill session so get_session_status can
+            # report progress while the skill runs.
+            try:
+                (session_dir / "session.json").write_text(
+                    json.dumps(
+                        {
+                            "session_id": session_id,
+                            "workspace": str(session_dir),
+                            "status": "in_progress",
+                            "final_status": "in_progress",
+                            "manifest": skill_name,
+                            "request_content": request,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+            except OSError as e:
+                logger.warning(f"Failed to seed session.json for skill {skill_name}: {e}")
 
             # Invoke skill. Pass the request in context so SkillInvoker builds
             # the full skill prompt (name, iron law, checklist, narrative).
@@ -660,6 +1085,31 @@ class StatelessOrchestrator:
                     logger.warning(f"Failed to write output_file {output_file}: {e}")
 
             artifact_paths = self._list_session_artifacts(session_dir)
+
+            # Persist final skill result for get_session_status polling.
+            try:
+                session_file = session_dir / "session.json"
+                session_data: dict[str, Any] = {}
+                if session_file.exists():
+                    session_data = json.loads(session_file.read_text(encoding="utf-8"))
+                session_data.update(
+                    {
+                        "session_id": session_id,
+                        "workspace": str(session_dir),
+                        "status": "completed" if result.success else "failed",
+                        "final_status": "completed" if result.success else "failed",
+                        "success": result.success,
+                        "output": result.output,
+                        "error": result.error,
+                        "output_file": written_output_file,
+                        "artifact_paths": artifact_paths,
+                        "done": True,
+                        "next_step": None,
+                    }
+                )
+                session_file.write_text(json.dumps(session_data, indent=2, default=str), encoding="utf-8")
+            except (OSError, json.JSONDecodeError) as e:
+                logger.warning(f"Failed to update session.json for skill {skill_name}: {e}")
 
             return {
                 "session_id": session_id,

@@ -12,8 +12,11 @@ import contextlib
 import logging
 import os
 import re
+import signal
 import subprocess
 import tempfile
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -311,6 +314,7 @@ class DevinCliAdapter(TransportAdapter):
         correction_artifact: str | None = None,
         enable_skills: bool = True,
         skill_filter: list[str] | None = None,
+        cancel_token: str | Path | None = None,
     ) -> InvocationResult:
         """
         Invoke devin-cli with a prompt in non-interactive mode
@@ -325,6 +329,10 @@ class DevinCliAdapter(TransportAdapter):
                 When provided, only those skills are eligible (subject to the
                 existing trigger-phrase matching). When ``None`` and
                 ``enable_skills`` is True, all loaded skills are eligible.
+            cancel_token: Optional path to a sentinel file. If provided, the
+                dispatch runs under ``Popen`` and polls for this file; if it
+                appears (or the timeout is reached) the child process is
+                terminated and killed. Used by ``cancel_workflow``.
 
         Returns:
             InvocationResult with success status, output, and error
@@ -394,48 +402,9 @@ class DevinCliAdapter(TransportAdapter):
 
             cmd.extend(["--prompt-file", str(prompt_file), "--print"])
 
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",  # Handle encoding errors gracefully
-                    timeout=timeout,
-                    cwd=self.workspace,
-                )
-
-                return InvocationResult(
-                    success=result.returncode == 0,
-                    output=result.stdout,
-                    error=result.stderr,
-                    exit_code=result.returncode,
-                )
-
-            except subprocess.TimeoutExpired:
-                return InvocationResult(
-                    success=False,
-                    output="",
-                    error=f"Command timed out after {timeout} seconds",
-                    exit_code=-1,
-                )
-            except (OSError, FileNotFoundError) as e:
-                return InvocationResult(
-                    success=False,
-                    output="",
-                    error=(
-                        f"Failed to execute devin-cli "
-                        f"({type(e).__name__}): {e}"
-                    ),
-                    exit_code=-1,
-                )
-            except Exception as e:
-                return InvocationResult(
-                    success=False,
-                    output="",
-                    error=f"Unexpected error invoking devin-cli: {e}",
-                    exit_code=-1,
-                )
+            if cancel_token is None:
+                return self._invoke_run(cmd, timeout, prompt_file)
+            return self._invoke_popen(cmd, timeout, prompt_file, Path(cancel_token))
         finally:
             # Clean up the temporary prompt file; best-effort with proper error handling
             if prompt_file is not None:
@@ -445,6 +414,188 @@ class DevinCliAdapter(TransportAdapter):
                 except OSError:
                     # Log warning but don't fail the operation if cleanup fails
                     logger.warning(f"Failed to clean up temporary file {prompt_file}")
+
+    def _invoke_run(
+        self,
+        cmd: list[str],
+        timeout: int,
+        prompt_file: Path,
+    ) -> InvocationResult:
+        """Run devin-cli with subprocess.run and return the result."""
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                cwd=self.workspace,
+            )
+
+            return InvocationResult(
+                success=result.returncode == 0,
+                output=result.stdout,
+                error=result.stderr,
+                exit_code=result.returncode,
+            )
+
+        except subprocess.TimeoutExpired:
+            return InvocationResult(
+                success=False,
+                output="",
+                error=f"Command timed out after {timeout} seconds",
+                exit_code=-1,
+            )
+        except (OSError, FileNotFoundError) as e:
+            return InvocationResult(
+                success=False,
+                output="",
+                error=(
+                    f"Failed to execute devin-cli "
+                    f"({type(e).__name__}): {e}"
+                ),
+                exit_code=-1,
+            )
+        except Exception as e:
+            return InvocationResult(
+                success=False,
+                output="",
+                error=f"Unexpected error invoking devin-cli: {e}",
+                exit_code=-1,
+            )
+
+    @staticmethod
+    def _read_stream(pipe, lines: list[str]) -> None:
+        """Reader thread target: collect lines from a text pipe."""
+        try:
+            for line in iter(pipe.readline, ""):
+                lines.append(line)
+        finally:
+            pipe.close()
+
+    def _kill_process(self, proc: subprocess.Popen[Any], grace: float = 3.0) -> None:
+        """Terminate and then force-kill a Popen process."""
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        except Exception as e:
+            logger.warning(f"Error while killing process {proc.pid}: {e}")
+
+    def _invoke_popen(
+        self,
+        cmd: list[str],
+        timeout: int,
+        prompt_file: Path,
+        cancel_token: Path,
+    ) -> InvocationResult:
+        """Run devin-cli with Popen and support cancellation via cancel_token."""
+        pid_file = cancel_token.parent / "pid.txt"
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=self.workspace,
+            )
+
+            try:
+                pid_file.write_text(
+                    json.dumps({"pid": proc.pid, "create_time": time.time()}),
+                    encoding="utf-8",
+                )
+            except OSError as e:
+                logger.warning(f"Failed to write pid file {pid_file}: {e}")
+
+            stdout_thread = threading.Thread(
+                target=self._read_stream, args=(proc.stdout, stdout_lines), daemon=True
+            )
+            stderr_thread = threading.Thread(
+                target=self._read_stream, args=(proc.stderr, stderr_lines), daemon=True
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+
+            start = time.monotonic()
+            cancelled = False
+            timed_out = False
+
+            while proc.poll() is None:
+                if cancel_token.exists():
+                    cancelled = True
+                    break
+                elapsed = time.monotonic() - start
+                if elapsed > timeout:
+                    timed_out = True
+                    break
+                time.sleep(0.5)
+
+            if cancelled or timed_out:
+                self._kill_process(proc)
+
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._kill_process(proc, grace=0.5)
+
+            stdout_thread.join(timeout=5)
+            stderr_thread.join(timeout=5)
+
+            stdout = "".join(stdout_lines)
+            stderr = "".join(stderr_lines)
+
+            if cancelled:
+                return InvocationResult(
+                    success=False,
+                    output=stdout,
+                    error="Cancelled by user",
+                    exit_code=-1,
+                )
+            if timed_out:
+                return InvocationResult(
+                    success=False,
+                    output=stdout,
+                    error=f"Command timed out after {timeout} seconds",
+                    exit_code=-1,
+                )
+
+            return InvocationResult(
+                success=proc.returncode == 0,
+                output=stdout,
+                error=stderr,
+                exit_code=proc.returncode or 0,
+            )
+
+        except (OSError, FileNotFoundError) as e:
+            return InvocationResult(
+                success=False,
+                output="",
+                error=(
+                    f"Failed to execute devin-cli "
+                    f"({type(e).__name__}): {e}"
+                ),
+                exit_code=-1,
+            )
+        except Exception as e:
+            return InvocationResult(
+                success=False,
+                output="",
+                error=f"Unexpected error invoking devin-cli: {e}",
+                exit_code=-1,
+            )
+        finally:
+            with contextlib.suppress(OSError):
+                if pid_file.exists():
+                    pid_file.unlink()
 
     def __enter__(self):
         """Context manager entry (no-op for simple adapter)"""

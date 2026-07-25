@@ -1403,6 +1403,7 @@ Edit this file with your input, then save to continue.
         Returns (result, error_dict) where error_dict is None on success.
         """
         try:
+            cancel_token = str(session_dir / ".cancel")
             result = self.skill_invoker.invoke_skill(
                 skill_name=skill_name,
                 context={
@@ -1416,6 +1417,7 @@ Edit this file with your input, then save to continue.
                 correction_artifact=correction_artifact,
                 focused_context=focused_context,
                 timeout=self.config.get("dispatch_timeout_seconds"),
+                cancel_token=cancel_token,
             )
             logger.info(
                 f"Skill {skill_name} invocation completed with "
@@ -1737,6 +1739,7 @@ Edit this file with your input, then save to continue.
             "role": "reviewer",
         }
 
+        cancel_token = str(session_dir / ".cancel")
         result = self.skill_invoker.invoke_skill(
             skill_name="swe-compliance",
             context=reviewer_context,
@@ -1744,6 +1747,7 @@ Edit this file with your input, then save to continue.
             focused_context=focused_context,
             correction_artifact=correction_artifact,
             is_reviewer=True,
+            cancel_token=cancel_token,
         )
 
         if not result.success:

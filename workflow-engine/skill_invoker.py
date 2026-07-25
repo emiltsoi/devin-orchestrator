@@ -158,6 +158,7 @@ class SkillInvoker:
         is_reviewer: bool = False,
         config_overrides: dict[str, Any] | None = None,
         timeout: int | None = None,
+        cancel_token: str | Path | None = None,
     ) -> SkillInvocationResult:
         """
         Invoke a skill using the devin-cli transport adapter
@@ -171,6 +172,7 @@ class SkillInvoker:
             correction_artifact: Optional path to correction artifact for retry loops
             is_reviewer: Whether this is a reviewer dispatch (triggers swe-compliance skill)
             timeout: Optional per-call timeout in seconds (defaults to configured value)
+            cancel_token: Optional path to a sentinel file for external cancellation.
 
         Returns:
             SkillInvocationResult with success status and output
@@ -286,6 +288,7 @@ class SkillInvoker:
                 focused_context=focused_context,
                 correction_artifact=correction_artifact,
                 enable_skills=False,
+                cancel_token=cancel_token,
             )
 
             return SkillInvocationResult(
