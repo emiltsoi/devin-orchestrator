@@ -8,7 +8,7 @@ Provides utilities for writing prompt files with user requests and context.
 import logging
 from pathlib import Path
 
-from security_utils import InvalidInputError
+from devin_orchestrator.security_utils import InvalidInputError
 
 logger = logging.getLogger(__name__)
 

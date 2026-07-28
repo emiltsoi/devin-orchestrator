@@ -578,5 +578,3 @@ def get_metrics_collector() -> MetricsCollector:
         _global_metrics_collector = MetricsCollector()
 
     return _global_metrics_collector
-
-

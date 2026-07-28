@@ -92,15 +92,9 @@ def install(
         print(f"Would copy config: {source_config} -> {target_config}")
 
     # Copy dispatch and MCP entry-point scripts so any workspace can invoke them.
-    # bootstrap_path.py must be copied too, because these scripts import it
-    # before adding devin_orchestrator to sys.path.
-    for script_name in (
-        "bootstrap_path.py",
-        "dispatch_devin.py",
-        "dispatch_skill.py",
-        "mcp_server.py",
-    ):
-        source_script = source_dir / script_name
+    # These live inside the devin_orchestrator package now.
+    for script_name in ("dispatch_devin.py", "dispatch_skill.py", "mcp_server.py"):
+        source_script = source_dir / "devin_orchestrator" / script_name
         target_script = global_root / script_name
         if source_script.exists():
             if not dry_run:

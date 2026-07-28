@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from security_utils import InvalidInputError
+from devin_orchestrator.security_utils import InvalidInputError
 
 # Allowlist of valid devin-cli permission modes. Must match the allowlist
 # enforced by DevinCliAdapter. Invalid configured values fall back to

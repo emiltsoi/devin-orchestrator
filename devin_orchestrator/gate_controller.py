@@ -13,13 +13,13 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from deterministic_tools import record_gate, wait_for_file_change
-from security_utils import InvalidInputError, PathTraversalError
+from devin_orchestrator.deterministic_tools import record_gate, wait_for_file_change
+from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from orchestration_engine import OrchestrationEngine
+    from devin_orchestrator.orchestration_engine import OrchestrationEngine
 
 logger = logging.getLogger(__name__)
 

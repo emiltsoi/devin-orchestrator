@@ -19,11 +19,11 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from config_loader import ConfigLoader
-from deterministic_tools import WorkflowManifestError, session_init
-from orchestration_engine import OrchestrationEngine
-from prompt_builder import write_request_prompt
-from security_utils import (
+from devin_orchestrator.config_loader import ConfigLoader
+from devin_orchestrator.deterministic_tools import WorkflowManifestError, session_init
+from devin_orchestrator.orchestration_engine import OrchestrationEngine
+from devin_orchestrator.prompt_builder import write_request_prompt
+from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
     validate_path_safe,
@@ -31,8 +31,8 @@ from security_utils import (
     validate_skill_name,
     validate_workflow_name,
 )
-from session_manager import create_session
-from skill_invoker import SkillInvoker
+from devin_orchestrator.session_manager import create_session
+from devin_orchestrator.skill_invoker import SkillInvoker
 
 logger = logging.getLogger(__name__)
 
@@ -734,7 +734,7 @@ class StatelessOrchestrator:
         gate_id: str | None = None,
     ) -> dict[str, Any]:
         """Resume a workflow in a background thread and return immediately."""
-        from session_manager import resolve_session
+        from devin_orchestrator.session_manager import resolve_session
 
         try:
             session_id = validate_session_id(session_id)
@@ -769,7 +769,7 @@ class StatelessOrchestrator:
 
     def get_workflow_status(self, session_id: str) -> dict[str, Any]:
         """Read the current status and any result for a session."""
-        from session_manager import resolve_session
+        from devin_orchestrator.session_manager import resolve_session
 
         try:
             session_id = validate_session_id(session_id)

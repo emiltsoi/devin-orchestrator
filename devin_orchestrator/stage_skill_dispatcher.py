@@ -13,14 +13,14 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from security_utils import InvalidInputError, PathTraversalError
-from triage_evaluator import TriageDecision
+from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
+from devin_orchestrator.triage_evaluator import TriageDecision
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from orchestration_engine import OrchestrationEngine
-    from skill_invoker import SkillInvocationResult
+    from devin_orchestrator.orchestration_engine import OrchestrationEngine
+    from devin_orchestrator.skill_invoker import SkillInvocationResult
 
 logger = logging.getLogger(__name__)
 

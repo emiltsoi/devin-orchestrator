@@ -53,7 +53,7 @@ def session_init(session_id: str, work_dir: Path, request_content: str = "") -> 
     """
     try:
         # Import security utilities for permission checks
-        from security_utils import check_directory_permissions
+        from devin_orchestrator.security_utils import check_directory_permissions
 
         session_dir = work_dir / session_id
 
@@ -126,7 +126,7 @@ def validate_structural(
             'artifact_results': Dict[str, Dict]
         }
     """
-    from floor_validator import validate_structural as _floor_validate_structural
+    from devin_orchestrator.floor_validator import validate_structural as _floor_validate_structural
 
     result = _floor_validate_structural(artifacts, required_artifacts=required_artifacts)
     return {
@@ -322,7 +322,7 @@ def load_skill(skill_dir: Path, skill_name: str) -> dict[str, Any]:
     # Validate skill name to prevent path traversal before interpolating
     # into filesystem paths. This is a defense-in-depth check; callers
     # should already validate at higher layers (MCP tool entry, SkillInvoker).
-    from security_utils import validate_skill_name
+    from devin_orchestrator.security_utils import validate_skill_name
 
     skill_name = validate_skill_name(skill_name)
 

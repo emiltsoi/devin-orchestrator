@@ -50,7 +50,7 @@ def main():
     print()
 
     # Configuration
-    repo_url = "https://github.com/cognition-dev/devin-orchestrator.git"  # Update with actual repo URL
+    repo_url = "https://github.com/emiltsoi/devin-orchestrator.git"  # Update with actual repo URL
     install_dir = Path.home() / "devin-orchestrator"
     global_root = Path.home() / ".devin-orchestrator"
     current_dir = Path.cwd()

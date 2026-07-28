@@ -32,9 +32,9 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from health_check import HealthChecker
-from metrics import MetricsCollector
-from orchestration_logger import LogLevel, get_logger
+from devin_orchestrator.health_check import HealthChecker
+from devin_orchestrator.metrics import MetricsCollector
+from devin_orchestrator.orchestration_logger import LogLevel, get_logger
 
 logger = logging.getLogger(__name__)
 
@@ -503,11 +503,11 @@ class SystemHealthMonitor:
 
         # Calculate average durations if workflows exist
         if all_metrics:
-            completed_workflows = [m for m in all_metrics.values() if m.total_duration]
-            if completed_workflows:
-                avg_duration = sum(m.total_duration for m in completed_workflows) / len(
-                    completed_workflows
-                )
+            durations: list[float] = [
+                m.total_duration for m in all_metrics.values() if m.total_duration
+            ]
+            if durations:
+                avg_duration = sum(durations) / len(durations)
                 performance_metrics["avg_workflow_duration"] = avg_duration
 
         # Count recent failures

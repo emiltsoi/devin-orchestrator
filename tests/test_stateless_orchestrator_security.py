@@ -13,9 +13,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
-
-from stateless_orchestrator import StatelessOrchestrator
+from devin_orchestrator.stateless_orchestrator import StatelessOrchestrator
 
 
 def _make_orchestrator_with_workspace(tmpdir: str) -> StatelessOrchestrator:
@@ -130,7 +128,10 @@ class TestRunWorkflowMalformedManifest:
 
     def test_load_manifest_raises_workflow_manifest_error(self):
         """load_manifest must raise WorkflowManifestError on malformed YAML."""
-        from deterministic_tools import WorkflowManifestError, load_manifest
+        from devin_orchestrator.deterministic_tools import (
+            WorkflowManifestError,
+            load_manifest,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             bad = Path(tmpdir) / "bad.manifest.yaml"
@@ -198,8 +199,8 @@ class TestRunWorkflowMalformedManifestStructure:
     def test_validate_manifest_structure_raises_workflow_manifest_error(self):
         """_validate_manifest_structure must raise WorkflowManifestError on
         missing required keys."""
-        from deterministic_tools import WorkflowManifestError
-        from orchestration_engine import OrchestrationEngine
+        from devin_orchestrator.deterministic_tools import WorkflowManifestError
+        from devin_orchestrator.orchestration_engine import OrchestrationEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             engine = OrchestrationEngine(work_dir=Path(tmpdir) / "work")
