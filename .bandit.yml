@@ -1,0 +1,13 @@
+exclude_dirs:
+  - .venv
+  - .venv-review
+  - .venv-ci
+  - .git
+  - .tox
+  - build
+  - dist
+  - .pytest_cache
+  - __pycache__
+  - tests
+skips:
+  - B101  # asserts are expected in pytest tests

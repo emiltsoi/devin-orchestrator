@@ -31,8 +31,14 @@ __pycache__/
 build/
 dist/
 .venv/
+.venv*/
 venv/
 env/
+.tox/
+
+# Coverage reports
+.coverage.*
+htmlcov/
 
 # Auto-generated build symlink
 # The hatch build hook creates devin_orchestrator from workflow-engine at build time;

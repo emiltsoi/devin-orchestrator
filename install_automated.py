@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Automated Installation Script for Devin Orchestrator
 
@@ -11,9 +10,8 @@ This script automates the entire installation process for devin-orchestrator:
 Run this script from any workspace to install devin-orchestrator.
 """
 
-import os
+import subprocess  # nosec B404
 import sys
-import subprocess
 from pathlib import Path
 
 
@@ -26,7 +24,7 @@ def run_command(cmd, cwd=None):
             # For simple commands, split into list (basic approach)
             # For complex commands, caller should provide list directly
             cmd = cmd.split()
-        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)  # nosec B603
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
         return False, "", str(e)
@@ -34,23 +32,23 @@ def run_command(cmd, cwd=None):
 
 def main():
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='Automated installation script for devin-orchestrator')
     parser.add_argument('--dry-run', action='store_true', help='Dry run - show what would be done without actually doing it')
-    
+
     args = parser.parse_args()
-    
+
     print("=== Automated Devin Orchestrator Installation ===")
     if args.dry_run:
         print("DRY RUN MODE - No actual installation will be performed")
     print()
-    
+
     # Configuration
     repo_url = "https://github.com/cognition-dev/devin-orchestrator.git"  # Update with actual repo URL
     install_dir = Path.home() / "devin-orchestrator"
     global_root = Path.home() / ".devin-orchestrator"
     current_dir = Path.cwd()
-    
+
     if args.dry_run:
         print("Would clone repository from:", repo_url)
         print("Would install to:", install_dir)
@@ -60,7 +58,7 @@ def main():
         print("=== Dry Run Complete ===")
         print("No changes were made.")
         return
-    
+
     # Step 1: Clone repository (if not already cloned)
     print("Step 1: Cloning repository...")
     if install_dir.exists():
@@ -81,12 +79,12 @@ def main():
             print("  Please clone manually and run install.py")
             sys.exit(1)
     print()
-    
+
     # Step 2: Install globally
     print("Step 2: Installing globally...")
     install_script = install_dir / "install.py"
     if install_script.exists():
-        print(f"  Running install.py...")
+        print("  Running install.py...")
         success, stdout, stderr = run_command(["python", str(install_script)], cwd=install_dir)
         if success:
             print("  Global installation successful")
@@ -97,17 +95,17 @@ def main():
         print(f"  Error: install.py not found at {install_script}")
         sys.exit(1)
     print()
-    
+
     # Step 3: Setup current workspace
     print("Step 3: Setting up current workspace...")
     workflows_dir = current_dir / ".devin" / "workflows"
     workflows_dir.mkdir(parents=True, exist_ok=True)
     print(f"  Created {workflows_dir}")
-    
+
     # Copy workflow manifests
     source_workflows = global_root / "workflows"
     if source_workflows.exists():
-        print(f"  Copying workflow manifests...")
+        print("  Copying workflow manifests...")
         for manifest in source_workflows.glob("*.yaml"):
             target = workflows_dir / manifest.name
             import shutil
@@ -117,7 +115,7 @@ def main():
     else:
         print(f"  Warning: Workflows directory not found at {source_workflows}")
     print()
-    
+
     # Step 4: Verify installation
     print("Step 4: Verifying installation...")
     checks = [
@@ -129,7 +127,7 @@ def main():
         ("Dispatch script", global_root / "dispatch_skill.py"),
         ("Workspace workflows", workflows_dir),
     ]
-    
+
     all_passed = True
     for name, path in checks:
         if path.exists():
@@ -138,7 +136,7 @@ def main():
             print(f"  ✗ {name}: {path} (NOT FOUND)")
             all_passed = False
     print()
-    
+
     if all_passed:
         print("=== Installation Complete ===")
         print()

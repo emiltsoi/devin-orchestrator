@@ -22,7 +22,7 @@ import contextlib
 import json
 import logging
 import re
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 from collections import defaultdict
@@ -1104,7 +1104,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         cmd.extend(["--timeout", str(timeout)])
 
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603
                 cmd,
                 capture_output=True,
                 text=True,
@@ -1194,7 +1194,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             cmd.append(json.dumps(overrides))
 
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603
                 cmd,
                 capture_output=True,
                 text=True,

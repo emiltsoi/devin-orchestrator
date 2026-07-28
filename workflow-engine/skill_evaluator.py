@@ -296,9 +296,9 @@ Respond with JSON only, no other text.
 """
 
         try:
-            import subprocess
+            import subprocess  # nosec B404
 
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603
                 [
                     self.devin_cli_path,
                     "--permission-mode",
