@@ -349,6 +349,53 @@ class TestWorkspaceConfig:
         assert config.default_model == "glm-5-2"
         assert config.session_work_dir == workspace
 
+    def test_workspace_config_deep_merges_nested_maps(self, tmp_path):
+        # Global config has model_overrides with two agents and agent_skills map.
+        global_config = tmp_path / "config.yaml"
+        global_config.write_text(
+            yaml.safe_dump(
+                {
+                    "model_overrides": {
+                        "coder": "swe-1.6",
+                        "reviewer": "reviewer-model",
+                    },
+                    "agent_skills": {
+                        "coder": ["writing-plans"],
+                        "reviewer": ["code-review"],
+                    },
+                    "default_model": "swe-1.6",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        ws_dir = workspace / ".devin-orchestrator"
+        ws_dir.mkdir()
+        ws_config = ws_dir / "config.yaml"
+        ws_config.write_text(
+            yaml.safe_dump(
+                {
+                    "model_overrides": {"coder": "workspace-coder-model"},
+                    "agent_skills": {"coder": ["subagent-driven-development"]},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        config = ConfigLoader.load(config_path=global_config, workspace=workspace)
+
+        # Workspace overrides coder, but leaves reviewer untouched.
+        assert config.model_overrides == {
+            "coder": "workspace-coder-model",
+            "reviewer": "reviewer-model",
+        }
+        assert config.agent_skills == {
+            "coder": ["subagent-driven-development"],
+            "reviewer": ["code-review"],
+        }
+
     def test_missing_workspace_config_uses_global(self, tmp_path):
         global_config = tmp_path / "config.yaml"
         global_config.write_text(

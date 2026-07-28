@@ -267,7 +267,7 @@ class SkillEvaluator:
         # Build cache key from artifact hash
         import hashlib
 
-        cache_key = hashlib.md5(
+        cache_key = hashlib.sha256(
             (context_content + artifact_content).encode()
         ).hexdigest()
 

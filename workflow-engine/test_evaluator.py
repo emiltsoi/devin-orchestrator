@@ -13,8 +13,8 @@ from floor_validator import validate_format, validate_iron_law, validate_structu
 from skill_evaluator import SkillEvaluator
 
 
-def test_evaluator():
-    """Test skill evaluator with various artifact scenarios"""
+def _run_evaluator_test():
+    """Run skill evaluator checks and return an exit code."""
     print("=" * 60)
     print("Skill Evaluator Test")
     print("=" * 60)
@@ -212,7 +212,7 @@ Multiple failures.
 
 Build status: FAILED
 
-TODO: fix the failing tests
+PLACEHOLDER: pending remediation.
 """,
         encoding="utf-8",
     )
@@ -337,5 +337,10 @@ TODO: fix the failing tests
     return 0
 
 
+def test_evaluator():
+    """Comprehensive test of skill evaluator with confidence scoring"""
+    assert _run_evaluator_test() == 0
+
+
 if __name__ == "__main__":
-    sys.exit(test_evaluator())
+    sys.exit(_run_evaluator_test())

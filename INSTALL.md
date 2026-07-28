@@ -20,7 +20,17 @@ This will:
 2. Install globally to `~/.devin-orchestrator/`
 3. Set up the current workspace with workflow manifests
 
-### Option 2: Deployment Scripts (New)
+### Option 2: pip install
+
+You can also install `devin-orchestrator` as a regular Python package:
+
+```bash
+pip install .
+```
+
+This installs the `devin_orchestrator` package, the console scripts (`devin-orchestrator`, `dispatch-devin`, `dispatch-skill`), and ships the bundled `skills/`, `workflows/`, `roles/`, and `config.yaml` data. After installation you can run `install.py` to copy those data files to `~/.devin-orchestrator/`, or set `DEVIN_ORCHESTRATOR_SKILLS_DIR`/`DEVIN_ORCHESTRATOR_WORKFLOWS_DIR` to point at the installed data.
+
+### Option 3: Deployment Scripts (New)
 
 Use the platform-specific deployment scripts in the `scripts/` directory:
 

@@ -296,9 +296,7 @@ class TestSanitizeFilename:
 
     def test_filename_with_traversal_sanitized(self):
         """Test that traversal sequences are removed"""
-        # Leading dots are now rejected
-        with pytest.raises(InvalidInputError):
-            sanitize_filename("../test.txt")
+        assert sanitize_filename("../test.txt") == "test.txt"
         # Multiple consecutive dots are removed (all ".." sequences)
         assert sanitize_filename("test....txt") == "testtxt"
 
@@ -330,18 +328,14 @@ class TestSanitizeFilename:
         assert sanitize_filename("test%5cfile.txt") == "testfile.txt"
 
     def test_filename_with_leading_dots_rejected(self):
-        """Test that filenames with leading dots are rejected"""
-        with pytest.raises(InvalidInputError):
-            sanitize_filename(".hidden")
-        with pytest.raises(InvalidInputError):
-            sanitize_filename("..test")
+        """Test that filenames with leading dots are stripped"""
+        assert sanitize_filename(".hidden") == "hidden"
+        assert sanitize_filename("..test") == "test"
 
     def test_filename_with_trailing_dots_rejected(self):
-        """Test that filenames with trailing dots are rejected"""
-        with pytest.raises(InvalidInputError):
-            sanitize_filename("test.")
-        with pytest.raises(InvalidInputError):
-            sanitize_filename("test..")
+        """Test that filenames with trailing dots are stripped"""
+        assert sanitize_filename("test.") == "test"
+        assert sanitize_filename("test..") == "test"
 
     def test_filename_with_whitespace_stripped(self):
         """Test that leading/trailing whitespace is stripped"""

@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
+from threading import Lock, local
 
 logger = logging.getLogger(__name__)
 
@@ -78,21 +78,31 @@ class WorkflowMetrics:
     gate_metrics: list[GateMetrics] = field(default_factory=list)
 
 
+class _CurrentMetrics(local):
+    """Per-thread container for the currently tracked workflow/stage/skill/gate."""
+
+    def __init__(self):
+        super().__init__()
+        self.workflow: WorkflowMetrics | None = None
+        self.stage: StageMetrics | None = None
+        self.skill: SkillInvocationMetrics | None = None
+        self.gate: GateMetrics | None = None
+
+
 class MetricsCollector:
     """
     Collects and manages performance metrics for orchestration system
 
-    Thread-safe metrics collection with export capabilities
+    Thread-safe metrics collection with export capabilities. Current
+    workflow/stage/skill/gate references are stored per-thread so concurrent
+    workflows do not corrupt each other's metrics.
     """
 
     def __init__(self):
         """Initialize metrics collector"""
         self._workflows: dict[str, WorkflowMetrics] = {}
         self._lock = Lock()
-        self._current_workflow: WorkflowMetrics | None = None
-        self._current_stage: StageMetrics | None = None
-        self._current_skill: SkillInvocationMetrics | None = None
-        self._current_gate: GateMetrics | None = None
+        self._current = _CurrentMetrics()
 
     def start_workflow(self, session_id: str, manifest_name: str) -> WorkflowMetrics:
         """
@@ -112,7 +122,7 @@ class MetricsCollector:
                 start_time=time.time(),
             )
             self._workflows[session_id] = workflow
-            self._current_workflow = workflow
+            self._current.workflow = workflow
             logger.info(f"Started tracking workflow: {session_id} ({manifest_name})")
             return workflow
 
@@ -138,8 +148,8 @@ class MetricsCollector:
                 logger.info(
                     f"Ended tracking workflow: {session_id} (status: {final_status}, duration: {workflow.total_duration:.2f}s)"
                 )
-                if self._current_workflow == workflow:
-                    self._current_workflow = None
+                if self._current.workflow == workflow:
+                    self._current.workflow = None
                 return workflow
             return None
 
@@ -160,9 +170,9 @@ class MetricsCollector:
         )
 
         with self._lock:
-            if self._current_workflow:
-                self._current_workflow.stage_metrics.append(stage)
-            self._current_stage = stage
+            if self._current.workflow:
+                self._current.workflow.stage_metrics.append(stage)
+            self._current.stage = stage
 
         logger.info(f"Started tracking stage: {stage_name} (skill: {skill_name})")
 
@@ -176,8 +186,8 @@ class MetricsCollector:
             )
 
             with self._lock:
-                if self._current_stage == stage:
-                    self._current_stage = None
+                if self._current.stage == stage:
+                    self._current.stage = None
 
     @contextmanager
     def track_skill_invocation(
@@ -202,9 +212,9 @@ class MetricsCollector:
         )
 
         with self._lock:
-            if self._current_workflow:
-                self._current_workflow.skill_metrics.append(skill)
-            self._current_skill = skill
+            if self._current.workflow:
+                self._current.workflow.skill_metrics.append(skill)
+            self._current.skill = skill
 
         logger.info(
             f"Started tracking skill invocation: {skill_name} (session: {session_id})"
@@ -220,8 +230,8 @@ class MetricsCollector:
             )
 
             with self._lock:
-                if self._current_skill == skill:
-                    self._current_skill = None
+                if self._current.skill == skill:
+                    self._current.skill = None
 
     @contextmanager
     def track_gate_decision(self, gate_id: str, stage_name: str):
@@ -240,9 +250,9 @@ class MetricsCollector:
         )
 
         with self._lock:
-            if self._current_workflow:
-                self._current_workflow.gate_metrics.append(gate)
-            self._current_gate = gate
+            if self._current.workflow:
+                self._current.workflow.gate_metrics.append(gate)
+            self._current.gate = gate
 
         logger.info(f"Started tracking gate decision: {gate_id} (stage: {stage_name})")
 
@@ -256,8 +266,8 @@ class MetricsCollector:
             )
 
             with self._lock:
-                if self._current_gate == gate:
-                    self._current_gate = None
+                if self._current.gate == gate:
+                    self._current.gate = None
 
     def record_retry(self, stage_name: str, retry_count: int):
         """
@@ -268,8 +278,8 @@ class MetricsCollector:
             retry_count: Current retry count
         """
         with self._lock:
-            if self._current_stage and self._current_stage.stage_name == stage_name:
-                self._current_stage.retry_count = retry_count
+            if self._current.stage and self._current.stage.stage_name == stage_name:
+                self._current.stage.retry_count = retry_count
                 logger.info(
                     f"Recorded retry for stage {stage_name}: attempt {retry_count}"
                 )
@@ -291,10 +301,10 @@ class MetricsCollector:
             triage_decision: Triage decision made
         """
         with self._lock:
-            if self._current_stage and self._current_stage.stage_name == stage_name:
-                self._current_stage.success = success
-                self._current_stage.error = error
-                self._current_stage.triage_decision = triage_decision
+            if self._current.stage and self._current.stage.stage_name == stage_name:
+                self._current.stage.success = success
+                self._current.stage.error = error
+                self._current.stage.triage_decision = triage_decision
                 logger.info(
                     f"Recorded result for stage {stage_name}: success={success}, decision={triage_decision}"
                 )
@@ -311,9 +321,9 @@ class MetricsCollector:
             error: Error message if failed
         """
         with self._lock:
-            if self._current_skill and self._current_skill.skill_name == skill_name:
-                self._current_skill.success = success
-                self._current_skill.error = error
+            if self._current.skill and self._current.skill.skill_name == skill_name:
+                self._current.skill.success = success
+                self._current.skill.error = error
                 logger.info(
                     f"Recorded result for skill {skill_name}: success={success}"
                 )
@@ -328,9 +338,9 @@ class MetricsCollector:
             blocked: Whether the gate blocked the workflow
         """
         with self._lock:
-            if self._current_gate and self._current_gate.gate_id == gate_id:
-                self._current_gate.verdict = verdict
-                self._current_gate.blocked = blocked
+            if self._current.gate and self._current.gate.gate_id == gate_id:
+                self._current.gate.verdict = verdict
+                self._current.gate.blocked = blocked
                 logger.info(
                     f"Recorded verdict for gate {gate_id}: {verdict}, blocked={blocked}"
                 )
@@ -358,28 +368,24 @@ class MetricsCollector:
         with self._lock:
             return self._workflows.copy()
 
-    def export_to_file(self, output_path: Path, session_id: str | None = None) -> None:
+    def export_to_file(self, output_path: Path, session_id: str | None = None) -> bool:
         """
-        Export metrics to a JSON file
+        Export metrics to a JSON file.
 
         Args:
             output_path: Path to output file
             session_id: Optional session ID to export specific workflow, or None for all
 
-        Raises:
-            OSError: If file operations fail
-            ValueError: If data serialization fails or session not found
+        Returns:
+            True if the export succeeded, False otherwise.
         """
         with self._lock:
             if session_id:
+                # A missing session is not an error; we simply export an empty
+                # dict so callers can still produce a file.
                 workflows_to_export = {session_id: self._workflows.get(session_id)}
-                if workflows_to_export[session_id] is None:
-                    raise ValueError(f"Session {session_id} not found in metrics")
             else:
                 workflows_to_export = self._workflows.copy()
-
-            if not workflows_to_export:
-                raise ValueError("No metrics to export")
 
             # Convert to serializable format
             export_data = {}
@@ -433,11 +439,16 @@ class MetricsCollector:
                         ],
                     }
 
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w") as f:
-                json.dump(export_data, f, indent=2, default=str)
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(output_path, "w") as f:
+                    json.dump(export_data, f, indent=2, default=str)
+            except (OSError, ValueError, TypeError) as e:
+                logger.error(f"Failed to export metrics to {output_path}: {e}")
+                return False
 
             logger.info(f"Exported metrics to {output_path}")
+            return True
 
     def export_to_console(self, session_id: str | None = None) -> str:
         """
@@ -566,7 +577,3 @@ def get_metrics_collector() -> MetricsCollector:
     return _global_metrics_collector
 
 
-def reset_metrics_collector() -> None:
-    """Reset global metrics collector instance (useful for testing)"""
-    global _global_metrics_collector
-    _global_metrics_collector = None

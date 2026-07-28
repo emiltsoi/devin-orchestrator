@@ -15,6 +15,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import gate_controller
+import orchestration_engine
 from orchestration_engine import OrchestrationEngine, TriageDecision
 
 
@@ -107,6 +109,17 @@ class TestOrchestrationEngine(unittest.TestCase):
 
         self.engine = OrchestrationEngine(self.work_dir, self.config)
 
+        # Gate/pause tests now use filesystem events. Mock the shared wait helper
+        # so tests remain fast and deterministic without requiring real edits.
+        self.wait_for_file_change_patcher = patch.object(
+            orchestration_engine, "wait_for_file_change", return_value=False
+        )
+        self.wait_for_file_change_patcher.start()
+        self.gate_wait_for_file_change_patcher = patch.object(
+            gate_controller, "wait_for_file_change", return_value=False
+        )
+        self.gate_wait_for_file_change_patcher.start()
+
         # Mock skill data for avoiding encoding issues
         self.mock_skill_data = {
             "definition": {
@@ -135,6 +148,8 @@ class TestOrchestrationEngine(unittest.TestCase):
 
     def tearDown(self):
         """Clean up test fixtures"""
+        self.wait_for_file_change_patcher.stop()
+        self.gate_wait_for_file_change_patcher.stop()
         shutil.rmtree(self.temp_dir)
 
     def test_initialization(self):
@@ -709,6 +724,115 @@ class TestOrchestrationEngine(unittest.TestCase):
                         )
 
                     self.assertEqual(results["final_status"], "blocked")
+
+    def test_gate_retry_request_changes_re_evaluates_gate(self):
+        """A request_changes gate verdict retries the stage and re-gates it."""
+        session_id = "TEST-008-RETRY"
+        request_content = "Test request"
+
+        gate_manifest = {
+            "name": "gate-retry-test",
+            "description": "Test gate request_changes retry flow",
+            "skip_brainstorming": True,
+            "stages": [
+                {
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
+                    "gate": "g1_approval",
+                }
+            ],
+        }
+
+        gate_manifest_path = self.workflows_dir / "gate-retry-manifest.yaml"
+        with open(gate_manifest_path, "w", encoding="utf-8") as f:
+            yaml.dump(gate_manifest, f)
+
+        session_dir = self.work_dir / session_id
+        session_dir.mkdir(exist_ok=True)
+
+        # _execute_stage is called once for the initial run and once for the
+        # retry after the gate returns request_changes.
+        execute_results = [
+            {
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "first attempt",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
+            },
+            {
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "second attempt",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
+            },
+        ]
+
+        def mock_execute_stage(*args, **kwargs):
+            return execute_results.pop(0)
+
+        gate_results = [
+            {"gate_id": "g1_approval", "verdict": "request_changes", "blocked": False},
+            {"gate_id": "g1_approval", "verdict": "approve", "blocked": False},
+        ]
+
+        captured_stage_results = []
+
+        def mock_handle_gate_capturing(*args, **kwargs):
+            captured_stage_results.append(kwargs.get("stage_result"))
+            return gate_results.pop(0)
+
+        # Patch validate_path_safe so _validate_artifact_path resolves inside
+        # the temp session directory instead of failing path checks.
+        def mock_validate_path_safe(base, candidate, allow_absolute=False):
+            return candidate
+
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = {
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
+                },
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
+            }
+
+            with patch(
+                "orchestration_engine.validate_path_safe",
+                side_effect=mock_validate_path_safe,
+            ):
+                with patch("orchestration_engine.time.sleep"):
+                    with patch.object(
+                        self.engine, "_execute_stage", side_effect=mock_execute_stage
+                    ):
+                        with patch.object(
+                            self.engine,
+                            "_handle_gate",
+                            side_effect=mock_handle_gate_capturing,
+                        ):
+                            results = self.engine.execute_workflow(
+                                gate_manifest_path, session_id, request_content
+                            )
+
+        self.assertEqual(results["final_status"], "completed")
+        # _handle_gate should be called twice: once for request_changes and
+        # once for the re-evaluation after retry.
+        self.assertEqual(len(captured_stage_results), 2)
+        self.assertEqual(captured_stage_results[0]["output"], "first attempt")
+        self.assertEqual(captured_stage_results[1]["output"], "second attempt")
 
     def test_gate_handling_with_decision_file(self):
         """Should create gate decision file"""
@@ -1653,6 +1777,111 @@ class TestOrchestrationEngine(unittest.TestCase):
                             ]
                             self.assertGreater(len(retry_calls), 0)
 
+    def test_retry_does_not_skip_second_stage(self):
+        """A retry on stage 1 must re-run stage 1 and then still execute stage 2."""
+        session_id = "TEST-029"
+        request_content = "Test request"
+
+        retry_manifest = {
+            "name": "multi-stage-retry-test",
+            "description": "Test retry does not skip second stage",
+            "skip_brainstorming": True,
+            "stages": [
+                {
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
+                },
+                {
+                    "name": "stage2",
+                    "skill": "implementation",
+                    "output_artifacts": ["code.py"],
+                },
+            ],
+        }
+
+        retry_manifest_path = self.workflows_dir / "multi-stage-retry-manifest.yaml"
+        with open(retry_manifest_path, "w", encoding="utf-8") as f:
+            yaml.dump(retry_manifest, f)
+
+        call_count = [0]
+
+        def mock_execute_stage(*args, **kwargs):
+            stage = kwargs.get("stage") or (args[0] if args else {})
+            stage_name = stage.get("name", "unknown") if isinstance(stage, dict) else "unknown"
+            call_count[0] += 1
+            if stage_name == "stage1":
+                if call_count[0] == 1:
+                    return {
+                        "stage": "stage1",
+                        "skill": "brainstorming",
+                        "success": True,
+                        "output": "Draft",
+                        "error": "Validation failed",
+                        "validation": {
+                            "valid": False,
+                            "errors": ["File is empty"],
+                            "artifact_results": {},
+                        },
+                        "triage_decision": TriageDecision.RETRY,
+                    }
+                else:
+                    return {
+                        "stage": "stage1",
+                        "skill": "brainstorming",
+                        "success": True,
+                        "output": "Success",
+                        "error": None,
+                        "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                        "triage_decision": TriageDecision.PROCEED,
+                    }
+            return {
+                "stage": "stage2",
+                "skill": "implementation",
+                "success": True,
+                "output": "Done",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
+            }
+
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = {
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
+                },
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
+            }
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
+                mock_validate.return_value = retry_manifest_path
+
+                with patch.object(
+                    self.engine, "_execute_stage", side_effect=mock_execute_stage
+                ):
+                    with patch("time.sleep"):
+                        results = self.engine.execute_workflow(
+                            retry_manifest_path, session_id, request_content
+                        )
+
+                        self.assertEqual(results["final_status"], "completed")
+                        self.assertEqual(len(results["stages"]), 2)
+                        self.assertEqual(results["stages"][0]["stage"], "stage1")
+                        self.assertEqual(
+                            results["stages"][0]["triage_decision"], TriageDecision.PROCEED
+                        )
+                        self.assertEqual(results["stages"][1]["stage"], "stage2")
+                        self.assertEqual(call_count[0], 3)
+
     # Additional gate-blocking tests for comprehensive coverage
 
     def test_gate_request_changes_verdict(self):
@@ -1729,6 +1958,87 @@ class TestOrchestrationEngine(unittest.TestCase):
                         )
 
                         self.assertEqual(results["final_status"], "blocked")
+
+    def test_gate_request_changes_loop_escalates(self):
+        """Should escalate when a gate repeatedly returns request_changes."""
+        session_id = "TEST-028B"
+        request_content = "Test request"
+
+        gate_manifest = {
+            "name": "gate-request-changes-loop-test",
+            "description": "Test gate request changes loop",
+            "skip_brainstorming": True,
+            "stages": [
+                {
+                    "name": "stage1",
+                    "skill": "brainstorming",
+                    "output_artifacts": ["design.md"],
+                    "gate": "g1_approval",
+                }
+            ],
+        }
+
+        gate_manifest_path = (
+            self.workflows_dir / "gate-request-changes-loop-manifest.yaml"
+        )
+        with open(gate_manifest_path, "w", encoding="utf-8") as f:
+            yaml.dump(gate_manifest, f)
+
+        # _execute_stage always succeeds, but the gate never stops asking for
+        # changes. This simulates the scenario where reviewer confidence stays
+        # MEDIUM and the gate's auto-bypass keeps returning request_changes.
+        def mock_execute_stage(*args, **kwargs):
+            return {
+                "stage": "stage1",
+                "skill": "brainstorming",
+                "success": True,
+                "output": "Success",
+                "error": None,
+                "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                "triage_decision": TriageDecision.PROCEED,
+            }
+
+        def mock_handle_gate(*args, **kwargs):
+            return {
+                "gate_id": "g1_approval",
+                "verdict": "request_changes",
+                "blocked": False,
+            }
+
+        with patch("orchestration_engine.load_skill") as mock_load_skill:
+            mock_load_skill.return_value = {
+                "definition": {
+                    "schema_version": 1,
+                    "name": "brainstorming",
+                    "description": "Brainstorming skill",
+                    "iron_law": "NO IMPLEMENTATION UNTIL DESIGN APPROVED",
+                    "triggers": ["new_feature"],
+                    "checklist": [],
+                    "terminal_state": "writing-plans",
+                    "announcement": "Using the brainstorming skill",
+                    "red_flags": [],
+                },
+                "narrative": "# Brainstorming Skill\n\n## Overview\nBrainstorming skill for generating ideas.",
+                "format": "separate",
+            }
+
+            with patch("orchestration_engine.validate_path_safe") as mock_validate:
+                mock_validate.return_value = gate_manifest_path
+
+                with patch("orchestration_engine.time.sleep"):
+                    with patch.object(
+                        self.engine, "_execute_stage", side_effect=mock_execute_stage
+                    ):
+                        with patch.object(
+                            self.engine,
+                            "_handle_gate",
+                            side_effect=mock_handle_gate,
+                        ):
+                            results = self.engine.execute_workflow(
+                                gate_manifest_path, session_id, request_content
+                            )
+
+                        self.assertEqual(results["final_status"], "escalated")
 
     def test_gate_malformed_decision(self):
         """Should handle malformed gate decision file"""

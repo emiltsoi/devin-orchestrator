@@ -30,17 +30,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
+from bootstrap_path import ensure_workflow_engine_on_path
+
 logger = logging.getLogger(__name__)
 
 # Add workflow-engine to Python path so we can import ConfigLoader and
 # security_utils without requiring the harness to be installed as a package.
-WORKFLOW_ENGINE_DIR = Path(__file__).parent / "workflow-engine"
-if not WORKFLOW_ENGINE_DIR.is_dir():
-    raise FileNotFoundError(
-        f"workflow-engine directory not found at {WORKFLOW_ENGINE_DIR}. "
-        "Run install.py to copy the engine next to this script."
-    )
-sys.path.insert(0, str(WORKFLOW_ENGINE_DIR))
+ensure_workflow_engine_on_path()
 
 try:
     import yaml
@@ -61,13 +57,26 @@ from security_utils import (  # noqa: E402
 )
 
 
+def _package_version() -> str:
+    """Return the installed package version, or a fallback in source trees."""
+    try:
+        from importlib.metadata import version
+
+        return version("devin-orchestrator")
+    except Exception:  # pragma: no cover - source tree fallback
+        return "0.1.2"
+
+
 class McpServer:
     """Minimal stdio MCP server backed by the devin-orchestrator harness."""
 
     PROTOCOL_VERSION = "2024-11-05"
     SERVER_NAME = "devin-orchestrator"
-    SERVER_VERSION = "0.1.2"
+    SERVER_VERSION = _package_version()
     MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+    # Maximum bytes of subprocess output to keep per stdout/stderr stream.
+    # Larger outputs are truncated before being returned to MCP clients.
+    MAX_OUTPUT_BYTES = 5 * 1024 * 1024  # 5 MB
     # Rate limiting: max 10 calls per tool per 60-second window
     RATE_LIMIT_MAX_CALLS = 10
     RATE_LIMIT_WINDOW_SECONDS = 60
@@ -88,7 +97,6 @@ class McpServer:
         self._framing: str | None = None  # "ndjson" or "content-length"
         # Rate limiting: track tool call timestamps per tool name
         self._tool_call_history: defaultdict[str, list[float]] = defaultdict(list)
-        self._message_log_path: Path | None = None
         self._message_log: IO[str] | None = None
         if message_log_path is not None:
             self._open_message_log(message_log_path)
@@ -98,14 +106,12 @@ class McpServer:
         try:
             log_path = Path(message_log_path).expanduser()
             log_path.parent.mkdir(parents=True, exist_ok=True)
-            self._message_log_path = log_path
             self._message_log = open(  # noqa: SIM115
                 log_path, "a", encoding="utf-8", buffering=1
             )
             logger.info("MCP message log: %s", log_path)
         except (OSError, ValueError) as e:
             logger.warning("Cannot open MCP message log %s: %s", message_log_path, e)
-            self._message_log_path = None
             self._message_log = None
 
     def _log_message(
@@ -246,7 +252,7 @@ class McpServer:
             },
             {
                 "name": "execute",
-                "description": "Main entry point. Execute a request with automatic intent routing. Prefer this for general requests; the server will choose the appropriate workflow or skill.",
+                "description": "Main entry point. Execute a request with automatic intent routing, starting the matched workflow/skill in the background. Prefer this for general requests. Use query_workflow_status to poll for completion.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -280,7 +286,7 @@ class McpServer:
             },
             {
                 "name": "implement",
-                "description": "Implement a feature or fix using the full `superpower` workflow (brainstorming, worktrees, plan, subagent-driven development, tests, review, completion). Use this for any non-trivial code change.",
+                "description": "Implement a feature or fix using the full `superpower` workflow (brainstorming, worktrees, plan, subagent-driven development, tests, review, completion). Starts in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -309,7 +315,7 @@ class McpServer:
             },
             {
                 "name": "review",
-                "description": "Review code changes using the `code_review` workflow. Use for code diff review, PR review, or general code quality evaluation.",
+                "description": "Review code changes using the `code_review` workflow. Use for code diff review, PR review, or general code quality evaluation. Starts in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -338,7 +344,7 @@ class McpServer:
             },
             {
                 "name": "investigate",
-                "description": "Investigate an incident, bug, or failure using the `rca` workflow. Read-only; no git write operations.",
+                "description": "Investigate an incident, bug, or failure using the `rca` workflow. Read-only; no git write operations. Starts in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -367,7 +373,7 @@ class McpServer:
             },
             {
                 "name": "plan",
-                "description": "Create a detailed implementation plan using the `writing-plans` skill. Produces a plan.md with bite-sized tasks.",
+                "description": "Create a detailed implementation plan using the `writing-plans` skill. Produces a plan.md with bite-sized tasks. Starts in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -386,7 +392,7 @@ class McpServer:
             },
             {
                 "name": "run_workflow",
-                "description": "Run a named workflow (superpower, code_review, rca, pr_review) with a request. Use when you need a specific workflow rather than the auto-routed `execute` tool.",
+                "description": "Run a named workflow (superpower, code_review, rca, pr_review) with a request. Starts in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -436,7 +442,7 @@ class McpServer:
             },
             {
                 "name": "continue_workflow",
-                "description": "Resume a workflow that is paused at a gate. Optionally supply a gate verdict.",
+                "description": "Resume a workflow that is paused at a gate. Optionally supply a gate verdict. The workflow resumes in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -452,8 +458,22 @@ class McpServer:
                 },
             },
             {
+                "name": "query_workflow_status",
+                "description": "Poll the status of a started or continued workflow. Returns session status, stages, and the final result once available.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session ID returned by run_workflow/continue_workflow/execute/implement/review/investigate/plan/run_skill",
+                        },
+                    },
+                    "required": ["session_id"],
+                },
+            },
+            {
                 "name": "run_skill",
-                "description": "Run a process skill (e.g. brainstorming, writing-plans, systematic-debugging) in a fresh session. NOT for implementation or code-fix tasks; use `implement`, `run_workflow`, or `dispatch_devin` for those.",
+                "description": "Run a process skill (e.g. brainstorming, writing-plans, systematic-debugging) in a fresh session. Starts in the background; use query_workflow_status to poll. NOT for implementation or code-fix tasks; use `implement`, `run_workflow`, or `dispatch_devin` for those.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -535,6 +555,7 @@ class McpServer:
             "get_workflow": 13,
             "gate_decision": 14,
             "continue_workflow": 15,
+            "query_workflow_status": 16,
         }
         tools.sort(key=lambda tool: tool_order.get(tool.get("name"), 100))
         return {
@@ -567,7 +588,7 @@ class McpServer:
 
         usage_text = """# Devin Orchestrator MCP Usage
 
-Pick the highest-level tool that matches your task:
+Pick the highest-level tool that matches your task. All workflow and skill tools now start in the background and return a session_id; use query_workflow_status to poll.
 
 1. execute — main entry point; auto-routes by intent.
 2. implement — full superpower workflow for feature/bug-fix implementation.
@@ -576,7 +597,10 @@ Pick the highest-level tool that matches your task:
 5. plan — writing-plans skill to produce an implementation plan.
 6. run_workflow — run a specific named workflow.
 7. run_skill — process skills only (brainstorming, writing-plans, systematic-debugging).
-8. dispatch_devin — focused single-shot worker with prompt_file, focused_context, model, output_file.
+8. gate_decision — write a verdict for a waiting gate.
+9. continue_workflow — resume a workflow after a gate decision.
+10. query_workflow_status — poll status and result for any session_id.
+11. dispatch_devin — focused single-shot worker with prompt_file, focused_context, model, output_file.
 
 Do NOT use run_skill for implementation tasks. It has no focused_context and bypasses the workflow gates. For coding work, use implement, run_workflow, or dispatch_devin.
 """
@@ -950,6 +974,19 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             parts.extend(["\n# Runbook\n", runbook.read_text(encoding="utf-8")])
         return [self._text_content("".join(parts))]
 
+    @staticmethod
+    def _truncate_output(text: str, max_bytes: int = MAX_OUTPUT_BYTES) -> str:
+        """Truncate ``text`` to ``max_bytes`` UTF-8 bytes and append a marker."""
+        if not text:
+            return text
+        encoded = text.encode("utf-8")
+        if len(encoded) <= max_bytes:
+            return text
+        marker = "\n... [output truncated]\n"
+        keep = max(0, max_bytes - len(marker.encode("utf-8")))
+        truncated = encoded[:keep].decode("utf-8", errors="ignore")
+        return truncated + marker
+
     def _tool_dispatch_devin(self, arguments: dict) -> list[dict]:
         """
         Dispatch a generic Devin run with a role and prompt file.
@@ -1050,7 +1087,13 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         if validated_output_file is not None:
             cmd.extend(["--output-file", str(validated_output_file)])
         for ctx in arguments.get("focused_context", []):
-            cmd.extend(["--focused-context", str(ctx)])
+            try:
+                validated_ctx = validate_path_safe(
+                    work_dir, Path(ctx), allow_absolute=True
+                )
+            except (InvalidInputError, PathTraversalError) as e:
+                return [self._text_content(f"Invalid focused_context path: {e}")]
+            cmd.extend(["--focused-context", str(validated_ctx)])
 
         # Validate timeout
         try:
@@ -1074,12 +1117,19 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return [self._text_content(
                 f"Devin dispatch timed out after {timeout} seconds."
             )]
-        text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
+        text = (
+            f"Exit code: {result.returncode}\n\nSTDOUT:\n"
+            f"{self._truncate_output(result.stdout)}"
+        )
         if result.stderr:
-            text += f"\n\nSTDERR:\n{result.stderr}"
+            text += f"\n\nSTDERR:\n{self._truncate_output(result.stderr)}"
         if validated_output_file is not None and validated_output_file.exists():
+            try:
+                output_text = validated_output_file.read_text(encoding="utf-8")
+            except OSError:
+                output_text = "[could not read output file]"
             text += f"\n\n--- OUTPUT FILE ({validated_output_file}) ---\n"
-            text += validated_output_file.read_text(encoding="utf-8")
+            text += self._truncate_output(output_text)
         return [self._text_content(text)]
 
     def _tool_dispatch_skill(self, arguments: dict) -> list[dict]:
@@ -1156,9 +1206,12 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return [self._text_content(
                 f"Skill dispatch timed out after {timeout} seconds."
             )]
-        text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
+        text = (
+            f"Exit code: {result.returncode}\n\nSTDOUT:\n"
+            f"{self._truncate_output(result.stdout)}"
+        )
         if result.stderr:
-            text += f"\n\nSTDERR:\n{result.stderr}"
+            text += f"\n\nSTDERR:\n{self._truncate_output(result.stderr)}"
         return [self._text_content(text)]
 
     def _tool_read_artifact(self, arguments: dict) -> list[dict]:
@@ -1222,11 +1275,14 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         """
         Execute a request with automatic or explicit intent routing.
 
+        Starts the matched workflow/skill in a background thread and returns
+        the session_id immediately. Use query_workflow_status to poll.
+
         Args:
             arguments: Tool arguments containing request, intent, demo_mode, timeout
 
         Returns:
-            List containing execution result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1244,18 +1300,21 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         )
         request = arguments["request"]
         intent = arguments.get("intent", "auto")
-        result = orchestrator.execute(request, intent)
+        result = orchestrator.execute_async(request, intent)
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_implement(self, arguments: dict) -> list[dict]:
         """
         Execute an implementation request using the superpower workflow.
 
+        Starts the workflow in the background and returns the session_id.
+        Use query_workflow_status to poll.
+
         Args:
             arguments: Tool arguments containing request, demo_mode, timeout
 
         Returns:
-            List containing implementation result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1272,18 +1331,21 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
-        result = orchestrator.implement(request)
+        result = orchestrator.implement_async(request)
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_review(self, arguments: dict) -> list[dict]:
         """
         Execute a review request using the code_review workflow.
 
+        Starts the workflow in the background and returns the session_id.
+        Use query_workflow_status to poll.
+
         Args:
             arguments: Tool arguments containing request, demo_mode, timeout
 
         Returns:
-            List containing review result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1300,18 +1362,21 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
-        result = orchestrator.review(request)
+        result = orchestrator.review_async(request)
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_investigate(self, arguments: dict) -> list[dict]:
         """
         Execute an investigation request using the rca workflow.
 
+        Starts the workflow in the background and returns the session_id.
+        Use query_workflow_status to poll.
+
         Args:
             arguments: Tool arguments containing request, demo_mode, timeout
 
         Returns:
-            List containing investigation result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1328,7 +1393,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             gate_mode=arguments.get("gate_mode", "auto"),
         )
         request = arguments["request"]
-        result = orchestrator.investigate(request)
+        result = orchestrator.investigate_async(request)
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_plan(self, arguments: dict) -> list[dict]:
@@ -1339,7 +1404,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             arguments: Tool arguments containing request, demo_mode
 
         Returns:
-            List containing planning result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1348,18 +1413,21 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             demo_mode=arguments.get("demo_mode", False),
         )
         request = arguments["request"]
-        result = orchestrator.plan(request)
+        result = orchestrator.plan_async(request)
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_run_workflow(self, arguments: dict) -> list[dict]:
         """
         Run a specific workflow with a request.
 
+        Starts the workflow in the background and returns the session_id.
+        Use query_workflow_status to poll.
+
         Args:
             arguments: Tool arguments containing workflow, request, demo_mode, timeout
 
         Returns:
-            List containing workflow execution result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1389,7 +1457,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return [self._text_content(f"Invalid workflow name: {e}")]
 
         request = arguments["request"]
-        result = orchestrator.run_workflow(workflow_name, request)
+        result = orchestrator.run_workflow_async(workflow_name, request)
         return [self._text_content(json.dumps(result, indent=2))]
 
     def _tool_gate_decision(self, arguments: dict) -> list[dict]:
@@ -1436,11 +1504,14 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         """
         Resume a workflow that is paused at a gate.
 
+        Starts the continuation in the background and returns the session_id.
+        Use query_workflow_status to poll.
+
         Args:
             arguments: Tool arguments containing session_id and optional gate verdict
 
         Returns:
-            List containing continuation result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1452,7 +1523,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             workspace=self.workspace,
             gate_mode=arguments.get("gate_mode", "auto"),
         )
-        result = orchestrator.continue_workflow(
+        result = orchestrator.continue_workflow_async(
             session_id=session_id,
             gate_verdict=arguments.get("gate_verdict"),
             gate_notes=arguments.get("gate_notes"),
@@ -1464,11 +1535,14 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         """
         Run a specific skill with a request.
 
+        Starts the skill in the background and returns the session_id.
+        Use query_workflow_status to poll.
+
         Args:
             arguments: Tool arguments containing skill, request, demo_mode, timeout
 
         Returns:
-            List containing skill execution result
+            List containing session info with session_id and status
         """
         from stateless_orchestrator import StatelessOrchestrator
 
@@ -1528,7 +1602,27 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             timeout=timeout,
         )
         request = arguments["request"]
-        result = orchestrator.run_skill(skill_name, request)
+        result = orchestrator.run_skill_async(skill_name, request)
+        return [self._text_content(json.dumps(result, indent=2))]
+
+    def _tool_query_workflow_status(self, arguments: dict) -> list[dict]:
+        """
+        Poll the status of a started or continued workflow/skill.
+
+        Args:
+            arguments: Tool arguments containing session_id
+
+        Returns:
+            List containing status, stages, and result
+        """
+        from stateless_orchestrator import StatelessOrchestrator
+
+        session_id = arguments.get("session_id")
+        if not session_id:
+            return [self._text_content("session_id is required")]
+
+        orchestrator = StatelessOrchestrator(workspace=self.workspace)
+        result = orchestrator.get_workflow_status(session_id)
         return [self._text_content(json.dumps(result, indent=2))]
 
     # --------------------------------------------------------------------- #

@@ -2,6 +2,7 @@
 Test multi-artifact evaluation - verify all artifacts are evaluated
 """
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -12,8 +13,8 @@ from floor_validator import validate_structural
 from skill_evaluator import EvaluationResult, SkillEvaluator
 
 
-def test_multi_artifact_evaluation():
-    """Test that multiple artifacts are evaluated correctly"""
+def _run_multi_artifact_evaluation():
+    """Run the multi-artifact evaluation checks and return an exit code."""
     print("=" * 60)
     print("Multi-Artifact Evaluation Test")
     print("=" * 60)
@@ -98,9 +99,10 @@ def test_multi_artifact_evaluation():
         artifact2.unlink()
         artifact3.unlink()
         test_dir.rmdir()
-    except PermissionError:
-        # Windows file handle issue - directory will be cleaned up later
-        pass
+    except (PermissionError, OSError):
+        # Directory may not be empty if previous runs left files; remove
+        # the tree recursively to keep the workspace clean.
+        shutil.rmtree(test_dir, ignore_errors=True)
 
     print("\n" + "=" * 60)
     print("Multi-Artifact Evaluation Test: PASSED")
@@ -146,16 +148,14 @@ def test_multi_artifact_evaluation():
         # Windows file handle issue - directory will be cleaned up later
         pass
 
-    # Cleanup test directory
-    try:
-        test_dir.rmdir()
-    except PermissionError:
-        # Windows file handle issue - directory will be cleaned up later
-        pass
-
     print("=" * 60)
     return 0
 
 
+def test_multi_artifact_evaluation():
+    """Test that multiple artifacts are evaluated correctly"""
+    assert _run_multi_artifact_evaluation() == 0
+
+
 if __name__ == "__main__":
-    sys.exit(test_multi_artifact_evaluation())
+    sys.exit(_run_multi_artifact_evaluation())

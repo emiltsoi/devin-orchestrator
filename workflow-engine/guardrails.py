@@ -7,10 +7,12 @@ Implements safety checks based on learned Devin behavior:
 - Independent verification for reviewer BLOCK verdicts
 """
 
+import logging
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class Guardrails:
@@ -43,40 +45,7 @@ class Guardrails:
 
         try:
             content = module_path.read_text(encoding="utf-8")
-
-            # Count import statements. The pattern captures the full import
-            # line so the inner re.search below can extract the module name.
-            import_pattern = r"^\s*(?:from\s+\S+\s+)?import\s+\w.*$"
-            imports = re.findall(import_pattern, content, re.MULTILINE)
-
-            # Filter out stdlib imports (they don't count toward coupling)
-            stdlib_modules = {
-                "os",
-                "sys",
-                "pathlib",
-                "json",
-                "re",
-                "datetime",
-                "typing",
-                "dataclasses",
-                "collections",
-                "itertools",
-                "functools",
-                "math",
-                "random",
-                "string",
-                "io",
-            }
-
-            external_imports = []
-            for imp in imports:
-                # Extract module name from import statement
-                match = re.search(r"import\s+(\w+)", imp)
-                if match:
-                    module_name = match.group(1)
-                    if module_name not in stdlib_modules:
-                        external_imports.append(module_name)
-
+            external_imports = Guardrails._extract_modules(content)
             return len(external_imports) <= max_coupling
 
         except Exception:
@@ -107,7 +76,10 @@ class Guardrails:
     @staticmethod
     def verify_syntax(file_path: Path) -> bool:
         """
-        Verify Python syntax using py_compile
+        Verify Python syntax using the standard compile() builtin.
+
+        This is portable across operating systems and does not rely on a
+        Windows-only ``py`` launcher or write side-effect ``.pyc`` files.
 
         Args:
             file_path: Path to the Python file
@@ -119,14 +91,10 @@ class Guardrails:
             return False
 
         try:
-            result = subprocess.run(
-                ["py", "-m", "py_compile", str(file_path)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            return result.returncode == 0
-        except Exception:
+            source = file_path.read_text(encoding="utf-8")
+            compile(source, str(file_path), "exec")
+            return True
+        except (SyntaxError, OSError, UnicodeDecodeError):
             return False
 
     @staticmethod
@@ -174,6 +142,54 @@ class Guardrails:
         return result
 
     @staticmethod
+    def _extract_modules(content: str) -> list[str]:
+        """
+        Extract top-level module names from a Python source string.
+
+        Handles both ``import x`` and ``from x import y`` forms, ignoring
+        relative ``from .`` imports and standard-library modules.
+        """
+        import_pattern = r"^\s*(?:from\s+\S+\s+)?import\s+.*$"
+        import_lines = re.findall(import_pattern, content, re.MULTILINE)
+
+        stdlib_modules = {
+            "os",
+            "sys",
+            "pathlib",
+            "json",
+            "re",
+            "datetime",
+            "typing",
+            "dataclasses",
+            "collections",
+            "itertools",
+            "functools",
+            "math",
+            "random",
+            "string",
+            "io",
+        }
+
+        modules: list[str] = []
+        for line in import_lines:
+            line = line.strip()
+            if line.startswith("from "):
+                match = re.search(r"from\s+([\w.]+)", line)
+                if match:
+                    name = match.group(1).lstrip(".").split(".")[0]
+                    if name and name not in stdlib_modules:
+                        modules.append(name)
+            elif line.startswith("import "):
+                # import a, b as c, d.e
+                clause = line[len("import "):]
+                for item in clause.split(","):
+                    name = item.strip().split()[0].split(".")[0]
+                    if name and name not in stdlib_modules:
+                        modules.append(name)
+
+        return modules
+
+    @staticmethod
     def check_leaf_module_boundary(
         target_module: Path, _workspace: Path
     ) -> dict[str, Any]:
@@ -192,34 +208,9 @@ class Guardrails:
         if target_module.exists():
             try:
                 content = target_module.read_text(encoding="utf-8")
-                import_pattern = r"^\s*(?:from\s+\S+\s+)?import\s+\w.*$"
-                imports = re.findall(import_pattern, content, re.MULTILINE)
-
-                stdlib_modules = {
-                    "os",
-                    "sys",
-                    "pathlib",
-                    "json",
-                    "re",
-                    "datetime",
-                    "typing",
-                    "dataclasses",
-                    "collections",
-                    "itertools",
-                    "functools",
-                    "math",
-                    "random",
-                    "string",
-                    "io",
-                }
-
-                for imp in imports:
-                    match = re.search(r"import\s+(\w+)", imp)
-                    if match:
-                        module_name = match.group(1)
-                        if module_name not in stdlib_modules:
-                            coupling_count += 1
-            except Exception:
-                pass
+                external_imports = Guardrails._extract_modules(content)
+                coupling_count = len(external_imports)
+            except Exception as exc:  # noqa: BLE001 - best-effort coupling check
+                logger.warning("Could not analyse coupling for %s: %s", target_module, exc)
 
         return {"is_leaf": coupling_count <= 2, "coupling_count": coupling_count}

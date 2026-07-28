@@ -69,6 +69,10 @@ def validate_path_safe(
     if "\x00" in target_str:
         raise InvalidInputError("Target path contains null bytes")
 
+    # Note: allow_absolute is intentionally accepted for backward compatibility.
+    # Absolute targets that resolve inside the base are treated as safe;
+    # absolute targets outside the base are rejected below regardless of the flag.
+
     base_str = str(base_path)
     if not base_str or base_str.strip() in ("", "."):
         raise InvalidInputError("Base path cannot be empty")
@@ -133,17 +137,12 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     # Strip leading/trailing whitespace first
     sanitized = filename.strip()
 
-    # Reject leading/trailing dots before sanitization
-    if sanitized.startswith(".") or sanitized.endswith("."):
-        raise InvalidInputError(f"Filename cannot start or end with dot: {filename}")
-
     # Decode URL-encoded strings (e.g., %2e%2e -> ..)
     try:
         from urllib.parse import unquote
         sanitized = unquote(sanitized)
-    except Exception:
-        # If URL decoding fails, continue with original string
-        pass
+    except Exception as exc:  # noqa: BLE001 - URL decoding is best-effort sanitization
+        logger.warning("URL decoding failed for %r: %s", filename, exc)
 
     # Remove null bytes and other dangerous characters
     sanitized = sanitized.replace("\x00", "")
@@ -515,36 +514,3 @@ def redact_sensitive_data(data: str, patterns: list[str]) -> str:
         redacted = re.sub(pattern, "[REDACTED]", redacted, flags=re.IGNORECASE)
     return redacted
 
-
-def validate_backup_name(backup_name: str) -> str:
-    """
-    Validate and sanitize a backup name to prevent directory traversal and injection.
-
-    Args:
-        backup_name: The backup name to validate
-
-    Returns:
-        Sanitized backup name
-
-    Raises:
-        InvalidInputError: If the backup name is invalid
-    """
-    if not backup_name:
-        raise InvalidInputError("Backup name cannot be empty")
-
-    # Remove path separators and parent directory references
-    sanitized = backup_name.replace("/", "").replace("\\", "").replace("..", "")
-
-    # Remove null bytes and other dangerous characters
-    sanitized = sanitized.replace("\x00", "")
-
-    # Remove control characters
-    sanitized = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", sanitized)
-
-    # Ensure backup name is not empty after sanitization
-    if not sanitized:
-        raise InvalidInputError(
-            f"Backup name is invalid after sanitization: {backup_name}"
-        )
-
-    return sanitized

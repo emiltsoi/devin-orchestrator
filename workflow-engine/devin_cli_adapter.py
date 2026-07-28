@@ -14,14 +14,24 @@ import os
 import re
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 from security_utils import InvalidInputError, PathTraversalError, validate_path_safe
-from transport_adapter import InvocationResult, TransportAdapter
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class InvocationResult:
+    """Result from a transport adapter invocation"""
+
+    success: bool
+    output: str
+    error: str
+    exit_code: int
 
 # Allowlist of valid devin-cli permission modes. The CLI only accepts these
 # values; any other string must be rejected before being passed to a subprocess
@@ -29,8 +39,13 @@ logger = logging.getLogger(__name__)
 # automated dispatch.
 ALLOWED_PERMISSION_MODES = frozenset({"dangerous", "smart", "auto"})
 
+# Maximum bytes of stdout/stderr to keep in an InvocationResult. Larger outputs
+# are truncated and a marker is appended so the harness cannot OOM or pass
+# multi-megabyte payloads back through MCP.
+DEFAULT_MAX_OUTPUT_BYTES = 5 * 1024 * 1024
 
-class DevinCliAdapter(TransportAdapter):
+
+class DevinCliAdapter:
     """
     Devin CLI simple adapter using --print mode
 
@@ -81,6 +96,25 @@ class DevinCliAdapter(TransportAdapter):
         self.skills = self._load_skills()
 
     @staticmethod
+    def _truncate_output(text: str, max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES) -> str:
+        """Truncate ``text`` to ``max_bytes`` UTF-8 bytes and append a marker.
+
+        This prevents multi-megabyte devin-cli outputs from propagating back
+        through the orchestration layer or MCP responses while still giving the
+        caller the leading portion of the output.
+        """
+        if not text:
+            return text
+        encoded = text.encode("utf-8")
+        if len(encoded) <= max_bytes:
+            return text
+        marker = "\n... [output truncated]\n"
+        marker_bytes = marker.encode("utf-8")
+        keep = max(0, max_bytes - len(marker_bytes))
+        truncated = encoded[:keep].decode("utf-8", errors="ignore")
+        return truncated + marker
+
+    @staticmethod
     def _validate_permission_mode(permission_mode: str | None) -> str:
         """
         Validate the permission mode against the allowlist.
@@ -107,10 +141,6 @@ class DevinCliAdapter(TransportAdapter):
                 f"must be one of {sorted(ALLOWED_PERMISSION_MODES)}"
             )
         return permission_mode
-
-    def capabilities(self) -> list[str]:
-        """Return the capabilities supported by this adapter"""
-        return ["native_subagent_dispatch", "file_operations", "terminal_commands"]
 
     def _load_skills(self) -> dict[str, dict[str, str]]:
         """
@@ -338,7 +368,20 @@ class DevinCliAdapter(TransportAdapter):
         if focused_context:
             prompt += "\n\n## Focused Context Artifacts\n"
             for artifact_path in focused_context:
-                prompt += f"- {artifact_path}\n"
+                try:
+                    validated_path = validate_path_safe(
+                        Path(self.workspace),
+                        Path(artifact_path),
+                        allow_absolute=True,
+                    )
+                except (InvalidInputError, PathTraversalError) as e:
+                    return InvocationResult(
+                        success=False,
+                        output="",
+                        error=f"Invalid focused_context path: {e}",
+                        exit_code=-1,
+                    )
+                prompt += f"- {validated_path}\n"
 
         # Add correction artifact if provided
         # Note: Devin CLI doesn't support --correction, so we inject into prompt instead
@@ -407,8 +450,8 @@ class DevinCliAdapter(TransportAdapter):
 
                 return InvocationResult(
                     success=result.returncode == 0,
-                    output=result.stdout,
-                    error=result.stderr,
+                    output=self._truncate_output(result.stdout),
+                    error=self._truncate_output(result.stderr),
                     exit_code=result.returncode,
                 )
 

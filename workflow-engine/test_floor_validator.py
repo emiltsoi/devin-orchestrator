@@ -12,8 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from floor_validator import validate_format, validate_iron_law, validate_structural
 
 
-def test_floor_validator():
-    """Comprehensive test of floor_validator module functions"""
+def _run_floor_validator_test():
+    """Run floor_validator checks and return an exit code."""
     print("=" * 60)
     print("Floor Validator Module Test")
     print("=" * 60)
@@ -282,6 +282,47 @@ def test_floor_validator():
     print("Floor Validator Module Test: ALL TESTS PASSED")
     print("=" * 60)
     return 0
+
+
+def test_floor_validator():
+    """Comprehensive test of floor_validator module functions"""
+    assert _run_floor_validator_test() == 0
+
+
+def test_validate_structural_required_artifacts(tmp_path):
+    present = tmp_path / "present.md"
+    present.write_text("content", encoding="utf-8")
+    result = validate_structural([present], required_artifacts=["present.md", "missing.md"])
+    assert result["result"] == "FAIL"
+    assert any("Required artifact missing" in f for f in result["failures"])
+
+
+def test_validate_structural_word_boundaries(tmp_path):
+    todo_list = tmp_path / "todolist.md"
+    todo_list.write_text("This todolist is fine.", encoding="utf-8")
+    result = validate_structural(todo_list)
+    assert result["result"] == "PASS", result["failures"]
+
+    real_todo = tmp_path / "todo.md"
+    real_todo.write_text("TODO: implement this", encoding="utf-8")
+    result = validate_structural(real_todo)
+    assert result["result"] == "FAIL"
+
+
+def test_validate_structural_yaml_integrated(tmp_path):
+    yaml_file = tmp_path / "data.yaml"
+    yaml_file.write_text("name: test\nunclosed: [", encoding="utf-8")
+    result = validate_structural(yaml_file)
+    assert result["result"] == "FAIL"
+    assert any("YAML parsing error" in f for f in result["failures"])
+
+
+def test_validate_structural_json_integrated(tmp_path):
+    json_file = tmp_path / "data.json"
+    json_file.write_text('{"bad": }', encoding="utf-8")
+    result = validate_structural(json_file)
+    assert result["result"] == "FAIL"
+    assert any("JSON parsing error" in f for f in result["failures"])
 
 
 if __name__ == "__main__":

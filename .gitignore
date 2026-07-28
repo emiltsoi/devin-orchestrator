@@ -1,6 +1,5 @@
 # Windsurf
-.windsurf/cache/
-.windsurf/index/
+.windsurf/
 
 # OS
 .DS_Store
@@ -17,12 +16,27 @@ archive/
 
 # Per-workspace deployment directories
 .devin/workflows/
+.devin/execution-plan.md
 
 # Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.ruff_cache/
+
+# Build/packaging
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Auto-generated build symlink
+# The hatch build hook creates devin_orchestrator from workflow-engine at build time;
+# it must not be committed.
+devin_orchestrator
 
 # Logs
 logs/

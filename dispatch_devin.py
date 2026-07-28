@@ -29,17 +29,18 @@ import sys
 from pathlib import Path
 
 # Add local workflow-engine to Python path for imports
-WORKFLOW_ENGINE_DIR = Path(__file__).parent / "workflow-engine"
-if not WORKFLOW_ENGINE_DIR.is_dir():
-    raise FileNotFoundError(
-        f"workflow-engine directory not found at {WORKFLOW_ENGINE_DIR}. "
-        "Run install.py to copy the engine next to this script."
-    )
-sys.path.insert(0, str(WORKFLOW_ENGINE_DIR))
+from bootstrap_path import ensure_workflow_engine_on_path
+
+ensure_workflow_engine_on_path()
 
 from config_loader import ConfigLoader  # noqa: E402
 from devin_cli_adapter import DevinCliAdapter  # noqa: E402
 from model_resolver import resolve_model  # noqa: E402
+from security_utils import (  # noqa: E402
+    InvalidInputError,
+    PathTraversalError,
+    validate_path_safe,
+)
 
 # Safe characters allowed in a role short name. Path separators, dots, and
 # traversal segments are rejected so a short name cannot resolve outside the
@@ -50,13 +51,25 @@ _ROLE_SHORT_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 def resolve_role_file(role: str) -> Path:
     """Resolve a role name or path to a markdown role file.
 
-    A full path to an existing markdown file is accepted directly. A short
+    A full path to an existing markdown file is accepted directly, provided it
+    has a ``.md`` extension and contains no path-traversal segments. A short
     name (e.g. ``coder``) is restricted to ``[a-zA-Z0-9_-]+`` and resolved to
-    ``roles/<role>.md`` under the repo root; path separators and traversal
-    segments are rejected.
+    ``roles/<role>.md`` under the repo root.
     """
+    # Reject traversal attempts and dangerous characters up-front. This covers
+    # both short names and explicit file paths.
+    if ".." in role or "\x00" in role or re.search(r"[\x00-\x1f\x7f-\x9f]", role):
+        raise FileNotFoundError(f"Invalid role path: {role!r}")
+
     candidate = Path(role)
+
+    # If an explicit file path is provided, it must be a markdown file and
+    # must not contain path-traversal segments (checked above).
     if candidate.is_file():
+        if candidate.suffix.lower() != ".md":
+            raise FileNotFoundError(
+                f"Role file must be a markdown file (.md): {candidate}"
+            )
         return candidate
 
     # Short name: reject anything that looks like a path or traversal attempt
@@ -233,7 +246,14 @@ def main() -> int:
     )
 
     if args.output_file:
-        Path(args.output_file).write_text(result.output, encoding="utf-8")
+        try:
+            output_path = validate_path_safe(
+                Path(work_dir), Path(args.output_file), allow_absolute=True
+            )
+            output_path.write_text(result.output, encoding="utf-8")
+        except (InvalidInputError, PathTraversalError, OSError) as e:
+            print(f"Invalid output file {args.output_file}: {e}", file=sys.stderr)
+            return 1
 
     if result.output:
         sys.stdout.buffer.write((result.output + "\n").encode("utf-8"))

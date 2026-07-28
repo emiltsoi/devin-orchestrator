@@ -10,11 +10,9 @@ and manages state transitions.
 import json
 import logging
 import os
-import random
 import re
 import sys
 import time
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,33 +20,32 @@ if TYPE_CHECKING:
     from metrics import MetricsCollector
     from monitoring import MonitoringSystem
 
+from artifact_validator import ArtifactValidator
 from config_loader import ConfigLoader
 from deterministic_tools import (
     WorkflowManifestError,
-    create_placeholder_artifact,
+    create_placeholder_artifact,  # noqa: F401
     load_manifest,
-    load_skill,
-    record_gate,
+    load_skill,  # noqa: F401
     session_init,
     update_status,
-    validate_structural,
+    validate_structural,  # noqa: F401
+    wait_for_file_change,
 )
+from gate_controller import GateController
 from metrics import get_metrics_collector
 from monitoring import get_monitoring_system
 from security_utils import (
     InvalidInputError,
     PathTraversalError,
-    sanitize_filename,
     validate_path_safe,
     validate_session_id,
 )
 from session_manager import resolve_session
-from skill_invoker import SkillInvocationResult, SkillInvoker
-
-# Gate interaction modes
-GATE_MODE_INTERACTIVE = "interactive"
-GATE_MODE_SIGNAL = "signal"
-GATE_MODE_AUTO = "auto"
+from skill_invoker import SkillInvoker
+from stage_skill_dispatcher import StageSkillDispatcher
+from triage_evaluator import TriageDecision, TriageEvaluator
+from workflow_stage_executor import WorkflowStageExecutor
 
 # Configure logging
 logging.basicConfig(
@@ -57,16 +54,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class TriageDecision(Enum):
-    """Triage decision for stage execution"""
-
-    PROCEED = "proceed"
-    RETRY = "retry"
-    ESCALATE = "escalate"
-
-
 class OrchestrationEngine:
     """Actual orchestration engine for workflow execution"""
+
+    def __getattr__(self, name: str) -> Any:
+        """Expose selected module-level helpers so collaborators call patched versions during tests."""
+        if name in ("update_status", "load_skill", "validate_path_safe", "validate_structural", "load_manifest", "create_placeholder_artifact"):
+            return globals()[name]
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
     def __init__(self, work_dir: Path, config: dict[str, Any] | None = None, metrics: "MetricsCollector | None" = None, monitoring: "MonitoringSystem | None" = None):
         """
@@ -85,6 +80,16 @@ class OrchestrationEngine:
             # Use provided instances or fall back to global instances for backward compatibility
             self.metrics = metrics if metrics is not None else get_metrics_collector()
             self.monitoring = monitoring if monitoring is not None else get_monitoring_system()
+            self.artifact_validator = ArtifactValidator(self)
+            self.triage_evaluator = TriageEvaluator(self)
+            self.stage_skill_dispatcher = StageSkillDispatcher(self)
+            self.gate_controller = GateController(self)
+            self.workflow_stage_executor = WorkflowStageExecutor(
+                self,
+                artifact_validator=self.artifact_validator,
+                triage_evaluator=self.triage_evaluator,
+                stage_skill_dispatcher=self.stage_skill_dispatcher,
+            )
             logger.info(f"OrchestrationEngine initialized with work_dir: {work_dir}")
         except Exception as e:
             logger.error(f"Error initializing OrchestrationEngine: {e}")
@@ -117,6 +122,7 @@ class OrchestrationEngine:
         )
         if error is not None:
             return error
+        config_overrides = self._normalize_config_overrides(config_overrides)
 
         # Initialize session
         session_dir, error = self._init_workflow_session(
@@ -233,6 +239,7 @@ class OrchestrationEngine:
         )
         if error is not None:
             return error
+        config_overrides = self._normalize_config_overrides(config_overrides)
 
         # Write the gate decision if provided
         if gate_verdict is not None:
@@ -296,6 +303,29 @@ class OrchestrationEngine:
             if stage_name.startswith("gate_") and entry.get("status") == "waiting":
                 return stage_name.replace("gate_", "", 1)
         return None
+
+    @staticmethod
+    def _normalize_config_overrides(config_overrides: Any) -> dict[str, Any]:
+        """
+        Validate and normalize optional config overrides.
+
+        Accepts a dict with string keys or None. Logs and drops invalid
+        entries so downstream code can safely call ``.get()``.
+        """
+        if config_overrides is None:
+            return {}
+        if isinstance(config_overrides, dict):
+            if not all(isinstance(k, str) for k in config_overrides):
+                logger.warning(
+                    "config_overrides contains non-string keys; dropping them"
+                )
+                return {k: v for k, v in config_overrides.items() if isinstance(k, str)}
+            return config_overrides
+        logger.warning(
+            f"Invalid config_overrides type {type(config_overrides).__name__}; "
+            "using empty dict"
+        )
+        return {}
 
     def _validate_and_load_manifest(
         self, session_id: str, manifest_path: Path
@@ -467,285 +497,9 @@ class OrchestrationEngine:
                 "error_type": type(e).__name__,
             }
 
-    def _run_workflow_stages(
-        self,
-        manifest: dict[str, Any],
-        session_dir: Path,
-        session_id: str,
-        config_overrides: dict[str, Any] | None,
-        results: dict[str, Any],
-        resume: bool = False,
-    ) -> None:
-        """
-        Execute all stages in the manifest, updating results in place.
-
-        Args:
-            manifest: Workflow manifest configuration
-            session_dir: Session directory
-            session_id: Session identifier
-            config_overrides: Optional configuration overrides for skills
-            results: Results dictionary to update in place
-            resume: If True, skip stages already marked completed in session.json
-        """
-        for stage in manifest["stages"]:
-            try:
-                stage_result = self._execute_stage(
-                    stage=stage,
-                    manifest=manifest,
-                    session_dir=session_dir,
-                    session_id=session_id,
-                    config_overrides=config_overrides,
-                    resume=resume,
-                )
-                results["stages"].append(stage_result)
-            except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                logger.error(
-                    f"Error executing stage "
-                    f"{stage.get('name', 'unknown')}: {e}"
-                )
-                results["stages"].append(
-                    {
-                        "stage": stage.get("name", "unknown"),
-                        "skill": stage.get("skill", "unknown"),
-                        "success": False,
-                        "output": None,
-                        "error": f"Error during stage execution: {str(e)}",
-                        "validation": {
-                            "valid": False,
-                            "errors": [f"Error: {str(e)}"],
-                            "artifact_results": {},
-                        },
-                        "triage_decision": TriageDecision.ESCALATE,
-                    }
-                )
-                results["final_status"] = "escalated"
-                update_status(
-                    session_dir,
-                    stage.get("name", "unknown"),
-                    "error",
-                    f"Unexpected error: {str(e)}",
-                )
-                break
-
-            # Check triage decision
-            if stage_result["triage_decision"] == TriageDecision.ESCALATE:
-                results["final_status"] = "escalated"
-                update_status(
-                    session_dir,
-                    stage["name"],
-                    "escalated",
-                    "Workflow escalated to human",
-                )
-                break
-            elif stage_result["triage_decision"] == TriageDecision.RETRY:
-                should_break = self._retry_stage_execution(
-                    stage,
-                    manifest,
-                    session_dir,
-                    session_id,
-                    config_overrides,
-                    stage_result,
-                    results,
-                )
-                if should_break:
-                    break
-
-            # Handle gate if present
-            if "gate" in stage and stage["gate"] != "none":
-                gate_result = self._handle_gate(
-                    gate_id=stage["gate"],
-                    stage_name=stage["name"],
-                    session_dir=session_dir,
-                    manifest=manifest,
-                    stage_result=stage_result,
-                )
-                if gate_result.get("requires_input"):
-                    results["final_status"] = "waiting_for_input"
-                    update_status(
-                        session_dir,
-                        f"gate_{stage['gate']}",
-                        "waiting",
-                        gate_result.get("notes", f"Gate {stage['gate']} waiting for agent decision"),
-                    )
-                    break
-                if gate_result.get("verdict") == "request_changes":
-                    update_status(
-                        session_dir,
-                        stage["name"],
-                        "request_changes",
-                        f"Gate {stage['gate']} requested changes",
-                    )
-                    # Re-run the current stage on the next continue/loop
-                    should_break = self._retry_stage_execution(
-                        stage,
-                        manifest,
-                        session_dir,
-                        session_id,
-                        config_overrides,
-                        {
-                            "stage": stage["name"],
-                            "skill": stage.get("skill", "unknown"),
-                            "success": False,
-                            "output": None,
-                            "error": gate_result.get(
-                                "notes", f"Gate {stage['gate']} requested changes"
-                            ),
-                            "validation": {"valid": False, "errors": [], "artifact_results": {}},
-                            "triage_decision": TriageDecision.RETRY,
-                        },
-                        results,
-                    )
-                    if should_break:
-                        break
-                    continue
-                if gate_result["blocked"]:
-                    results["final_status"] = "blocked"
-                    update_status(
-                        session_dir,
-                        f"gate_{stage['gate']}",
-                        "block",
-                        gate_result.get("notes", f"Gate {stage['gate']} blocked"),
-                    )
-                    break
-
-    def _retry_stage_execution(
-        self,
-        stage: dict[str, Any],
-        manifest: dict[str, Any],
-        session_dir: Path,
-        session_id: str,
-        config_overrides: dict[str, Any] | None,
-        stage_result: dict[str, Any],
-        results: dict[str, Any],
-    ) -> bool:
-        """
-        Retry a failed stage with exponential backoff and correction artifacts.
-
-        Args:
-            stage: Stage configuration from manifest
-            manifest: Full manifest configuration
-            session_dir: Session directory
-            session_id: Session identifier
-            config_overrides: Optional configuration overrides for skills
-            stage_result: Previous stage execution result
-            results: Results dictionary to update in place
-
-        Returns:
-            True if the outer stage loop should break (retries exhausted)
-        """
-        max_retries = self._resolve_max_retries(stage)
-        retry_count = 0
-        last_error = stage_result["error"]
-
-        while retry_count < max_retries:
-            retry_count += 1
-            update_status(
-                session_dir,
-                stage["name"],
-                "retrying",
-                f"Retry {retry_count}/{max_retries}: {last_error}",
-            )
-
-            # Exponential backoff with jitter to avoid thundering herd
-            # Base backoff: 2^retry_count seconds, plus random jitter up to 50%
-            base_backoff = 2**retry_count
-            jitter = random.uniform(0, 0.5 * base_backoff)
-            backoff_seconds = base_backoff + jitter
-            time.sleep(backoff_seconds)
-
-            # Re-dispatch with correction artifact
-            try:
-                correction_artifact = self._validate_artifact_path(
-                    f"correction-{stage['name']}-attempt{retry_count}.md",
-                    session_dir,
-                )
-                correction_artifact.write_text(
-                    f"# Correction for {stage['name']}\n\n"
-                    f"Error: {last_error}\n\n"
-                    "Please fix the issue and re-run the stage."
-                )
-                logger.info(
-                    f"Created correction artifact: {correction_artifact}"
-                )
-            except (OSError, PermissionError, InvalidInputError, PathTraversalError) as e:
-                logger.error(f"Error creating correction artifact: {e}")
-                update_status(
-                    session_dir,
-                    stage["name"],
-                    "error",
-                    f"Failed to create correction artifact: {str(e)}",
-                )
-                break
-
-            stage_result = self._execute_stage(
-                stage=stage,
-                manifest=manifest,
-                session_dir=session_dir,
-                session_id=session_id,
-                config_overrides=config_overrides,
-                correction_artifact=str(correction_artifact),
-            )
-
-            if stage_result["triage_decision"] == TriageDecision.PROCEED:
-                break
-            last_error = stage_result["error"]
-
-        if (
-            retry_count >= max_retries
-            and stage_result["triage_decision"] != TriageDecision.PROCEED
-        ):
-            results["final_status"] = "escalated"
-            update_status(
-                session_dir,
-                stage["name"],
-                "escalated",
-                f"Max retries ({max_retries}) exceeded: {last_error}",
-            )
-            # Log retry exhaustion
-            logger.warning(
-                f"Retry attempts exhausted for stage {stage['name']} "
-                f"after {max_retries} attempts: {last_error}"
-            )
-            return True
-
-        return False
-
-    def _resolve_max_retries(self, stage: dict[str, Any]) -> int:
-        """
-        Resolve max retry count for a stage from its configuration.
-
-        Falls back to the default of 3 and clamps to a sane range.
-        Invalid values are logged and treated as the default.
-
-        Args:
-            stage: Stage configuration from manifest
-
-        Returns:
-            Maximum number of retries for this stage
-        """
-        default_max = 3
-        stage_name = stage.get("name", "<unknown>")
-        raw_max = stage.get("max_retries", default_max)
-        try:
-            max_retries = int(raw_max)
-        except (TypeError, ValueError):
-            logger.warning(
-                f"Invalid max_retries value for stage {stage_name}: "
-                f"{raw_max!r}; using default {default_max}"
-            )
-            return default_max
-        if max_retries < 0:
-            logger.warning(
-                f"max_retries cannot be negative for stage {stage_name}; "
-                f"using {default_max}"
-            )
-            return default_max
-        if max_retries > 10:
-            logger.warning(
-                f"max_retries too large for stage {stage_name}; clamping to 10"
-            )
-            return 10
-        return max_retries
+    def _run_workflow_stages(self, manifest: dict[str, Any], session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None, results: dict[str, Any], resume: bool=False) -> None:
+        """Delegate to WorkflowStageExecutor._run_workflow_stages."""
+        return self.workflow_stage_executor._run_workflow_stages(manifest, session_dir, session_id, config_overrides, results, resume)
 
     def _finalize_workflow(
         self,
@@ -777,120 +531,54 @@ class OrchestrationEngine:
         except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in workflow monitoring: {e}")
 
-    def _execute_stage(
+    def _execute_stage(self, stage: dict[str, Any], manifest: dict[str, Any], session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None=None, correction_artifact: str | None=None, resume: bool=False) -> dict[str, Any]:
+        """Delegate to WorkflowStageExecutor._execute_stage."""
+        return self.workflow_stage_executor._execute_stage(stage, manifest, session_dir, session_id, config_overrides, correction_artifact, resume)
+
+
+    def _handle_gate(
         self,
-        stage: dict[str, Any],
-        manifest: dict[str, Any],
+        gate_id: str,
+        stage_name: str,
         session_dir: Path,
-        session_id: str,
-        config_overrides: dict[str, Any] | None = None,
-        correction_artifact: str | None = None,
-        resume: bool = False,
+        manifest: dict[str, Any] | None = None,
+        stage_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """
-        Execute a single stage
-
-        Args:
-            stage: Stage configuration from manifest
-            manifest: Full manifest configuration
-            session_dir: Session directory
-            session_id: Session identifier
-            config_overrides: Optional configuration overrides for skills
-            correction_artifact: Optional path to correction artifact for retry loops
-            resume: If True, skip stages already marked completed in session.json
-
-        Returns:
-            Dictionary with stage execution results
-        """
-        stage_name = stage["name"]
-        skill_name = stage["skill"]
-
-        # When resuming, check the session log before re-running a stage that has
-        # already completed. Statuses like "request_changes" cause a re-run.
-        if resume:
-            try:
-                session_data = json.loads(
-                    (session_dir / "session.json").read_text(encoding="utf-8")
-                )
-                latest_status = None
-                for entry in reversed(session_data.get("stages", [])):
-                    if entry.get("stage") == stage_name:
-                        latest_status = entry.get("status")
-                        break
-                if latest_status == "completed":
-                    return {
-                        "stage": stage_name,
-                        "skill": skill_name,
-                        "success": True,
-                        "output": "Stage already completed (resumed)",
-                        "error": None,
-                        "validation": {
-                            "valid": True,
-                            "errors": [],
-                            "artifact_results": {},
-                        },
-                        "triage_decision": TriageDecision.PROCEED,
-                    }
-            except (OSError, json.JSONDecodeError) as e:
-                logger.warning(f"Failed to read session.json for resume check: {e}")
-
-        update_status(
-            session_dir, stage_name, "in_progress", f"Starting stage: {stage_name}"
+        """Delegate gate handling to GateController."""
+        return self.gate_controller.handle_gate(
+            gate_id, stage_name, session_dir, manifest, stage_result
         )
 
-        # Check if stage should be skipped
-        if manifest.get("skip_brainstorming", False) and stage_name == "brainstorming":
-            return self._skip_stage(stage, session_dir, session_id)
+    def _validate_artifact_path(
+        self, artifact_name: str, session_dir: Path
+    ) -> Path:
+        """Delegate to ArtifactValidator."""
+        return self.artifact_validator.validate_artifact_path(
+            artifact_name, session_dir
+        )
 
-        # Track stage execution with metrics
-        with self.metrics.track_stage(stage_name, skill_name):
-            # Check if interactive mode is enabled for this stage
-            if config_overrides and config_overrides.get("interactive_mode", False):
-                error = self._handle_interactive_pause(
-                    stage_name, skill_name, session_dir
-                )
-                if error is not None:
-                    return error
+    def _validate_stage_artifacts(
+        self,
+        stage_name: str,
+        session_dir: Path,
+        output_artifacts: list[str],
+    ) -> tuple[dict[str, Any], list[Path]]:
+        """Delegate to ArtifactValidator."""
+        return self.artifact_validator.validate_stage_artifacts(
+            stage_name, session_dir, output_artifacts
+        )
 
-            # Load skill
-            skill_error = self._load_stage_skill(skill_name, stage_name)
-            if skill_error is not None:
-                return skill_error
+    def _resolve_max_retries(self, stage: dict[str, Any]) -> int:
+        """Delegate to WorkflowStageExecutor._resolve_max_retries."""
+        return self.workflow_stage_executor._resolve_max_retries(stage)
 
-            # Dispatch skill with metrics tracking
-            with self.metrics.track_skill_invocation(
-                skill_name,
-                session_id,
-                stage.get("skill") == "requesting-code-review",
-            ):
-                result, dispatch_error = self._dispatch_stage_skill(
-                    skill_name,
-                    stage_name,
-                    stage,
-                    session_dir,
-                    session_id,
-                    config_overrides,
-                    correction_artifact,
-                )
-                if dispatch_error is not None:
-                    return dispatch_error
-
-            # Validate output artifacts
-            validation_result, artifact_paths = self._validate_stage_artifacts(
-                stage_name, session_dir, stage.get("output_artifacts", [])
-            )
-
-            # Dispatch reviewer, make triage decision, and build result
-            return self._evaluate_stage_and_triage(
-                stage_name,
-                skill_name,
-                session_dir,
-                session_id,
-                result,
-                validation_result,
-                artifact_paths,
-                correction_artifact,
-            )
+    def _skip_stage(
+        self, stage: dict[str, Any], session_dir: Path, session_id: str
+    ) -> dict[str, Any]:
+        """Delegate to WorkflowStageExecutor._skip_stage."""
+        return self.workflow_stage_executor._skip_stage(
+            stage, session_dir, session_id
+        )
 
     def _handle_interactive_pause(
         self, stage_name: str, skill_name: str, session_dir: Path
@@ -972,22 +660,37 @@ Edit this file with your input, then save to continue.
         """
         Wait for the pause file to be modified with user input.
 
+        Uses filesystem events instead of polling.
+
         Args:
             pause_file: Path to the pause file
             stage_name: Name of the stage
             session_dir: Session directory
         """
         try:
-            import time
-
             max_wait_seconds = self.config.get("pause_timeout_seconds", 3600)
-            check_interval = self.config.get("pause_check_interval", 5)
-            waited_seconds = 0
+            deadline = time.time() + max_wait_seconds
             initial_content = pause_file.read_text(encoding="utf-8")
 
-            while waited_seconds < max_wait_seconds:
-                time.sleep(check_interval)
-                waited_seconds += check_interval
+            # If the file already contains a valid input, use it immediately.
+            initial_input = self._extract_user_input(initial_content)
+            if initial_input is not None:
+                update_status(
+                    session_dir,
+                    stage_name,
+                    "paused",
+                    f"User input received: {initial_input[:50]}...",
+                )
+                return
+
+            while time.time() < deadline:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+
+                # Block until the pause file changes or the timeout expires.
+                if not wait_for_file_change(pause_file, timeout=remaining):
+                    break
 
                 current_content = pause_file.read_text(encoding="utf-8")
                 if current_content != initial_content:
@@ -1005,7 +708,7 @@ Edit this file with your input, then save to continue.
                         break
                     # If user_input is None, no valid input found yet, continue waiting
 
-            if waited_seconds >= max_wait_seconds:
+            if time.time() >= deadline:
                 update_status(
                     session_dir,
                     stage_name,
@@ -1039,8 +742,6 @@ Edit this file with your input, then save to continue.
         Returns:
             Extracted user input, or None if no valid input found
         """
-        import re
-
         # Try multiple patterns to extract input, in order of preference
         patterns = [
             # Pattern 1: "input: value" on its own line
@@ -1061,1029 +762,6 @@ Edit this file with your input, then save to continue.
 
         # No valid input found
         return None
-
-    def _load_stage_skill(
-        self, skill_name: str, stage_name: str
-    ) -> dict[str, Any] | None:
-        """
-        Load a skill definition from the configured skills directory.
-
-        Returns an error dict on failure, None on success.
-        """
-        try:
-            from config_loader import ConfigLoader
-
-            config = ConfigLoader.load()
-            skills_dir = config.skills_dir
-            load_skill(skills_dir, skill_name)
-            logger.info(f"Loaded skill {skill_name} from {skills_dir}")
-            return None
-        except (InvalidInputError, ValueError) as e:
-            logger.error(f"Validation error loading skill {skill_name}: {e}")
-            return {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"Validation error loading skill: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Validation error: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-        except FileNotFoundError as e:
-            logger.error(f"Skill directory or file not found for {skill_name}: {e}")
-            return {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"Skill not found: {skill_name}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Skill not found: {skill_name}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in skill file for {skill_name}: {e}")
-            return {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"Invalid JSON in skill file: {e}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Invalid JSON in skill file: {e}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-        except (RuntimeError, PathTraversalError) as e:
-            logger.error(f"Error loading skill {skill_name}: {e}")
-            return {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"Error loading skill: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Error loading skill: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-
-    def _dispatch_stage_skill(
-        self,
-        skill_name: str,
-        stage_name: str,
-        stage: dict[str, Any],
-        session_dir: Path,
-        session_id: str,
-        config_overrides: dict[str, Any] | None,
-        correction_artifact: str | None,
-    ) -> tuple[SkillInvocationResult | None, dict[str, Any] | None]:
-        """
-        Dispatch skill invocation with error handling and metrics recording.
-
-        Returns (result, error_dict) where error_dict is None on success.
-        """
-        try:
-            result = self.skill_invoker.invoke_skill(
-                skill_name=skill_name,
-                context={
-                    "session_id": session_id,
-                    "stage": stage_name,
-                    "skill": skill_name,
-                },
-                workspace=str(session_dir),
-                is_reviewer=stage.get("skill") == "requesting-code-review",
-                config_overrides=config_overrides,
-                correction_artifact=correction_artifact,
-                timeout=self.config.get("dispatch_timeout_seconds"),
-            )
-            logger.info(
-                f"Skill {skill_name} invocation completed with "
-                f"success={result.success}"
-            )
-
-            # Record skill result in metrics
-            self.metrics.record_skill_result(
-                skill_name, result.success, result.error
-            )
-            return result, None
-        except (InvalidInputError, ValueError) as e:
-            logger.error(
-                f"Validation error during skill invocation for {skill_name}: {e}"
-            )
-            self.metrics.record_skill_result(
-                skill_name, False, f"Validation error: {str(e)}"
-            )
-            return None, {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"Validation error during skill invocation: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Validation error: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-        except OSError as e:
-            logger.error(
-                f"File system error during skill invocation for {skill_name}: {e}"
-            )
-            self.metrics.record_skill_result(
-                skill_name, False, f"File system error: {str(e)}"
-            )
-            return None, {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"File system error during skill invocation: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"File system error: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-        except TimeoutError as e:
-            logger.error(f"Timeout during skill invocation for {skill_name}: {e}")
-            self.metrics.record_skill_result(
-                skill_name, False, f"Timeout: {str(e)}"
-            )
-            return None, {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"Timeout during skill invocation: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Timeout: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.RETRY,
-            }
-        except (RuntimeError, PathTraversalError) as e:
-            logger.error(
-                f"Error during skill invocation for {skill_name}: {e}"
-            )
-            self.metrics.record_skill_result(
-                skill_name, False, f"Error: {str(e)}"
-            )
-            return None, {
-                "stage": stage_name,
-                "skill": skill_name,
-                "success": False,
-                "output": None,
-                "error": f"Unexpected error during skill invocation: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Unexpected error: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-
-    def _validate_artifact_path(
-        self, artifact_name: str, session_dir: Path
-    ) -> Path:
-        """
-        Validate and resolve a stage artifact path so it is contained within
-        the session directory.
-
-        The artifact name is sanitized via ``sanitize_filename`` to remove any
-        path separators or traversal segments, then joined onto the session
-        directory and validated with ``validate_path_safe``. This ensures that
-        neither manifest-controlled artifact names nor reviewer-provided names
-        can escape the session directory when reading or writing artifacts.
-
-        Args:
-            artifact_name: Relative artifact name (e.g. "design.md").
-            session_dir: Session directory that must contain the artifact.
-
-        Returns:
-            The validated, absolute artifact path inside ``session_dir``.
-
-        Raises:
-            InvalidInputError: If the artifact name is invalid.
-            PathTraversalError: If the artifact resolves outside the session.
-        """
-        safe_name = sanitize_filename(artifact_name, max_length=255)
-        candidate = session_dir / safe_name
-        return validate_path_safe(session_dir, candidate, allow_absolute=True)
-
-    def _validate_stage_artifacts(
-        self,
-        stage_name: str,
-        session_dir: Path,
-        output_artifacts: list[str],
-    ) -> tuple[dict[str, Any], list[Path]]:
-        """
-        Validate stage output artifacts structurally.
-
-        Returns (validation_result, artifact_paths).
-        """
-        artifact_paths: list[Path] = []
-        for artifact in output_artifacts:
-            try:
-                artifact_paths.append(
-                    self._validate_artifact_path(artifact, session_dir)
-                )
-            except (InvalidInputError, PathTraversalError) as e:
-                logger.error(
-                    f"Invalid artifact path for stage {stage_name}: {e}"
-                )
-                return (
-                    {
-                        "valid": False,
-                        "errors": [f"Invalid artifact path {artifact!r}: {str(e)}"],
-                        "artifact_results": {},
-                    },
-                    [],
-                )
-        try:
-            validation_result = validate_structural(artifact_paths)
-            logger.info(
-                f"Validation completed for stage {stage_name}: "
-                f"valid={validation_result['valid']}"
-            )
-            return validation_result, artifact_paths
-        except FileNotFoundError as e:
-            logger.error(
-                f"Artifact not found during validation for stage {stage_name}: {e}"
-            )
-            return (
-                {
-                    "valid": False,
-                    "errors": [f"Artifact not found: {str(e)}"],
-                    "artifact_results": {},
-                },
-                artifact_paths,
-            )
-        except PermissionError as e:
-            logger.error(
-                f"Permission error during validation for stage {stage_name}: {e}"
-            )
-            return (
-                {
-                    "valid": False,
-                    "errors": [f"Permission error during validation: {str(e)}"],
-                    "artifact_results": {},
-                },
-                artifact_paths,
-            )
-        except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-            logger.error(
-                f"Error during validation for stage {stage_name}: {e}"
-            )
-            return (
-                {
-                    "valid": False,
-                    "errors": [f"Validation error: {str(e)}"],
-                    "artifact_results": {},
-                },
-                artifact_paths,
-            )
-
-    def _evaluate_stage_and_triage(
-        self,
-        stage_name: str,
-        skill_name: str,
-        session_dir: Path,
-        session_id: str,
-        result: Any,
-        validation_result: dict[str, Any],
-        artifact_paths: list[Path],
-        correction_artifact: str | None,
-    ) -> dict[str, Any]:
-        """
-        Dispatch neutral reviewer, make triage decision, and build stage result.
-
-        Returns the final stage execution result dictionary.
-        """
-        # Dispatch neutral reviewer after structural validation passes
-        reviewer_verdict = "PASS"
-        confidence = "HIGH"
-        review_output = None
-        review_artifact_path = None
-
-        if result.success and validation_result["valid"]:
-            try:
-                review_artifact_path = self._validate_artifact_path(
-                    f"review-{stage_name}.md", session_dir
-                )
-                reviewer_verdict, confidence, review_output = self._dispatch_reviewer(
-                    stage_name=stage_name,
-                    skill_name=skill_name,
-                    session_dir=session_dir,
-                    session_id=session_id,
-                    artifact_paths=artifact_paths,
-                    correction_artifact=correction_artifact,
-                )
-                if review_artifact_path and review_output:
-                    review_artifact_path.write_text(
-                        review_output, encoding="utf-8"
-                    )
-            except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                logger.error(
-                    f"Reviewer dispatch failed for stage {stage_name}: {e}"
-                )
-                reviewer_verdict = "FAIL"
-                confidence = "LOW"
-
-        # Make triage decision
-        if not result.success:
-            triage_decision = TriageDecision.ESCALATE
-            error = result.error
-        elif not validation_result["valid"]:
-            triage_decision = TriageDecision.RETRY
-            error = "; ".join(validation_result["errors"])
-        elif reviewer_verdict == "FAIL" or confidence == "LOW":
-            triage_decision = TriageDecision.RETRY
-            error = f"Reviewer verdict: {reviewer_verdict}, confidence: {confidence}"
-        else:
-            triage_decision = TriageDecision.PROCEED
-            error = None
-
-        # Record stage result in metrics
-        self.metrics.record_stage_result(
-            stage_name, result.success, error, triage_decision.value
-        )
-
-        update_status(
-            session_dir,
-            stage_name,
-            "completed" if triage_decision == TriageDecision.PROCEED else "failed",
-            f"Triage decision: {triage_decision.value}",
-        )
-
-        return {
-            "stage": stage_name,
-            "skill": skill_name,
-            "success": result.success,
-            "output": result.output,
-            "error": error,
-            "validation": validation_result,
-            "reviewer_verdict": reviewer_verdict,
-            "confidence": confidence,
-            "triage_decision": triage_decision,
-        }
-
-    def _dispatch_reviewer(
-        self,
-        stage_name: str,
-        skill_name: str,
-        session_dir: Path,
-        session_id: str,
-        artifact_paths: list[Path],
-        correction_artifact: str | None = None,
-    ) -> tuple:
-        """
-        Dispatch a neutral reviewer worker to evaluate stage artifacts.
-
-        Args:
-            stage_name: Name of the stage being reviewed
-            skill_name: Name of the skill that was invoked
-            session_dir: Session directory
-            session_id: Session identifier
-            artifact_paths: List of artifact paths to review
-            correction_artifact: Optional path to correction artifact
-
-        Returns:
-            Tuple of (verdict, confidence, review_output) where verdict is
-            'PASS' or 'FAIL' and confidence is 'HIGH', 'MEDIUM', or 'LOW'.
-        """
-        focused_context = [str(p) for p in artifact_paths if p.exists()]
-        if not focused_context:
-            return "PASS", "HIGH", "No artifacts to review"
-
-        review_output_artifact = self._validate_artifact_path(
-            f"review-{stage_name}.md", session_dir
-        )
-        if review_output_artifact.exists():
-            try:
-                existing_review = review_output_artifact.read_text(encoding="utf-8")
-            except (OSError, RuntimeError):
-                existing_review = ""
-        else:
-            existing_review = ""
-
-        reviewer_context = {
-            "session_id": session_id,
-            "stage": stage_name,
-            "skill": skill_name,
-            "role": "reviewer",
-        }
-
-        result = self.skill_invoker.invoke_skill(
-            skill_name="swe-compliance",
-            context=reviewer_context,
-            workspace=str(session_dir),
-            focused_context=focused_context,
-            correction_artifact=correction_artifact,
-            is_reviewer=True,
-        )
-
-        if not result.success:
-            return "FAIL", "LOW", result.error
-
-        review_output = result.output or existing_review or "Reviewer approved"
-
-        # Parse the explicit overall assessment produced by swe-compliance.
-        # The review narrative uses headings like "Overall Quality Assessment:
-        # EXCELLENT/GOOD/ACCEPTABLE/POOR/BLOCKED" and lists "Critical Issues Found".
-        review_lower = review_output.lower()
-
-        assessment_match = re.search(
-            r"overall quality assessment[:\s]+([a-z]+)", review_lower
-        )
-        critical_count = 0
-        critical_match = re.search(
-            r"critical issues? found[:\s]*(\d+)", review_lower
-        )
-        if critical_match:
-            critical_count = int(critical_match.group(1))
-
-        if assessment_match:
-            assessment = assessment_match.group(1).strip().rstrip(".")
-            if assessment in {"excellent", "good", "acceptable"}:
-                verdict = "PASS"
-                confidence = "HIGH" if assessment in {"excellent", "good"} else "MEDIUM"
-            elif assessment in {"poor", "blocked", "fail"}:
-                verdict = "FAIL"
-                confidence = "LOW"
-            else:
-                verdict = "PASS"
-                confidence = "MEDIUM"
-        elif critical_count > 0 or any(
-            word in review_lower
-            for word in ["rejected", "block", "cannot proceed", "must fix"]
-        ):
-            verdict = "FAIL"
-            confidence = "LOW"
-        elif any(
-            word in review_lower
-            for word in ["minor", "caveat", "warning", "suggestion", "medium"]
-        ):
-            verdict = "PASS"
-            confidence = "MEDIUM"
-        else:
-            verdict = "PASS"
-            confidence = "HIGH"
-
-        review_text = f"# Review for {stage_name}\n\nVerdict: {verdict}\nConfidence: {confidence}\n\n{review_output}"
-        return verdict, confidence, review_text
-
-    def _skip_stage(
-        self, stage: dict[str, Any], session_dir: Path, session_id: str
-    ) -> dict[str, Any]:
-        """
-        Skip a stage (e.g., brainstorming when spec is clear)
-
-        Args:
-            stage: Stage configuration from manifest
-            session_dir: Session directory
-            session_id: Session identifier
-
-        Returns:
-            Dictionary with stage skip results
-        """
-        stage_name = stage["name"]
-
-        update_status(
-            session_dir, stage_name, "skipped", "Skipping stage - spec is clear"
-        )
-
-        # Create placeholder artifacts
-        try:
-            output_artifacts = stage.get("output_artifacts", [])
-            for artifact in output_artifacts:
-                artifact_path = self._validate_artifact_path(artifact, session_dir)
-                if artifact_path.name == "design.md":
-                    placeholder = f"# Design\n\nSkipping brainstorming - spec is clear.\n\nSession ID: {session_id}\n"
-                    create_placeholder_artifact(artifact_path, placeholder)
-                    logger.info(f"Created placeholder artifact: {artifact_path}")
-        except (OSError, PermissionError, InvalidInputError, PathTraversalError) as e:
-            logger.error(f"Error creating placeholder artifacts: {e}")
-            return {
-                "stage": stage_name,
-                "skill": stage["skill"],
-                "success": False,
-                "output": "Stage skip failed - artifact creation error",
-                "error": f"Error creating placeholder artifacts: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Artifact creation error: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-
-        return {
-            "stage": stage_name,
-            "skill": stage["skill"],
-            "success": True,
-            "output": "Stage skipped - spec is clear",
-            "error": None,
-            "validation": {"valid": True, "errors": [], "artifact_results": {}},
-            "triage_decision": TriageDecision.PROCEED,
-        }
-
-    def _handle_gate(
-        self,
-        gate_id: str,
-        stage_name: str,
-        session_dir: Path,
-        manifest: dict[str, Any] | None = None,
-        stage_result: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Handle a gate (human approval or auto-gate).
-
-        Supports three interaction modes via ``config["gate_mode"]``:
-        - ``interactive``: block and wait for a decision file edit (legacy CLI behaviour).
-        - ``signal``: create the decision file and immediately return a signal
-          to the calling agent without waiting.
-        - ``auto``: evaluate bypass conditions and either auto-approve or signal
-          the agent when human judgment is required.
-
-        Args:
-            gate_id: Gate identifier
-            stage_name: Stage name for context
-            session_dir: Session directory
-            manifest: Workflow manifest containing gate definitions
-            stage_result: Result of the stage that produced this gate
-
-        Returns:
-            Dictionary with gate handling results
-        """
-        update_status(
-            session_dir,
-            f"gate_{gate_id}",
-            "waiting",
-            f"Waiting for gate decision: {gate_id}",
-        )
-
-        # Create gate decision file for human/agent input
-        error = self._create_gate_decision_file(gate_id, stage_name, session_dir)
-        if error is not None:
-            return error
-
-        gate_decision_file = self._validate_artifact_path(
-            f"gate-{gate_id}-decision.md", session_dir
-        )
-
-        gate_mode = self.config.get("gate_mode", GATE_MODE_INTERACTIVE)
-
-        # Legacy interactive mode: block until the decision file is edited.
-        if gate_mode == GATE_MODE_INTERACTIVE:
-            try:
-                return self._wait_and_parse_gate_decision(
-                    gate_id, session_dir, gate_decision_file
-                )
-            except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                logger.error(f"Error during gate handling: {e}")
-                update_status(
-                    session_dir,
-                    f"gate_{gate_id}",
-                    "error",
-                    f"Gate handling error: {str(e)}",
-                )
-                return {
-                    "gate_id": gate_id,
-                    "verdict": "block",
-                    "blocked": True,
-                    "error": f"Gate handling error: {str(e)}",
-                }
-
-        # Non-interactive modes: signal/auto. First, honour any pre-existing
-        # decision that an agent may have already written.
-        parsed = self._read_gate_decision(gate_decision_file)
-        if parsed is not None:
-            verdict, notes = parsed
-            if verdict in ["approve", "request_changes", "block"]:
-                try:
-                    record_gate(gate_id, verdict, session_dir, notes)
-                    update_status(
-                        session_dir,
-                        f"gate_{gate_id}",
-                        verdict,
-                        f"Gate {verdict}: {gate_id}",
-                    )
-                    logger.info(f"Gate {gate_id} decision recorded: {verdict}")
-                except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                    logger.error(f"Error recording gate decision: {e}")
-                    update_status(
-                        session_dir,
-                        f"gate_{gate_id}",
-                        "error",
-                        f"Failed to record gate decision: {str(e)}",
-                    )
-                    return {
-                        "gate_id": gate_id,
-                        "verdict": "block",
-                        "blocked": True,
-                        "error": f"Failed to record gate decision: {str(e)}",
-                    }
-                return {
-                    "gate_id": gate_id,
-                    "verdict": verdict,
-                    "blocked": verdict == "block",
-                    "notes": notes,
-                }
-
-        # ``signal`` mode always returns a request for input.
-        if gate_mode == GATE_MODE_SIGNAL:
-            return self._build_gate_signal(
-                gate_id, stage_name, session_dir, gate_decision_file
-            )
-
-        # ``auto`` mode: decide whether to bypass or escalate.
-        bypass = self._evaluate_gate_bypass_conditions(
-            gate_id, stage_name, session_dir, gate_decision_file, manifest, stage_result
-        )
-        verdict = bypass["verdict"]
-        conditions = bypass["conditions"]
-        notes = "; ".join(
-            c["reason"] for c in conditions if c["triggered"]
-        ) or "No escalation triggers detected"
-
-        if verdict == "approve":
-            try:
-                record_gate(gate_id, "approve", session_dir, notes)
-                update_status(
-                    session_dir,
-                    f"gate_{gate_id}",
-                    "approve",
-                    f"Auto-approved gate {gate_id}: {notes}",
-                )
-                logger.info(f"Gate {gate_id} auto-approved")
-            except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                logger.error(f"Error recording auto gate approval: {e}")
-                return {
-                    "gate_id": gate_id,
-                    "verdict": "block",
-                    "blocked": True,
-                    "error": f"Failed to record gate approval: {str(e)}",
-                }
-            return {
-                "gate_id": gate_id,
-                "verdict": "approve",
-                "blocked": False,
-                "auto_approved": True,
-                "conditions": conditions,
-            }
-
-        # request_changes or block: signal the calling agent.
-        signal = self._build_gate_signal(
-            gate_id, stage_name, session_dir, gate_decision_file, verdict, notes, conditions
-        )
-        return signal
-
-    def _read_gate_decision(self, gate_decision_file: Path) -> tuple[str, str] | None:
-        """Read a gate decision file once and return the parsed verdict if present."""
-        try:
-            content = gate_decision_file.read_text(encoding="utf-8")
-        except (OSError, PermissionError):
-            return None
-        return self._parse_gate_verdict(content)
-
-    def _build_gate_signal(
-        self,
-        gate_id: str,
-        stage_name: str,
-        session_dir: Path,
-        gate_decision_file: Path,
-        verdict: str = "block",
-        notes: str = "",
-        conditions: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
-        """Build a non-blocking gate result for the calling agent."""
-        instruction = (
-            f"Gate '{gate_id}' for stage '{stage_name}' requires a decision. "
-            f"Write a verdict to {gate_decision_file} using:\n\n"
-            f"verdict: approve|request_changes|block\n"
-            f"notes: [optional notes]\n\n"
-            f"Then call continue_workflow with session_id {session_dir.name} to resume."
-        )
-        return {
-            "gate_id": gate_id,
-            "verdict": verdict,
-            "blocked": False,
-            "requires_input": True,
-            "decision_file": str(gate_decision_file),
-            "session_id": session_dir.name,
-            "stage_name": stage_name,
-            "notes": notes,
-            "instruction": instruction,
-            "conditions": conditions or [],
-        }
-
-    def _get_gate_config(
-        self, gate_id: str, manifest: dict[str, Any] | None
-    ) -> dict[str, Any]:
-        """Return gate configuration from the manifest, or an empty dict."""
-        if not manifest:
-            return {}
-        for gate in manifest.get("gates", []):
-            if gate.get("id") == gate_id:
-                return gate
-        return {}
-
-    def _evaluate_gate_bypass_conditions(
-        self,
-        gate_id: str,
-        _stage_name: str,
-        _session_dir: Path,
-        _gate_decision_file: Path,
-        manifest: dict[str, Any] | None,
-        stage_result: dict[str, Any] | None,
-    ) -> dict[str, Any]:
-        """
-        Evaluate whether a gate can be automatically approved or must escalate.
-
-        Returns a dict with:
-            verdict: "approve" | "request_changes" | "block"
-            conditions: list of condition dicts with name, triggered, verdict, reason
-        """
-        stage_result = stage_result or {}
-        gate_config = self._get_gate_config(gate_id, manifest)
-        output = (stage_result.get("output") or "").lower()
-
-        # demo_mode is a simulation override: it short-circuits all other
-        # bypass/escalation checks so automated tests and dry-runs do not
-        # block on gates.
-        if self.config.get("demo_mode"):
-            return {
-                "verdict": "approve",
-                "conditions": [
-                    {
-                        "name": "demo_mode",
-                        "triggered": True,
-                        "verdict": "approve",
-                        "reason": "demo_mode is enabled; auto-approving for simulation",
-                    }
-                ],
-            }
-
-        conditions: list[dict[str, Any]] = [
-            {
-                "name": "mandatory_gate",
-                "triggered": bool(gate_config.get("mandatory")),
-                "verdict": "block",
-                "reason": "gate is marked mandatory and requires an explicit agent decision",
-            },
-            {
-                "name": "stage_failure",
-                "triggered": stage_result.get("success") is False,
-                "verdict": "block",
-                "reason": "preceding stage did not succeed",
-            },
-            {
-                "name": "reviewer_rejected",
-                "triggered": (
-                    stage_result.get("reviewer_verdict") == "FAIL"
-                    or stage_result.get("confidence") == "LOW"
-                ),
-                "verdict": "request_changes",
-                "reason": "reviewer rejected the stage output or reported low confidence",
-            },
-            {
-                "name": "critical_security_findings",
-                "triggered": any(
-                    keyword in output
-                    for keyword in ["critical", "security", "unsafe", "block", "danger"]
-                ),
-                "verdict": "block",
-                "reason": "stage output contains critical or security-related keywords",
-            },
-            {
-                "name": "missing_or_empty_output",
-                "triggered": not output.strip(),
-                "verdict": "request_changes",
-                "reason": "stage output is empty or missing",
-            },
-            {
-                "name": "warnings_or_medium_confidence",
-                "triggered": (
-                    stage_result.get("confidence") == "MEDIUM"
-                    or any(
-                        keyword in output
-                        for keyword in ["warning", "minor", "caveat", "suggestion"]
-                    )
-                ),
-                "verdict": "request_changes",
-                "reason": "stage output contains warnings or medium-confidence concerns",
-            },
-        ]
-
-        # Determine the most severe verdict from triggered conditions.
-        severity = {"approve": 0, "request_changes": 1, "block": 2}
-        final_verdict = "approve"
-        for condition in conditions:
-            if condition["triggered"]:
-                cond_verdict = condition["verdict"]
-                if severity.get(cond_verdict, 0) > severity.get(final_verdict, 0):
-                    final_verdict = cond_verdict
-
-        # Config-driven bypass: auto-approve non-security gates when the
-        # preceding stage succeeded and reported HIGH confidence.
-        has_block = any(
-            c["triggered"] and c["verdict"] == "block" for c in conditions
-        )
-        bypass_config = self.config.get("gate_bypass_conditions") or {}
-        if (
-            not has_block
-            and bypass_config.get("confidence_high_non_security")
-            and stage_result.get("confidence") == "HIGH"
-            and stage_result.get("success") is not False
-        ):
-            final_verdict = "approve"
-            conditions.append(
-                {
-                    "name": "confidence_high_non_security",
-                    "triggered": True,
-                    "verdict": "approve",
-                    "reason": "stage succeeded with HIGH confidence and gate is non-security; config bypass auto-approves",
-                }
-            )
-
-        return {"verdict": final_verdict, "conditions": conditions}
-
-    def _create_gate_decision_file(
-        self, gate_id: str, stage_name: str, session_dir: Path
-    ) -> dict[str, Any] | None:
-        """
-        Create the gate decision file for human input.
-
-        Returns an error dict on failure, None on success.
-        """
-        try:
-            gate_decision_file = self._validate_artifact_path(
-                f"gate-{gate_id}-decision.md", session_dir
-            )
-            if gate_decision_file.exists():
-                return None
-            gate_decision_file.write_text(f"""# Gate Decision: {gate_id}
-
-Stage: {stage_name}
-
-Please review the stage output and provide your decision.
-
-## Options:
-- approve: Proceed to next stage
-- request_changes: Request changes and retry
-- block: Block workflow and escalate to human
-
-## Decision Format:
-```
-verdict: approve|request_changes|block
-notes: [optional notes]
-```
-
-Please edit this file with your decision.
-""")
-            logger.info(f"Created gate decision file: {gate_decision_file}")
-            return None
-        except (OSError, PermissionError) as e:
-            logger.error(f"Error creating gate decision file: {e}")
-            update_status(
-                session_dir,
-                f"gate_{gate_id}",
-                "error",
-                f"Failed to create gate decision file: {str(e)}",
-            )
-            return {
-                "gate_id": gate_id,
-                "verdict": "block",
-                "blocked": True,
-                "error": f"Failed to create gate decision file: {str(e)}",
-            }
-
-    def _wait_and_parse_gate_decision(
-        self, gate_id: str, session_dir: Path, gate_decision_file: Path
-    ) -> dict[str, Any]:
-        """
-        Wait for the gate decision file to be modified and parse the decision.
-
-        Returns a gate result dictionary (either a verdict, a read error, or a
-        timeout).
-        """
-        import time
-
-        max_wait_seconds = self.config.get("gate_timeout_seconds", 3600)
-        check_interval = self.config.get("gate_check_interval", 5)
-        waited_seconds = 0
-
-        while waited_seconds < max_wait_seconds:
-            time.sleep(check_interval)
-            waited_seconds += check_interval
-
-            # Check if file has been modified (contains decision)
-            try:
-                content = gate_decision_file.read_text(encoding="utf-8")
-            except (OSError, PermissionError) as e:
-                logger.error(f"Error reading gate decision file: {e}")
-                update_status(
-                    session_dir,
-                    f"gate_{gate_id}",
-                    "error",
-                    f"Failed to read gate decision file: {str(e)}",
-                )
-                return {
-                    "gate_id": gate_id,
-                    "verdict": "block",
-                    "blocked": True,
-                    "error": f"Failed to read gate decision file: {str(e)}",
-                }
-
-            parsed = self._parse_gate_verdict(content)
-            if parsed is not None:
-                verdict, notes = parsed
-                if verdict in ["approve", "request_changes", "block"]:
-                    try:
-                        record_gate(gate_id, verdict, session_dir, notes)
-                        update_status(
-                            session_dir,
-                            f"gate_{gate_id}",
-                            verdict,
-                            f"Gate {verdict}: {gate_id}",
-                        )
-                        logger.info(
-                            f"Gate {gate_id} decision recorded: {verdict}"
-                        )
-                    except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                        logger.error(f"Error recording gate decision: {e}")
-                        update_status(
-                            session_dir,
-                            f"gate_{gate_id}",
-                            "error",
-                            f"Failed to record gate decision: {str(e)}",
-                        )
-
-                    return {
-                        "gate_id": gate_id,
-                        "verdict": verdict,
-                        "blocked": verdict == "block",
-                    }
-
-        # Timeout reached - escalate
-        verdict = "block"
-        notes = f"Gate decision timeout after {max_wait_seconds} seconds"
-        try:
-            record_gate(gate_id, verdict, session_dir, notes)
-            update_status(
-                session_dir,
-                f"gate_{gate_id}",
-                "timeout",
-                f"Gate timeout: {gate_id}",
-            )
-            logger.warning(
-                f"Gate {gate_id} timeout after {max_wait_seconds} seconds"
-            )
-        except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-            logger.error(f"Error recording gate timeout: {e}")
-            update_status(
-                session_dir,
-                f"gate_{gate_id}",
-                "error",
-                f"Failed to record gate timeout: {str(e)}",
-            )
-
-        return {"gate_id": gate_id, "verdict": verdict, "blocked": True}
-
-    def _parse_gate_verdict(
-        self, content: str
-    ) -> tuple[str, str] | None:
-        """
-        Parse verdict and notes from gate decision file content.
-
-        Returns (verdict, notes) if a verdict line is found, None otherwise.
-        """
-        if "verdict:" not in content:
-            return None
-        verdict = None
-        notes = ""
-        for line in content.split("\n"):
-            if line.startswith("verdict:"):
-                verdict = line.split(":", 1)[1].strip()
-            elif line.startswith("notes:"):
-                notes = line.split(":", 1)[1].strip()
-        return verdict, notes
-
 
 def _print_cli_error(message: str, error_type: str, details: str | None = None) -> None:
     """Print a CLI error as JSON and exit with code 1."""

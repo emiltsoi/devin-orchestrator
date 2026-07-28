@@ -55,7 +55,6 @@ class AlertType(Enum):
     WORKFLOW_FAILURE = "workflow_failure"
     PERFORMANCE_DEGRADATION = "performance_degradation"
     RESOURCE_EXHAUSTION = "resource_exhaustion"
-    ANOMALY_DETECTED = "anomaly_detected"
 
 
 @dataclass
@@ -107,7 +106,6 @@ class MonitoringConfig:
 
     health_check_interval: int = 60  # seconds
     metrics_retention_hours: int = 24
-    alert_retention_hours: int = 168  # 7 days
     max_alerts: int = 1000
     enable_continuous_monitoring: bool = True
     performance_thresholds: dict[str, float] = field(
