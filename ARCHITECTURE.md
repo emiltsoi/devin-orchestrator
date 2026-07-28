@@ -541,7 +541,7 @@ Canonical source: `devin-orchestrator` repository
 - `workflows/*.manifest.yaml` - structured workflow manifests
 - `workflows/*.runbook.md` - agent-facing orchestration runbooks
 - `skills/*` - skill definitions
-- `workflow-engine/*` - deterministic tools and dispatch mechanics
+- `devin_orchestrator/*` - deterministic tools and dispatch mechanics
 
 Deployed to workspace per DEPLOYMENT.md protocol.
 
@@ -568,6 +568,6 @@ Deployed to workspace per DEPLOYMENT.md protocol.
 
 - [obra/superpowers](https://github.com/obra/superpowers) - Original skills framework
 - [skills/README.md](skills/README.md) - Current skills library
-- [workflow-engine/MANIFEST-SCHEMA.md](workflow-engine/MANIFEST-SCHEMA.md) - Workflow manifest schema
+- [devin_orchestrator/MANIFEST-SCHEMA.md](devin_orchestrator/MANIFEST-SCHEMA.md) - Workflow manifest schema
 - [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Multi-agent dispatch runbook
 - [workflows/superpower.runbook.md](workflows/superpower.runbook.md) - Example workflow implementation

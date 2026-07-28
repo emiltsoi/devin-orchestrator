@@ -5,14 +5,14 @@ Tests for security_utils.py validation functions
 
 import os
 
-# Add workflow-engine to path
+# Add devin_orchestrator to path
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
 
 from security_utils import (
     InvalidInputError,
@@ -73,8 +73,11 @@ class TestValidatePathSafe:
         """Test that symlink traversal is rejected"""
         # Skip on Windows due to permission requirements for symlink creation
         import platform
+
         if platform.system() == "Windows":
-            pytest.skip("Symlink test skipped on Windows due to permission requirements")
+            pytest.skip(
+                "Symlink test skipped on Windows due to permission requirements"
+            )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir) / "base"

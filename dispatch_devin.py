@@ -15,7 +15,7 @@ Usage example (fallback only):
         --role coder \
         --prompt-file prompts/security_hardening.md \
         --output-file work/SECURITY-001/output.md \
-        --focused-context workflow-engine/security_utils.py
+        --focused-context devin_orchestrator/security_utils.py
 
 A role name resolves to roles/<role>.md under the repo root. A full path to a
 markdown file is also accepted.
@@ -28,10 +28,10 @@ import re
 import sys
 from pathlib import Path
 
-# Add local workflow-engine to Python path for imports
-from bootstrap_path import ensure_workflow_engine_on_path
+# Add local devin_orchestrator to Python path for imports
+from bootstrap_path import ensure_devin_orchestrator_on_path
 
-ensure_workflow_engine_on_path()
+ensure_devin_orchestrator_on_path()
 
 from config_loader import ConfigLoader  # noqa: E402
 from devin_cli_adapter import DevinCliAdapter  # noqa: E402
@@ -194,7 +194,11 @@ def main() -> int:
             "falling back to model_profile/default_model",
             file=sys.stderr,
         )
-    if args.agent and config.model_overrides and args.agent not in config.model_overrides:
+    if (
+        args.agent
+        and config.model_overrides
+        and args.agent not in config.model_overrides
+    ):
         print(
             f"Warning: agent {args.agent!r} not found in config.model_overrides; "
             "falling back to models/model_profile/default_model",
@@ -262,7 +266,11 @@ def main() -> int:
         sys.stderr.buffer.write((result.error + "\n").encode("utf-8"))
         sys.stderr.buffer.flush()
 
-    return result.exit_code if result.exit_code is not None else (0 if result.success else 1)
+    return (
+        result.exit_code
+        if result.exit_code is not None
+        else (0 if result.success else 1)
+    )
 
 
 if __name__ == "__main__":

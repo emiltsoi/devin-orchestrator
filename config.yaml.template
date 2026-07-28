@@ -6,7 +6,7 @@
 global_root: ~/.devin-orchestrator
 skills_dir: ~/.devin-orchestrator/skills
 workflows_dir: ~/.devin-orchestrator/workflows
-workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
+workflow_engine_dir: ~/.devin-orchestrator/devin_orchestrator
 
 # Devin CLI configuration
 # Windows: C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe

@@ -41,7 +41,7 @@ env/
 htmlcov/
 
 # Auto-generated build symlink
-# The hatch build hook creates devin_orchestrator from workflow-engine at build time;
+# The hatch build hook creates devin_orchestrator from devin_orchestrator at build time;
 # it must not be committed.
 devin_orchestrator
 

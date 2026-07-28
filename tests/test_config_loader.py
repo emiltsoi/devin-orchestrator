@@ -5,14 +5,14 @@ Unit tests for config_loader module
 
 import os
 
-# Add workflow-engine to path
+# Add devin_orchestrator to path
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
 
 from config_loader import ConfigLoader, GlobalConfig
 
@@ -69,8 +69,7 @@ def test_config_loader_workspace_override():
         workspace_config_path.write_text('default_model: "workspace-model"\n')
 
         config = ConfigLoader.load(
-            config_path=global_config_path,
-            workspace=workspace_dir
+            config_path=global_config_path, workspace=workspace_dir
         )
         assert config.default_model == "workspace-model"
 

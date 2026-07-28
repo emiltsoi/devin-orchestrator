@@ -5,7 +5,7 @@ This directory contains the skills library for devin-orchestrator. Skills are pr
 **See Also:**
 - [ARCHITECTURE.md](../ARCHITECTURE.md) - Core abstractions and skill layer
 - [workflows/](../workflows/) - Workflow definitions that reference skills
-- [workflow-engine/](../workflow-engine/) - Engine that loads and executes skills
+- [devin_orchestrator/](../devin_orchestrator/) - Engine that loads and executes skills
 - [skills/SCHEMA.md](SCHEMA.md) - Skill schema definition
 
 ## Skill Structure
@@ -118,4 +118,4 @@ The workflow engine loads skills from the global installation at `~/.devin-orche
 
 - [ARCHITECTURE.md](../ARCHITECTURE.md) - Core abstractions and skill layer
 - [workflows/](../workflows/) - Workflow definitions that reference skills
-- [workflow-engine/](../workflow-engine/) - Engine that loads and executes skills
+- [devin_orchestrator/](../devin_orchestrator/) - Engine that loads and executes skills

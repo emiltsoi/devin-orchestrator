@@ -144,7 +144,7 @@ Manifest Loader → Session Manager → Step Executor
 
 ## Configuration
 
-**Workflow Engine Config** (`workflow-engine.yaml`):
+**Workflow Engine Config** (`devin_orchestrator.yaml`):
 ```yaml
 default_adapter: windsurf-cascade
 max_retries: 2

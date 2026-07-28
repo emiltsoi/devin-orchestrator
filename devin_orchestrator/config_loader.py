@@ -278,7 +278,7 @@ class ConfigLoader:
                     os.getenv(
                         "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR",
                         config_data.get(
-                            "workflow_engine_dir", "~/.devin-orchestrator/workflow-engine"
+                            "workflow_engine_dir", "~/.devin-orchestrator/devin_orchestrator"
                         ),
                     )
                 ),

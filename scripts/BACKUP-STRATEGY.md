@@ -58,7 +58,7 @@ The devin-orchestrator system manages critical data that must be regularly backe
   - `~/.devin-orchestrator/config.yaml`
   - `~/.devin-orchestrator/skills/`
   - `~/.devin-orchestrator/workflows/`
-  - `~/.devin-orchestrator/workflow-engine/`
+  - `~/.devin-orchestrator/devin_orchestrator/`
 
 ### Log Data
 - **Location**: `~/.devin-orchestrator/logs/`

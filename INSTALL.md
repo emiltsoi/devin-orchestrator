@@ -74,7 +74,7 @@ python install.py
 This installs devin-orchestrator to `~/.devin-orchestrator/`:
 - Skills: `~/.devin-orchestrator/skills/`
 - Workflows: `~/.devin-orchestrator/workflows/`
-- Workflow Engine: `~/.devin-orchestrator/workflow-engine/`
+- Workflow Engine: `~/.devin-orchestrator/devin_orchestrator/`
 - Config: `~/.devin-orchestrator/config.yaml`
 
 ### 3. Setup Workspace (Optional - for local overrides)
@@ -144,7 +144,7 @@ Edit `~/.devin-orchestrator/config.yaml` to customize. The config file supports 
 global_root: ~/.devin-orchestrator
 skills_dir: ~/.devin-orchestrator/skills
 workflows_dir: ~/.devin-orchestrator/workflows
-workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
+workflow_engine_dir: ~/.devin-orchestrator/devin_orchestrator
 
 # Windows
 devin_cli_path: C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
@@ -191,7 +191,7 @@ export DEVIN_DEFAULT_PERMISSION_MODE="dangerous"
 - **Global Skills**: Stored in `~/.devin-orchestrator/skills/` (no workspace duplication)
 - **Global Workflows**: Stored in `~/.devin-orchestrator/workflows/` (canonical source)
 - **Local Workflows**: Stored in `.devin/workflows/` (optional - for per-workspace overrides)
-- **Global Workflow Engine**: Stored in `~/.devin-orchestrator/workflow-engine/`
+- **Global Workflow Engine**: Stored in `~/.devin-orchestrator/devin_orchestrator/`
 - **Dispatch Script**: Stored in `~/.devin-orchestrator/dispatch_skill.py`
 
 **Orchestrator-Worker Pattern:**

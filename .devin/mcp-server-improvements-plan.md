@@ -62,6 +62,6 @@ Expose a server prompt `devin-orchestrator-usage` via MCP `prompts/list` and `pr
 ## Files to Edit
 
 - `mcp_server.py`
-- `workflow-engine/stateless_orchestrator.py`
+- `devin_orchestrator/stateless_orchestrator.py`
 - `MCP-CLIENTS.md`
 - (Optional) `mcp_server.py` for prompts capability

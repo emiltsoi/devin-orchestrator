@@ -94,7 +94,7 @@ class SystemHealthSnapshot:
     timestamp: datetime
     overall_status: str
     component_status: dict[str, str]
-    performance_metrics: dict[str, float]
+    performance_metrics: dict[str, float | int]
     active_workflows: int
     recent_failures: int
     resource_metrics: SystemResourceMetrics | None = None
@@ -496,7 +496,7 @@ class SystemHealthMonitor:
         # Get performance metrics
         all_metrics = self.metrics_collector.get_all_metrics()
 
-        performance_metrics = {
+        performance_metrics: dict[str, float | int] = {
             "active_workflows": len(all_metrics),
             "total_workflows": len(all_metrics),
         }

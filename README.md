@@ -73,7 +73,7 @@ devin-orchestrator/
 ├── MCP-CLIENTS.md   # MCP client configuration
 ├── skills/          # Skill definitions (YAML + markdown)
 ├── workflows/       # Workflow definitions (YAML manifests + markdown)
-├── workflow-engine/ # Orchestration engine and tools
+├── devin_orchestrator/ # Orchestration engine and tools
 ├── adapters/        # Transport adapter implementations
 ├── contracts/       # Dispatch contract definitions
 └── .windsurf/

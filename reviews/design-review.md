@@ -1,7 +1,7 @@
 # Design Review: devin-orchestrator
 
 **Date:** 2026-07-27  
-**Scope:** `mcp_server.py`, `workflow-engine/`, `stateless_orchestrator.py`, `orchestration_engine.py`, dispatch scripts, and supporting modules.  
+**Scope:** `mcp_server.py`, `devin_orchestrator/`, `stateless_orchestrator.py`, `orchestration_engine.py`, dispatch scripts, and supporting modules.  
 **Goal:** Fresh-eye assessment of the current design before proposing improvements.
 
 ---
@@ -46,7 +46,7 @@ However, the implementation is uneven. Some modules are clean and focused, while
 ## 3. Design Concerns and Risks
 
 ### The orchestration engine is a monolith
-`workflow-engine/orchestration_engine.py` is 2,211 lines and mixes:
+`devin_orchestrator/orchestration_engine.py` is 2,211 lines and mixes:
 - stage execution,
 - retry logic,
 - gate handling,
@@ -113,7 +113,7 @@ The `focused_context` list is appended to the subprocess command unvalidated. Th
 7. Fix `guardrails.py` portability and wire it into artifact/triage validation.
 8. Improve `floor_validator.py` to check required artifacts and skill-defined output schemas.
 9. Eliminate global singleton metrics/monitoring or make them instance-passable.
-10. Add a `pyproject.toml` and install the package instead of relying on `sys.path.insert(0, "workflow-engine")` in multiple files.
+10. Add a `pyproject.toml` and install the package instead of relying on `sys.path.insert(0, "devin_orchestrator")` in multiple files.
 11. Add Linux defaults and safer fallbacks in `config_loader.py`.
 12. Consolidate `config_overrides` parsing duplicated in `mcp_server.py`, `skill_invoker.py`, and `dispatch_skill.py`.
 

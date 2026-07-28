@@ -3,14 +3,14 @@
 Unit tests for skill_invoker module validation
 """
 
-# Add workflow-engine to path
+# Add devin_orchestrator to path
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
 
 from skill_invoker import SkillInvocationResult, SkillInvoker
 
@@ -44,7 +44,7 @@ def test_config_overrides_valid():
             skill_name="test-skill",
             context={"session_id": "test-001"},
             workspace=tmpdir,
-            config_overrides=valid_overrides
+            config_overrides=valid_overrides,
         )
 
         assert result.success is True
@@ -71,7 +71,7 @@ def test_config_overrides_invalid_type():
             skill_name="test-skill",
             context={"session_id": "test-001"},
             workspace=tmpdir,
-            config_overrides="not_a_dict"
+            config_overrides="not_a_dict",
         )
 
         assert result.success is False
@@ -100,7 +100,7 @@ def test_config_overrides_json_string():
             skill_name="test-skill",
             context={"session_id": "test-001"},
             workspace=tmpdir,
-            config_overrides='{"key": "value"}'
+            config_overrides='{"key": "value"}',
         )
 
         assert result.success is True
@@ -129,7 +129,7 @@ def test_config_overrides_invalid_key_type():
             skill_name="test-skill",
             context={"session_id": "test-001"},
             workspace=tmpdir,
-            config_overrides=invalid_overrides
+            config_overrides=invalid_overrides,
         )
 
         assert result.success is False
@@ -159,7 +159,7 @@ def test_config_overrides_invalid_value_type():
             skill_name="test-skill",
             context={"session_id": "test-001"},
             workspace=tmpdir,
-            config_overrides=invalid_overrides
+            config_overrides=invalid_overrides,
         )
 
         assert result.success is False
@@ -189,7 +189,7 @@ def test_config_overrides_list_value():
             skill_name="test-skill",
             context={"session_id": "test-001"},
             workspace=tmpdir,
-            config_overrides=invalid_overrides
+            config_overrides=invalid_overrides,
         )
 
         assert result.success is False

@@ -31,7 +31,7 @@ jobs:
     
     - name: Run tests
       run: |
-        cd workflow-engine
+        cd devin_orchestrator
         python -m pytest -v --cov=. --cov-report=xml --cov-report=term
     
     - name: Run linting
@@ -43,7 +43,7 @@ jobs:
     - name: Run security checks
       run: |
         pip install bandit safety
-        bandit -r workflow-engine/
+        bandit -r devin_orchestrator/
         safety check
     
     - name: Create Release

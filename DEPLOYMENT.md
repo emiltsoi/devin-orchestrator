@@ -31,7 +31,7 @@ This installs to `~/.devin-orchestrator/`:
 - `skills/*` - Skill definitions (.yaml) and narratives (.md)
 - `workflows/*.manifest.yaml` - Structured workflow manifests
 - `workflows/*.runbook.md` - Agent-facing orchestration runbooks
-- `workflow-engine/*` - Deterministic tools and dispatch mechanics
+- `devin_orchestrator/*` - Deterministic tools and dispatch mechanics
 - `config.yaml` - Configuration file
 
 ## Local Overrides (Optional)
@@ -66,7 +66,7 @@ vim workflows/superpower.manifest.yaml
 vim workflows/superpower.runbook.md
 
 # 3. Validate parity
-python -m pytest workflow-engine/test_parity_tool.py -q
+python -m pytest devin_orchestrator/test_parity_tool.py -q
 
 # 4. Commit changes
 git add workflows/superpower.manifest.yaml workflows/superpower.runbook.md

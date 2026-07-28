@@ -18,7 +18,11 @@ def _on_rm_error(func, path, exc_info):
     func(path)
 
 
-def install(global_root: Path | None = None, source_dir: Path | None = None, dry_run: bool = False):
+def install(
+    global_root: Path | None = None,
+    source_dir: Path | None = None,
+    dry_run: bool = False,
+):
     """
     Install devin-orchestrator to global location
 
@@ -70,8 +74,8 @@ def install(global_root: Path | None = None, source_dir: Path | None = None, dry
         print(f"Would copy workflows: {source_workflows} -> {target_workflows}")
 
     # Copy workflow engine
-    source_engine = source_dir / "workflow-engine"
-    target_engine = global_root / "workflow-engine"
+    source_engine = source_dir / "devin_orchestrator"
+    target_engine = global_root / "devin_orchestrator"
     if source_engine.exists():
         if not dry_run:
             if target_engine.exists():
@@ -89,8 +93,13 @@ def install(global_root: Path | None = None, source_dir: Path | None = None, dry
 
     # Copy dispatch and MCP entry-point scripts so any workspace can invoke them.
     # bootstrap_path.py must be copied too, because these scripts import it
-    # before adding workflow-engine to sys.path.
-    for script_name in ("bootstrap_path.py", "dispatch_devin.py", "dispatch_skill.py", "mcp_server.py"):
+    # before adding devin_orchestrator to sys.path.
+    for script_name in (
+        "bootstrap_path.py",
+        "dispatch_devin.py",
+        "dispatch_skill.py",
+        "mcp_server.py",
+    ):
         source_script = source_dir / script_name
         target_script = global_root / script_name
         if source_script.exists():
@@ -135,18 +144,38 @@ def install(global_root: Path | None = None, source_dir: Path | None = None, dry
         print("  - Config is available at: " + str(target_config))
         print()
         print("For agent integration, prefer the devin-orchestrator MCP tools")
-        print("  (e.g. mcp0_dispatch_devin, mcp0_dispatch_skill, mcp0_implement, mcp0_run_workflow).")
-        print("Use the legacy scripts only as a fallback when MCP tools are not available:")
-        print("  python " + str(global_root / "dispatch_skill.py") + " <skill> <session_id> <workspace> <is_reviewer> <focused_context>")
+        print(
+            "  (e.g. mcp0_dispatch_devin, mcp0_dispatch_skill, mcp0_implement, mcp0_run_workflow)."
+        )
+        print(
+            "Use the legacy scripts only as a fallback when MCP tools are not available:"
+        )
+        print(
+            "  python "
+            + str(global_root / "dispatch_skill.py")
+            + " <skill> <session_id> <workspace> <is_reviewer> <focused_context>"
+        )
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Install devin-orchestrator to global location')
-    parser.add_argument('global_root', nargs='?', help='Global root path (default: ~/.devin-orchestrator)')
-    parser.add_argument('source_dir', nargs='?', help='Source directory (default: current directory)')
-    parser.add_argument('--dry-run', action='store_true', help='Dry run - show what would be done without actually doing it')
+    parser = argparse.ArgumentParser(
+        description="Install devin-orchestrator to global location"
+    )
+    parser.add_argument(
+        "global_root",
+        nargs="?",
+        help="Global root path (default: ~/.devin-orchestrator)",
+    )
+    parser.add_argument(
+        "source_dir", nargs="?", help="Source directory (default: current directory)"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry run - show what would be done without actually doing it",
+    )
 
     args = parser.parse_args()
 

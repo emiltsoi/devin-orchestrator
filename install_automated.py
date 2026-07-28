@@ -33,8 +33,14 @@ def run_command(cmd, cwd=None):
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description='Automated installation script for devin-orchestrator')
-    parser.add_argument('--dry-run', action='store_true', help='Dry run - show what would be done without actually doing it')
+    parser = argparse.ArgumentParser(
+        description="Automated installation script for devin-orchestrator"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry run - show what would be done without actually doing it",
+    )
 
     args = parser.parse_args()
 
@@ -71,7 +77,9 @@ def main():
             print(f"  Warning: Could not update repository: {stderr}")
     else:
         print(f"  Cloning repository to {install_dir}...")
-        success, stdout, stderr = run_command(["git", "clone", repo_url, str(install_dir)])
+        success, stdout, stderr = run_command(
+            ["git", "clone", repo_url, str(install_dir)]
+        )
         if success:
             print("  Repository cloned successfully")
         else:
@@ -85,7 +93,9 @@ def main():
     install_script = install_dir / "install.py"
     if install_script.exists():
         print("  Running install.py...")
-        success, stdout, stderr = run_command(["python", str(install_script)], cwd=install_dir)
+        success, stdout, stderr = run_command(
+            ["python", str(install_script)], cwd=install_dir
+        )
         if success:
             print("  Global installation successful")
         else:
@@ -109,6 +119,7 @@ def main():
         for manifest in source_workflows.glob("*.yaml"):
             target = workflows_dir / manifest.name
             import shutil
+
             shutil.copy2(manifest, target)
             print(f"    Copied {manifest.name}")
         print("  Workflow manifests copied successfully")
@@ -122,7 +133,7 @@ def main():
         ("Global root", global_root),
         ("Skills directory", global_root / "skills"),
         ("Workflows directory", global_root / "workflows"),
-        ("Workflow engine", global_root / "workflow-engine"),
+        ("Workflow engine", global_root / "devin_orchestrator"),
         ("Config file", global_root / "config.yaml"),
         ("Dispatch script", global_root / "dispatch_skill.py"),
         ("Workspace workflows", workflows_dir),
@@ -141,14 +152,22 @@ def main():
         print("=== Installation Complete ===")
         print()
         print("You can now use devin-orchestrator with Cascade:")
-        print("  - Workflows are available in .devin/workflows/ (optional - for local overrides)")
+        print(
+            "  - Workflows are available in .devin/workflows/ (optional - for local overrides)"
+        )
         print("  - Skills are available globally at ~/.devin-orchestrator/skills/")
-        print("  - Workflows are available globally at ~/.devin-orchestrator/workflows/")
-        print("  - Workflow engine is available at ~/.devin-orchestrator/workflow-engine/")
+        print(
+            "  - Workflows are available globally at ~/.devin-orchestrator/workflows/"
+        )
+        print(
+            "  - Workflow engine is available at ~/.devin-orchestrator/devin_orchestrator/"
+        )
         print("  - Config is available at ~/.devin-orchestrator/config.yaml")
         print()
         print("Example dispatch:")
-        print("  python ~/.devin-orchestrator/dispatch_skill.py brainstorming SESSION-001 ~/.devin-orchestrator/work/SESSION-001 false true")
+        print(
+            "  python ~/.devin-orchestrator/dispatch_skill.py brainstorming SESSION-001 ~/.devin-orchestrator/work/SESSION-001 false true"
+        )
         print()
         print("Note: .devin/workflows/ is optional for per-workspace overrides.")
         print("The canonical source is ~/.devin-orchestrator/workflows/.")

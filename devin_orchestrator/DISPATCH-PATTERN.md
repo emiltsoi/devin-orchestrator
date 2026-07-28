@@ -6,7 +6,7 @@ The orchestrator–worker pattern uses SWE-1.6 (free tier) via Devin CLI with sk
 
 ## Skill Loading Mechanism
 
-Skills are loaded from `workflow-engine/skills/` and injected into prompts when their description matches prompt content. The matching is done via specific trigger phrases to avoid false positives.
+Skills are loaded from `devin_orchestrator/skills/` and injected into prompts when their description matches prompt content. The matching is done via specific trigger phrases to avoid false positives.
 
 ### Installed Skills
 
@@ -167,9 +167,9 @@ See `demo_orchestrator_worker.py` for the demonstration of this pattern:
 
 ## References
 
-- `workflow-engine/devin_cli_adapter.py` - Skill loading implementation
-- `workflow-engine/skill_invoker.py` - Skill invocation with trigger phrases
-- `workflow-engine/guardrails.py` - Guardrail implementations
-- `workflow-engine/skills/ponytail/SKILL.md` - Ponytail skill definition
-- `workflow-engine/skills/swe-compliance/SKILL.md` - SWE compliance skill definition
+- `devin_orchestrator/devin_cli_adapter.py` - Skill loading implementation
+- `devin_orchestrator/skill_invoker.py` - Skill invocation with trigger phrases
+- `devin_orchestrator/guardrails.py` - Guardrail implementations
+- `devin_orchestrator/skills/ponytail/SKILL.md` - Ponytail skill definition
+- `devin_orchestrator/skills/swe-compliance/SKILL.md` - SWE compliance skill definition
 - `ORCHESTRATION-RUNBOOK.md` - Section 6: Devin Dispatch Protocol
