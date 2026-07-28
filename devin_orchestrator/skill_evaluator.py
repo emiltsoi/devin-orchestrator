@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from floor_validator import validate_format, validate_iron_law, validate_structural
+from devin_orchestrator.floor_validator import validate_format, validate_iron_law, validate_structural
 
 
 @dataclass
@@ -47,7 +47,7 @@ class SkillEvaluator:
             enable_semantic: Enable semantic evaluation layer (default: False)
             devin_cli_path: Optional path to devin.exe for semantic evaluation
         """
-        from config_loader import ConfigLoader
+        from devin_orchestrator.config_loader import ConfigLoader
 
         config = ConfigLoader.load()
         self.harness_root = harness_root
@@ -85,7 +85,7 @@ class SkillEvaluator:
         details = {}
 
         # Load skill definition to get Iron Law
-        from deterministic_tools import load_skill
+        from devin_orchestrator.deterministic_tools import load_skill
 
         skill_data = load_skill(self.skills_dir, skill_name)
         if not skill_data:

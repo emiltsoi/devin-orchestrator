@@ -15,13 +15,13 @@ import re
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from guardrails import Guardrails
-from security_utils import InvalidInputError, PathTraversalError
+from devin_orchestrator.guardrails import Guardrails
+from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from orchestration_engine import OrchestrationEngine
+    from devin_orchestrator.orchestration_engine import OrchestrationEngine
 
 logger = logging.getLogger(__name__)
 

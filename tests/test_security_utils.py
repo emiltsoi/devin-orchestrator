@@ -4,17 +4,13 @@ Tests for security_utils.py validation functions
 """
 
 import os
-
-# Add devin_orchestrator to path
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
-
-from security_utils import (
+from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
     sanitize_filename,

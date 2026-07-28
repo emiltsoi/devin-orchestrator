@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from security_utils import InvalidInputError, PathTraversalError, validate_path_safe
+from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError, validate_path_safe
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class DevinCliAdapter:
             ValueError: If ``permission_mode`` is a non-empty value that is not
                 in ``ALLOWED_PERMISSION_MODES``.
         """
-        from config_loader import ConfigLoader
+        from devin_orchestrator.config_loader import ConfigLoader
 
         config = ConfigLoader.load()
         self.devin_cli_path = devin_cli_path

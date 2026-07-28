@@ -584,4 +584,3 @@ def _validate_config_overrides_dict(config_overrides: dict) -> dict[str, Any]:
             )
 
     return config_overrides
-

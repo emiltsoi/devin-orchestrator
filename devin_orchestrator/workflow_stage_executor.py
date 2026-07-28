@@ -14,19 +14,19 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from artifact_validator import ArtifactValidator
-from security_utils import (
+from devin_orchestrator.artifact_validator import ArtifactValidator
+from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
 )
-from stage_skill_dispatcher import StageSkillDispatcher
-from triage_evaluator import TriageDecision, TriageEvaluator
+from devin_orchestrator.stage_skill_dispatcher import StageSkillDispatcher
+from devin_orchestrator.triage_evaluator import TriageDecision, TriageEvaluator
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from orchestration_engine import OrchestrationEngine
-    from skill_invoker import SkillInvocationResult
+    from devin_orchestrator.orchestration_engine import OrchestrationEngine
+    from devin_orchestrator.skill_invoker import SkillInvocationResult
 
 logger = logging.getLogger(__name__)
 
@@ -597,4 +597,3 @@ class WorkflowStageExecutor:
     ) -> dict[str, Any]:
         """Delegate to TriageEvaluator."""
         return self._triage_evaluator.skip_stage(stage, session_dir, session_id)
-

@@ -14,13 +14,9 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from security_utils import SecurityError  # noqa: E402
-from skill_invoker import SkillInvocationResult  # noqa: E402
-
-import dispatch_skill  # noqa: E402
+import devin_orchestrator.dispatch_skill as dispatch_skill
+from devin_orchestrator.security_utils import SecurityError  # noqa: E402
+from devin_orchestrator.skill_invoker import SkillInvocationResult  # noqa: E402
 
 
 def _write_local_config(workspace: Path, base: Path) -> None:

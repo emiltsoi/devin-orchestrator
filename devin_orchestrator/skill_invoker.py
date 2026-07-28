@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from devin_cli_adapter import DevinCliAdapter
-from metrics import MetricsCollector
-from security_utils import (
+from devin_orchestrator.devin_cli_adapter import DevinCliAdapter
+from devin_orchestrator.metrics import MetricsCollector
+from devin_orchestrator.security_utils import (
     InvalidInputError,
     parse_config_overrides,
     validate_skill_name,
@@ -57,12 +57,12 @@ class SkillInvoker:
             demo_mode: If True, skip real Devin dispatches and simulate (for testing)
             metrics: Optional metrics collector (creates a fresh instance by default)
         """
-        from config_loader import ConfigLoader
+        from devin_orchestrator.config_loader import ConfigLoader
 
         config = ConfigLoader.load()
 
         self.skills_dir = skills_dir if skills_dir is not None else config.skills_dir
-        self.devin_cli_path = (
+        self.devin_cli_path: str | None = (
             devin_cli_path if devin_cli_path is not None else config.devin_cli_path
         )
         # If configured path does not exist, treat as unconfigured
@@ -127,7 +127,7 @@ class SkillInvoker:
         effective_timeout = timeout or self.dispatch_timeout_seconds
 
         # Load skill definition and narrative using deterministic_tools
-        from deterministic_tools import load_skill
+        from devin_orchestrator.deterministic_tools import load_skill
 
         try:
             skill_data = load_skill(self.skills_dir, validated_skill_name)

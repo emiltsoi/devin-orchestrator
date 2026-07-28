@@ -43,7 +43,7 @@ jobs:
           python -m pip install --upgrade "pip>=26.1.2"
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Compile Python files
-        run: python -m compileall mcp_server.py dispatch_devin.py dispatch_skill.py devin_orchestrator tests
+        run: python -m compileall devin_orchestrator tests install.py install_automated.py
       - name: Run pytest
         run: python -m pytest -q
 
@@ -60,7 +60,7 @@ jobs:
           python -m pip install --upgrade "pip>=26.1.2"
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Run bandit
-        run: bandit -c .bandit.yml -r devin_orchestrator mcp_server.py dispatch_devin.py dispatch_skill.py install.py install_automated.py -q -x '**/test_*.py'
+        run: bandit -c .bandit.yml -r devin_orchestrator install.py install_automated.py -q -x '**/test_*.py'
       - name: Run pip-audit
         run: pip-audit --desc
 

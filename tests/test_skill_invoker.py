@@ -3,16 +3,13 @@
 Unit tests for skill_invoker module validation
 """
 
-# Add devin_orchestrator to path
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
-
-from skill_invoker import SkillInvocationResult, SkillInvoker
+from devin_orchestrator.skill_invoker import SkillInvocationResult, SkillInvoker
 
 
 def test_config_overrides_valid():

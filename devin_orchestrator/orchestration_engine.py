@@ -16,9 +16,9 @@ import time
 from pathlib import Path
 from typing import Any, NoReturn
 
-from artifact_validator import ArtifactValidator
-from config_loader import ConfigLoader
-from deterministic_tools import (
+from devin_orchestrator.artifact_validator import ArtifactValidator
+from devin_orchestrator.config_loader import ConfigLoader
+from devin_orchestrator.deterministic_tools import (
     WorkflowManifestError,
     create_placeholder_artifact,  # noqa: F401
     load_manifest,
@@ -28,21 +28,21 @@ from deterministic_tools import (
     validate_structural,  # noqa: F401
     wait_for_file_change,
 )
-from gate_controller import GateController
-from metrics import MetricsCollector
-from monitoring import MonitoringSystem
-from security_utils import (
+from devin_orchestrator.gate_controller import GateController
+from devin_orchestrator.metrics import MetricsCollector
+from devin_orchestrator.monitoring import MonitoringSystem
+from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
     parse_config_overrides,
     validate_path_safe,
     validate_session_id,
 )
-from session_manager import resolve_session
-from skill_invoker import SkillInvoker
-from stage_skill_dispatcher import StageSkillDispatcher
-from triage_evaluator import TriageDecision, TriageEvaluator
-from workflow_stage_executor import WorkflowStageExecutor
+from devin_orchestrator.session_manager import resolve_session
+from devin_orchestrator.skill_invoker import SkillInvoker
+from devin_orchestrator.stage_skill_dispatcher import StageSkillDispatcher
+from devin_orchestrator.triage_evaluator import TriageDecision, TriageEvaluator
+from devin_orchestrator.workflow_stage_executor import WorkflowStageExecutor
 
 # Configure logging
 logging.basicConfig(

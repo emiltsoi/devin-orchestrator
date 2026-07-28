@@ -4,17 +4,13 @@ Unit tests for config_loader module
 """
 
 import os
-
-# Add devin_orchestrator to path
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
-
-from config_loader import ConfigLoader, GlobalConfig
+from devin_orchestrator.config_loader import ConfigLoader, GlobalConfig
 
 
 def test_config_loader_load_default():

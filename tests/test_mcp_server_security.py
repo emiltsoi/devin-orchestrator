@@ -16,10 +16,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from mcp_server import McpServer
+from devin_orchestrator.mcp_server import McpServer
 
 
 def _make_server_with_workspace(tmpdir: str) -> McpServer:
@@ -297,7 +294,7 @@ class TestDispatchDevinRelativePaths:
         rejected. PathTraversalError propagates out of the tool (mirroring the
         _tool_read_artifact pattern) and is surfaced as an error by
         _tools_call."""
-        from security_utils import PathTraversalError
+        from devin_orchestrator.security_utils import PathTraversalError
 
         with tempfile.TemporaryDirectory() as tmpdir:
             server = _make_server_with_workspace(tmpdir)

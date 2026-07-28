@@ -78,7 +78,7 @@ class OrchestrationLogger:
         # Load log rotation settings from config if not provided
         if max_bytes is None or backup_count is None:
             try:
-                from config_loader import ConfigLoader
+                from devin_orchestrator.config_loader import ConfigLoader
                 config = ConfigLoader.load()
                 if max_bytes is None:
                     max_bytes = config.log_max_bytes
