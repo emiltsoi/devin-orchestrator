@@ -131,7 +131,6 @@ def test_basic_logging():
         print(json_log_file.read_text())
 
         print("\n[OK] Basic logging test passed!")
-        return True
 
 
 def test_log_rotation():
@@ -180,7 +179,6 @@ def test_log_rotation():
             logger.logger.removeHandler(handler)
 
         print("[OK] Log rotation test passed!")
-        return True
 
 
 def test_log_levels():
@@ -212,7 +210,6 @@ def test_log_levels():
             logger.logger.removeHandler(handler)
 
         print("[OK] Log levels test passed!")
-        return True
 
 
 if __name__ == "__main__":

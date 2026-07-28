@@ -10,6 +10,7 @@ import contextlib
 import logging
 import os
 import re
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,6 +123,29 @@ class ConfigLoader:
         return data
 
     @staticmethod
+    def _deep_merge(
+        base: dict[str, Any], override: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Recursively merge ``override`` into ``base``.
+
+        Nested dictionaries are merged, while all other values are replaced by
+        the override. This lets a workspace config override specific nested
+        keys (e.g. ``model_overrides.coder``) without clobbering sibling keys.
+        """
+        merged = dict(base)
+        for key, value in override.items():
+            if (
+                key in merged
+                and isinstance(merged[key], dict)
+                and isinstance(value, dict)
+            ):
+                merged[key] = ConfigLoader._deep_merge(merged[key], value)
+            else:
+                merged[key] = value
+        return merged
+
+    @staticmethod
     def load(
         config_path: Path | None = None,
         workspace: Path | str | None = None,
@@ -149,12 +173,14 @@ class ConfigLoader:
 
         # If a workspace is specified and contains a local config, merge it over
         # the global config so workspaces can override session-specific settings.
+        # Nested dicts (e.g. model_overrides, agent_skills) are merged so a
+        # workspace can override individual keys without replacing the entire map.
         if workspace is not None:
             workspace_path = Path(workspace)
             workspace_config = workspace_path / ".devin-orchestrator" / "config.yaml"
             workspace_data = ConfigLoader._load_yaml_config(workspace_config)
             if workspace_data:
-                config_data = {**config_data, **workspace_data}
+                config_data = ConfigLoader._deep_merge(config_data, workspace_data)
                 # The workspace config is authoritative for session_work_dir if
                 # it was not explicitly provided; otherwise path expansion below
                 # will use the merged value as-is.
@@ -261,20 +287,25 @@ class ConfigLoader:
         except InvalidInputError as e:
             raise InvalidInputError(f"Invalid workflow_engine_dir configuration: {e}") from e
 
+        # Platform-aware default for the Devin CLI binary so the loader works
+        # out of the box on Linux/macOS as well as Windows.
+        if sys.platform == "win32" or os.name == "nt":
+            default_devin_cli = "~/AppData/Local/devin/cli/bin/devin.exe"
+        else:
+            default_devin_cli = "~/.local/bin/devin"
+
         try:
             devin_cli_path = str(
                 validate_expanded_path(
                     expand_path(
                         os.getenv(
                             "DEVIN_CLI_PATH",
-                            config_data.get(
-                                "devin_cli_path", "~/AppData/Local/devin/cli/bin/devin.exe"
-                        ),
-                    )
-                ),
-                "devin_cli_path"
+                            config_data.get("devin_cli_path", default_devin_cli),
+                        )
+                    ),
+                    "devin_cli_path"
+                )
             )
-        )
         except InvalidInputError as e:
             raise InvalidInputError(f"Invalid devin_cli_path configuration: {e}") from e
 
@@ -346,15 +377,44 @@ class ConfigLoader:
         if not isinstance(gate_bypass_conditions, dict):
             gate_bypass_conditions = None
 
-        # Fallback to current directory for testing (if global paths don't exist)
+        # Fallback to the local repository layout when configured paths do not
+        # exist. This makes out-of-the-box development/testing work, but we log
+        # a warning so users are not surprised when configured values are ignored.
+        repo_skills_dir = Path(__file__).parent.parent / "skills"
         if not skills_dir.exists():
-            skills_dir = Path(__file__).parent.parent / "skills"
+            logger.warning(
+                "skills_dir %s does not exist; falling back to %s",
+                skills_dir,
+                repo_skills_dir,
+            )
+            skills_dir = repo_skills_dir
+
+        repo_workflows_dir = Path(__file__).parent.parent / "workflows"
         if not workflows_dir.exists():
-            workflows_dir = Path(__file__).parent.parent / "workflows"
+            logger.warning(
+                "workflows_dir %s does not exist; falling back to %s",
+                workflows_dir,
+                repo_workflows_dir,
+            )
+            workflows_dir = repo_workflows_dir
+
+        repo_engine_dir = Path(__file__).parent
         if not workflow_engine_dir.exists():
-            workflow_engine_dir = Path(__file__).parent
+            logger.warning(
+                "workflow_engine_dir %s does not exist; falling back to %s",
+                workflow_engine_dir,
+                repo_engine_dir,
+            )
+            workflow_engine_dir = repo_engine_dir
+
+        repo_work_dir = Path(__file__).parent / "work"
         if not session_work_dir.exists():
-            session_work_dir = Path(__file__).parent / "work"
+            logger.warning(
+                "session_work_dir %s does not exist; falling back to %s",
+                session_work_dir,
+                repo_work_dir,
+            )
+            session_work_dir = repo_work_dir
 
         # Optional model routing + agent skill injection fields. Defaults are
         # empty so resolve_model() falls back to default_model and dispatch

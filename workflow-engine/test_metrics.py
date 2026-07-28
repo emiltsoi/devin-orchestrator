@@ -261,6 +261,33 @@ class TestClearMetrics:
         mc.clear_metrics("nope")  # must not raise
 
 
+class TestThreadIsolation:
+    def test_concurrent_workflows_keep_separate_stage_tracking(self):
+        """Threads using the same MetricsCollector do not share _current refs."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        mc = MetricsCollector()
+
+        def run_workflow(session_id: str, stage_name: str, skill_name: str):
+            mc.start_workflow(session_id, "manifest")
+            with mc.track_stage(stage_name, skill_name) as stage:
+                stage.success = True
+            return session_id
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_a = executor.submit(run_workflow, "s1", "stage-a", "skill-a")
+            future_b = executor.submit(run_workflow, "s2", "stage-b", "skill-b")
+            future_a.result()
+            future_b.result()
+
+        wf1 = mc.get_workflow_metrics("s1")
+        wf2 = mc.get_workflow_metrics("s2")
+        assert wf1 is not None
+        assert wf2 is not None
+        assert wf1.stage_metrics[0].stage_name == "stage-a"
+        assert wf2.stage_metrics[0].stage_name == "stage-b"
+
+
 class TestGlobalCollector:
     def test_get_metrics_collector_returns_singleton(self):
         a = get_metrics_collector()

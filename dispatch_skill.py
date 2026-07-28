@@ -13,23 +13,12 @@ from bash to dispatch skills to Devin.
 # ruff: noqa: E402
 import json
 import sys
-from pathlib import Path
+
+from bootstrap_path import ensure_workflow_engine_on_path
 
 # Add workflow-engine to Python path using script location
 # This works regardless of installation location
-script_dir = Path(__file__).parent
-workflow_engine_dir = script_dir / "workflow-engine"
-if workflow_engine_dir.exists():
-    sys.path.insert(0, str(workflow_engine_dir))
-else:
-    # Fallback to relative import if script is in workflow-engine directory
-    if script_dir.name == "workflow-engine":
-        sys.path.insert(0, str(script_dir))
-    else:
-        # Last resort: try the global installation path
-        global_path = Path.home() / ".devin-orchestrator" / "workflow-engine"
-        if global_path.exists():
-            sys.path.insert(0, str(global_path))
+ensure_workflow_engine_on_path()
 
 from config_loader import ConfigLoader
 from security_utils import (

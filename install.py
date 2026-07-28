@@ -87,8 +87,10 @@ def install(global_root: Path | None = None, source_dir: Path | None = None, dry
             shutil.copy2(source_config, target_config)
         print(f"Would copy config: {source_config} -> {target_config}")
 
-    # Copy dispatch and MCP entry-point scripts so any workspace can invoke them
-    for script_name in ("dispatch_devin.py", "mcp_server.py"):
+    # Copy dispatch and MCP entry-point scripts so any workspace can invoke them.
+    # bootstrap_path.py must be copied too, because these scripts import it
+    # before adding workflow-engine to sys.path.
+    for script_name in ("bootstrap_path.py", "dispatch_devin.py", "dispatch_skill.py", "mcp_server.py"):
         source_script = source_dir / script_name
         target_script = global_root / script_name
         if source_script.exists():

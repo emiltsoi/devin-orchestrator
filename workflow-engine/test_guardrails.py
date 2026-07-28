@@ -9,7 +9,6 @@ isolation.
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -50,11 +49,10 @@ class TestIsLeafModule:
     def test_from_import_form(self, tmp_path):
         path = _write(
             tmp_path / "mod.py",
-            "from pathlib import Path\nimport yaml\nimport requests\n",
+            "from external_lib import Thing\nimport yaml\nimport requests\n",
         )
-        # The guardrails extractor pulls the imported name from `from X import Y`,
-        # so "Path" counts as external (only "pathlib" is in the stdlib set).
-        # External imports: Path, yaml, requests -> 3 total.
+        # The extractor should pull the module/package from `from X import Y`,
+        # not the imported name. external_lib, yaml, and requests are external.
         assert Guardrails.is_leaf_module(path) is False
         assert Guardrails.is_leaf_module(path, max_coupling=3) is True
 
@@ -85,20 +83,16 @@ class TestVerifySyntax:
 
     def test_valid_syntax(self, tmp_path):
         path = _write(tmp_path / "ok.py", "x = 1\n")
-        with patch("guardrails.subprocess.run") as mock_run:
-            mock_run.return_value = type("R", (), {"returncode": 0})()
-            assert Guardrails.verify_syntax(path) is True
+        assert Guardrails.verify_syntax(path) is True
 
     def test_invalid_syntax(self, tmp_path):
         path = _write(tmp_path / "bad.py", "def (\n")
-        with patch("guardrails.subprocess.run") as mock_run:
-            mock_run.return_value = type("R", (), {"returncode": 1})()
-            assert Guardrails.verify_syntax(path) is False
+        assert Guardrails.verify_syntax(path) is False
 
-    def test_subprocess_exception_returns_false(self, tmp_path):
+    def test_read_error_returns_false(self, tmp_path):
         path = _write(tmp_path / "ok.py", "x = 1\n")
-        with patch("guardrails.subprocess.run", side_effect=OSError("boom")):
-            assert Guardrails.verify_syntax(path) is False
+        path.write_bytes(b"\xff\xfe")
+        assert Guardrails.verify_syntax(path) is False
 
 
 class TestVerifyComplianceBlock:
@@ -119,17 +113,16 @@ class TestVerifyComplianceBlock:
 
     def test_python_file_syntax_passes(self, tmp_path):
         path = _write(tmp_path / "ok.py", "\n".join(f"# {i}" for i in range(15)))
-        with patch("guardrails.subprocess.run") as mock_run:
-            mock_run.return_value = type("R", (), {"returncode": 0})()
-            result = Guardrails.verify_compliance_block("BLOCK", file_path=path)
+        result = Guardrails.verify_compliance_block("BLOCK", file_path=path)
         assert result["verified"] is True
         assert "Syntax verification passed" in " ".join(result["notes"])
 
     def test_python_file_syntax_fails(self, tmp_path):
-        path = _write(tmp_path / "bad.py", "\n".join(f"# {i}" for i in range(15)))
-        with patch("guardrails.subprocess.run") as mock_run:
-            mock_run.return_value = type("R", (), {"returncode": 1})()
-            result = Guardrails.verify_compliance_block("BLOCK", file_path=path)
+        path = _write(
+            tmp_path / "bad.py",
+            "\n".join(f"# {i}" for i in range(15)) + "\ndef (\n",
+        )
+        result = Guardrails.verify_compliance_block("BLOCK", file_path=path)
         assert result["verified"] is False
         assert "Syntax verification FAILED" in " ".join(result["notes"])
 
@@ -160,7 +153,7 @@ class TestCheckLeafModuleBoundary:
     def test_stdlib_only_is_leaf(self, tmp_path):
         path = _write(tmp_path / "mod.py", "import os\nimport sys\nfrom pathlib import Path\n")
         result = Guardrails.check_leaf_module_boundary(path, tmp_path)
-        # `from pathlib import Path` extracts "Path" (not in stdlib set), so
-        # coupling_count is 1. Still within the leaf threshold of 2.
-        assert result["coupling_count"] == 1
+        # `from pathlib import Path` extracts the module "pathlib" (stdlib),
+        # so it does not count toward coupling.
+        assert result["coupling_count"] == 0
         assert result["is_leaf"] is True

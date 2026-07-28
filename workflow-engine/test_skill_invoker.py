@@ -88,7 +88,7 @@ class TestSkillInvoker(unittest.TestCase):
         """Should fail when skill YAML not found"""
         context = {"session_id": "TEST-002"}
 
-        result = self.skill_invoker.invoke_skill("nonexistent_skill", context)
+        result = self.skill_invoker.invoke_skill("nonexistent-skill", context)
 
         self.assertFalse(result.success)
         self.assertIsNone(result.session_id)
@@ -98,13 +98,13 @@ class TestSkillInvoker(unittest.TestCase):
     def test_invoke_skill_missing_narrative(self):
         """Should fail when skill markdown not found"""
         # Create YAML but not markdown
-        (self.skills_dir / "partial_skill.yaml").write_text(
-            "schema_version: 1\nname: partial_skill\n"
+        (self.skills_dir / "partial-skill.yaml").write_text(
+            "schema_version: 1\nname: partial-skill\n"
         )
 
         context = {"session_id": "TEST-003"}
 
-        result = self.skill_invoker.invoke_skill("partial_skill", context)
+        result = self.skill_invoker.invoke_skill("partial-skill", context)
 
         self.assertFalse(result.success)
         self.assertIsNone(result.session_id)

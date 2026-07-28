@@ -8,8 +8,8 @@ from pathlib import Path
 from devin_cli_adapter import DevinCliAdapter
 
 
-def test_skill_loading():
-    """Test that skills are loaded and injected correctly"""
+def _run_skill_loading_test():
+    """Run the skill-loading checks and return the result dictionary."""
 
     # Initialize adapter with skills directory
     devin_cli_path = str(Path.home() / "AppData/Local/devin/cli/bin/devin.exe")
@@ -26,7 +26,7 @@ def test_skill_loading():
     coder_prompt = (
         "This is a coding dispatch and implementation task. Implement a function."
     )
-    injected_coder = adapter._inject_skills(coder_prompt)
+    injected_coder = adapter._inject_skills(coder_prompt, skill_filter=["ponytail"])
 
     print("=== Test 1: Coder Dispatch (should trigger ponytail) ===")
     print(f"Original prompt: {coder_prompt}")
@@ -38,7 +38,9 @@ def test_skill_loading():
 
     # Test 2: Reviewer dispatch should trigger swe-compliance
     reviewer_prompt = "This is a compliance review task, code verification, artifact audit, and quality check."
-    injected_reviewer = adapter._inject_skills(reviewer_prompt)
+    injected_reviewer = adapter._inject_skills(
+        reviewer_prompt, skill_filter=["swe-compliance"]
+    )
 
     print("=== Test 2: Reviewer Dispatch (should trigger swe-compliance) ===")
     print(f"Original prompt: {reviewer_prompt}")
@@ -78,8 +80,17 @@ def test_skill_loading():
     }
 
 
+def test_skill_loading():
+    """Test that skills are loaded and injected correctly"""
+    results = _run_skill_loading_test()
+    assert results["skills_loaded"] == 2
+    assert results["coder_triggers_ponytail"]
+    assert results["reviewer_triggers_compliance"]
+    assert results["generic_unchanged"]
+
+
 if __name__ == "__main__":
-    results = test_skill_loading()
+    results = _run_skill_loading_test()
     print("\n=== Test Results ===")
     for key, value in results.items():
         print(f"{key}: {value}")

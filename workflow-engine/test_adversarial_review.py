@@ -9,8 +9,8 @@ from pathlib import Path
 from skill_invoker import SkillInvoker
 
 
-def test_adversarial_review():
-    """Test adversarial review with multi Devin dispatch"""
+def _run_adversarial_review_test():
+    """Run the adversarial review checks and return a result dictionary."""
 
     # Sample proposal for testing
     proposal = """
@@ -217,7 +217,14 @@ Output format:
     return {"proposal": proposal, "results": results, "verdict": verdict}
 
 
+def test_adversarial_review():
+    """Test adversarial review with multi Devin dispatch"""
+    results = _run_adversarial_review_test()
+    assert results["verdict"]["verdict"]
+    assert isinstance(results["verdict"]["verdict"], str)
+
+
 if __name__ == "__main__":
-    results = test_adversarial_review()
+    results = _run_adversarial_review_test()
     print("=== Test Complete ===")
     print("Verdict: " + results["verdict"]["verdict"])

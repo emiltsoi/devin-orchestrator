@@ -8,9 +8,19 @@ across different orchestration contexts.
 
 import json
 import logging
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+try:
+    from watchdog.events import FileSystemEventHandler
+    from watchdog.observers import Observer
+
+    WATCHDOG_AVAILABLE = True
+except ImportError:
+    WATCHDOG_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +104,9 @@ def session_init(session_id: str, work_dir: Path, request_content: str = "") -> 
         raise
 
 
-def validate_structural(artifacts: list[Path]) -> dict[str, Any]:
+def validate_structural(
+    artifacts: list[Path], required_artifacts: list[str] | None = None
+) -> dict[str, Any]:
     """
     Validate structural floor for output artifacts
 
@@ -104,6 +116,7 @@ def validate_structural(artifacts: list[Path]) -> dict[str, Any]:
 
     Args:
         artifacts: List of artifact paths to validate
+        required_artifacts: Optional list of artifact names that must be produced
 
     Returns:
         Dictionary with validation results:
@@ -115,7 +128,7 @@ def validate_structural(artifacts: list[Path]) -> dict[str, Any]:
     """
     from floor_validator import validate_structural as _floor_validate_structural
 
-    result = _floor_validate_structural(artifacts)
+    result = _floor_validate_structural(artifacts, required_artifacts=required_artifacts)
     return {
         "valid": result["result"] == "PASS",
         "errors": result["failures"],
@@ -204,6 +217,62 @@ def create_placeholder_artifact(artifact_path: Path, content: str) -> None:
     """
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text(content)
+
+
+def wait_for_file_change(
+    target_path: Path,
+    timeout: float | None = None,
+    poll_interval: float = 0.5,
+) -> bool:
+    """
+    Wait until `target_path` is created or modified using filesystem events.
+
+    Uses watchdog when available and falls back to a polling loop otherwise.
+    Returns True if a change was observed, False if the timeout expired.
+    """
+    target_path = Path(target_path)
+    target_dir = target_path.parent
+    target_name = target_path.name
+
+    if WATCHDOG_AVAILABLE and target_dir.exists():
+        changed = threading.Event()
+
+        class _Handler(FileSystemEventHandler):
+            def on_any_event(self, event):
+                if Path(event.src_path).name == target_name:
+                    changed.set()
+
+        observer = Observer()
+        try:
+            observer.schedule(_Handler(), str(target_dir), recursive=False)
+            observer.start()
+            return changed.wait(timeout=timeout)
+        finally:
+            observer.stop()
+            observer.join(timeout=5)
+            if observer.is_alive():
+                logger.warning(
+                    "watchdog observer for %s did not stop within timeout; thread may leak",
+                    target_dir,
+                )
+
+    # Fallback: poll mtime for changes or wait for file to appear/disappear.
+    initial_mtime = target_path.stat().st_mtime if target_path.exists() else None
+    start = time.time()
+    while True:
+        time.sleep(poll_interval)
+
+        exists = target_path.exists()
+        if not exists:
+            if initial_mtime is not None:
+                return True
+        else:
+            current_mtime = target_path.stat().st_mtime
+            if initial_mtime is None or current_mtime != initial_mtime:
+                return True
+
+        if timeout is not None and time.time() - start >= timeout:
+            return False
 
 
 def load_manifest(manifest_path: Path) -> dict[str, Any]:

@@ -10,12 +10,16 @@ from typing import Any
 import yaml
 
 
-def validate_structural(artifacts: list[Path] | Path) -> dict[str, Any]:
+def validate_structural(
+    artifacts: list[Path] | Path, required_artifacts: list[str] | None = None
+) -> dict[str, Any]:
     """
-    Check if artifacts exist, are non-empty, and contain no placeholders
+    Check if required artifacts exist, are non-empty, contain no placeholders,
+    and that declared YAML/JSON files parse correctly.
 
     Args:
         artifacts: Single path or list of paths to the artifact files
+        required_artifacts: Optional list of artifact names that must be present
 
     Returns:
         Dict with 'result' (PASS|FAIL) and 'failures' list
@@ -25,13 +29,20 @@ def validate_structural(artifacts: list[Path] | Path) -> dict[str, Any]:
 
     failures = []
 
-    # Check for placeholder patterns
+    if required_artifacts:
+        artifact_names = {p.name for p in artifacts if isinstance(p, Path)}
+        for required in required_artifacts:
+            if required not in artifact_names:
+                failures.append(f"Required artifact missing: {required}")
+
+    # Explicit placeholder tokens. Word boundaries avoid flagging legitimate
+    # words like "todolist" while still catching "TODO" and "TODO:".
     placeholder_patterns = [
-        r"PLACEHOLDER",
-        r"TODO",
-        r"TBD",
+        r"\bPLACEHOLDER\b",
+        r"\bTODO\b",
+        r"\bTBD\b",
         r"Created after dispatch failure",
-        r"<!-- .* -->",  # HTML comment placeholders
+        r"<!--[\s\S]*?-->",  # HTML comment placeholders
     ]
 
     for artifact in artifacts:
@@ -53,6 +64,10 @@ def validate_structural(artifacts: list[Path] | Path) -> dict[str, Any]:
             if re.search(pattern, content, re.IGNORECASE):
                 failures.append(f"Artifact contains placeholder pattern: {pattern}")
                 break
+
+        fmt = validate_format(artifact)
+        if fmt["result"] == "FAIL":
+            failures.extend(fmt["failures"])
 
     return {"result": "PASS" if not failures else "FAIL", "failures": failures}
 
