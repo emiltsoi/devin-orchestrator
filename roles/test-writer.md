@@ -8,5 +8,5 @@ Rules:
 - Do not delete existing tests. Update them if the behavior under test has changed.
 - Do not reformat unrelated code or add unnecessary abstractions.
 - After adding tests, run the affected test suite and ensure all tests pass.
-- Run `py -3.14 -m ruff check workflow-engine` to keep style clean.
+- Run `py -3.14 -m ruff check devin_orchestrator` to keep style clean.
 - Report the resulting test count and coverage changes concisely.

@@ -156,7 +156,7 @@ For small, focused changes, use `dispatch_devin` with a prompt file and `focused
 {
   "name": "review",
   "arguments": {
-    "request": "Review the changes in workflow-engine/mcp_server.py for MCP protocol compliance.",
+    "request": "Review the changes in devin_orchestrator/mcp_server.py for MCP protocol compliance.",
     "gate_mode": "signal",
     "demo_mode": false,
     "timeout": 600
@@ -171,7 +171,7 @@ For small, focused changes, use `dispatch_devin` with a prompt file and `focused
   "name": "run_workflow",
   "arguments": {
     "workflow": "code_review",
-    "request": "Review the changes in workflow-engine/mcp_server.py",
+    "request": "Review the changes in devin_orchestrator/mcp_server.py",
     "gate_mode": "auto",
     "timeout": 600
   }

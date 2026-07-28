@@ -91,7 +91,7 @@ install_global() {
     local directories_to_copy=(
         "skills"
         "workflows"
-        "workflow-engine"
+        "devin_orchestrator"
         "adapters"
         "contracts"
     )
@@ -187,7 +187,7 @@ update_config() {
         sed -i.bak "s|global_root:.*|global_root: $install_path|g" "$config_path"
         sed -i.bak "s|skills_dir:.*|skills_dir: $install_path/skills|g" "$config_path"
         sed -i.bak "s|workflows_dir:.*|workflows_dir: $install_path/workflows|g" "$config_path"
-        sed -i.bak "s|workflow_engine_dir:.*|workflow_engine_dir: $install_path/workflow-engine|g" "$config_path"
+        sed -i.bak "s|workflow_engine_dir:.*|workflow_engine_dir: $install_path/devin_orchestrator|g" "$config_path"
         sed -i.bak "s|session_work_dir:.*|session_work_dir: $install_path/work|g" "$config_path"
 
         # Remove backup file

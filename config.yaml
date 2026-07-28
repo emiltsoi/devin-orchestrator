@@ -5,7 +5,7 @@
 global_root: ~/.devin-orchestrator
 skills_dir: ~/.devin-orchestrator/skills
 workflows_dir: ~/.devin-orchestrator/workflows
-workflow_engine_dir: ~/.devin-orchestrator/workflow-engine
+workflow_engine_dir: ~/.devin-orchestrator/devin_orchestrator
 
 # Devin CLI configuration
 # Set DEVIN_CLI_PATH environment variable or update this path

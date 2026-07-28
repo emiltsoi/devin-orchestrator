@@ -24,7 +24,7 @@ Implement basic workflow engine with manual skill invocation and step execution,
 ## Implementation Order
 
 ### 1. Manifest Loader
-**File**: `workflow-engine/manifest_loader.py`
+**File**: `devin_orchestrator/manifest_loader.py`
 
 **Responsibilities:**
 - Load YAML manifest from file
@@ -46,7 +46,7 @@ Implement basic workflow engine with manual skill invocation and step execution,
 - branch required
 
 ### 2. Session Manager
-**File**: `workflow-engine/session_manager.py`
+**File**: `devin_orchestrator/session_manager.py`
 
 **Responsibilities:**
 - Create session directory
@@ -74,7 +74,7 @@ phase=step-1  skill=brainstorming  retries=0/0
 ```
 
 ### 3. Basic Step Executor
-**File**: `workflow-engine/step_executor.py`
+**File**: `devin_orchestrator/step_executor.py`
 
 **Responsibilities:**
 - Load manifest

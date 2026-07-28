@@ -30,13 +30,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from bootstrap_path import ensure_workflow_engine_on_path
+from bootstrap_path import ensure_devin_orchestrator_on_path
 
 logger = logging.getLogger(__name__)
 
-# Add workflow-engine to Python path so we can import ConfigLoader and
+# Add devin_orchestrator to Python path so we can import ConfigLoader and
 # security_utils without requiring the harness to be installed as a package.
-ensure_workflow_engine_on_path()
+ensure_devin_orchestrator_on_path()
 
 try:
     import yaml
@@ -86,7 +86,9 @@ class McpServer:
     MIN_TIMEOUT_SECONDS = 1
     MAX_TIMEOUT_SECONDS = 3600
 
-    DEFAULT_MESSAGE_LOG = Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+    DEFAULT_MESSAGE_LOG = (
+        Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+    )
 
     def __init__(
         self, workspace: str | None = None, message_log_path: str | None = None
@@ -115,17 +117,13 @@ class McpServer:
             logger.warning("Cannot open MCP message log %s: %s", message_log_path, e)
             self._message_log = None
 
-    def _log_message(
-        self, direction: str, payload: dict[str, Any] | bytes
-    ) -> None:
+    def _log_message(self, direction: str, payload: dict[str, Any] | bytes) -> None:
         """Append a JSON-RPC message (or raw bytes) to the message log."""
         if self._message_log is None:
             return
         try:
             if isinstance(payload, bytes):
-                message: Any = {
-                    "_raw": payload.decode("utf-8", errors="replace")
-                }
+                message: Any = {"_raw": payload.decode("utf-8", errors="replace")}
             else:
                 message = payload
             entry = {
@@ -199,10 +197,22 @@ class McpServer:
                             "type": "string",
                             "description": "Workspace directory where Devin runs and writes outputs",
                         },
-                        "model": {"type": "string", "description": "Model to use for the worker (e.g. swe-1.6). Overrides default routing."},
-                        "agent": {"type": "string", "description": "Optional agent identifier or override."},
-                        "phase": {"type": "string", "description": "Optional workflow phase context."},
-                        "output_file": {"type": "string", "description": "Path where the worker writes a structured execution report."},
+                        "model": {
+                            "type": "string",
+                            "description": "Model to use for the worker (e.g. swe-1.6). Overrides default routing.",
+                        },
+                        "agent": {
+                            "type": "string",
+                            "description": "Optional agent identifier or override.",
+                        },
+                        "phase": {
+                            "type": "string",
+                            "description": "Optional workflow phase context.",
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Path where the worker writes a structured execution report.",
+                        },
                         "focused_context": {
                             "type": "array",
                             "items": {"type": "string"},
@@ -558,7 +568,7 @@ class McpServer:
             "continue_workflow": 15,
             "query_workflow_status": 16,
         }
-        tools.sort(key=lambda tool: tool_order.get(tool.get("name"), 100))
+        tools.sort(key=lambda tool: tool_order.get(str(tool.get("name") or ""), 100))
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
@@ -625,13 +635,22 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
 
         # Check rate limit for this tool
         if not self._check_rate_limit(name):
-            content = [self._text_content(f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds.")]
+            content = [
+                self._text_content(
+                    f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds."
+                )
+            ]
             is_error = True
         else:
             try:
                 content = self._run_tool(name, arguments)
                 is_error = False
-            except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
+            except (
+                FileNotFoundError,
+                ValueError,
+                InvalidInputError,
+                PathTraversalError,
+            ) as e:
                 content = [self._text_content(f"Error: {e}")]
                 is_error = True
             except (KeyError, TypeError) as e:
@@ -659,7 +678,8 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         current_time = time.time()
         # Clean up old calls outside the time window
         self._tool_call_history[tool_name] = [
-            timestamp for timestamp in self._tool_call_history[tool_name]
+            timestamp
+            for timestamp in self._tool_call_history[tool_name]
             if current_time - timestamp < self.RATE_LIMIT_WINDOW_SECONDS
         ]
 
@@ -688,13 +708,19 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return self.DEFAULT_TIMEOUT_SECONDS
 
         if not isinstance(timeout, int):
-            raise InvalidInputError(f"Timeout must be an integer, got {type(timeout).__name__}")
+            raise InvalidInputError(
+                f"Timeout must be an integer, got {type(timeout).__name__}"
+            )
 
         if timeout < self.MIN_TIMEOUT_SECONDS:
-            raise InvalidInputError(f"Timeout must be at least {self.MIN_TIMEOUT_SECONDS} seconds")
+            raise InvalidInputError(
+                f"Timeout must be at least {self.MIN_TIMEOUT_SECONDS} seconds"
+            )
 
         if timeout > self.MAX_TIMEOUT_SECONDS:
-            raise InvalidInputError(f"Timeout cannot exceed {self.MAX_TIMEOUT_SECONDS} seconds")
+            raise InvalidInputError(
+                f"Timeout cannot exceed {self.MAX_TIMEOUT_SECONDS} seconds"
+            )
 
         return timeout
 
@@ -735,9 +761,9 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
                 yaml_file = entry / f"{entry.name}.yaml"
                 if entry.is_dir() and yaml_file.exists():
                     try:
-                        data = yaml.safe_load(
-                            yaml_file.read_text(encoding="utf-8")
-                        ) or {}
+                        data = (
+                            yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+                        )
                     except yaml.YAMLError as e:
                         # Skip malformed skill YAML files so a single corrupt
                         # file does not crash the listing operation.
@@ -818,7 +844,9 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         use_cases_file = workflows_dir / "use-cases.yaml"
         if use_cases_file.exists():
             try:
-                use_cases_data = yaml.safe_load(use_cases_file.read_text(encoding="utf-8")) or {}
+                use_cases_data = (
+                    yaml.safe_load(use_cases_file.read_text(encoding="utf-8")) or {}
+                )
                 for uc in use_cases_data.get("use_cases", []):
                     wf_name = uc.get("workflow")
                     if not wf_name:
@@ -840,9 +868,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         if workflows_dir.exists():
             for manifest in sorted(workflows_dir.glob("*.manifest.yaml")):
                 try:
-                    data = yaml.safe_load(
-                        manifest.read_text(encoding="utf-8")
-                    ) or {}
+                    data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
                 except yaml.YAMLError as e:
                     # Skip malformed workflow manifests so a single corrupt
                     # file does not crash the listing operation.
@@ -1049,9 +1075,9 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
                 cwd=str(work_dir),
             )
         except subprocess.TimeoutExpired:
-            return [self._text_content(
-                f"Devin dispatch timed out after {timeout} seconds."
-            )]
+            return [
+                self._text_content(f"Devin dispatch timed out after {timeout} seconds.")
+            ]
         text = (
             f"Exit code: {result.returncode}\n\nSTDOUT:\n"
             f"{self._truncate_output(result.stdout)}"
@@ -1138,9 +1164,9 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return [self._text_content(
-                f"Skill dispatch timed out after {timeout} seconds."
-            )]
+            return [
+                self._text_content(f"Skill dispatch timed out after {timeout} seconds.")
+            ]
         text = (
             f"Exit code: {result.returncode}\n\nSTDOUT:\n"
             f"{self._truncate_output(result.stdout)}"
@@ -1176,7 +1202,9 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             try:
                 workspace = resolve_session(self.config.session_work_dir, session_id)
             except (FileNotFoundError, ValueError) as e:
-                return [self._text_content(f"Failed to resolve session {session_id}: {e}")]
+                return [
+                    self._text_content(f"Failed to resolve session {session_id}: {e}")
+                ]
             base = Path(workspace)
         else:
             # Without a session_id, use the caller-supplied workspace (or the
@@ -1508,28 +1536,32 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             "systematic-debugging",
         }
         if skill_name not in process_skills:
-            return [self._text_content(json.dumps(
-                {
-                    "success": False,
-                    "error": (
-                        f"run_skill is not the right tool for '{skill_name}'. "
-                        "It is intended for process skills only. "
-                        "For implementation use `implement`, `run_workflow`, or "
-                        "`dispatch_devin`. For review use `review` or "
-                        "`dispatch_devin` with a reviewer role. For investigation "
-                        "use `investigate` or `dispatch_devin` with a reviewer role."
-                    ),
-                    "skill": skill_name,
-                    "suggested_tools": [
-                        "implement",
-                        "run_workflow",
-                        "dispatch_devin",
-                        "review",
-                        "investigate",
-                    ],
-                },
-                indent=2,
-            ))]
+            return [
+                self._text_content(
+                    json.dumps(
+                        {
+                            "success": False,
+                            "error": (
+                                f"run_skill is not the right tool for '{skill_name}'. "
+                                "It is intended for process skills only. "
+                                "For implementation use `implement`, `run_workflow`, or "
+                                "`dispatch_devin`. For review use `review` or "
+                                "`dispatch_devin` with a reviewer role. For investigation "
+                                "use `investigate` or `dispatch_devin` with a reviewer role."
+                            ),
+                            "skill": skill_name,
+                            "suggested_tools": [
+                                "implement",
+                                "run_workflow",
+                                "dispatch_devin",
+                                "review",
+                                "investigate",
+                            ],
+                        },
+                        indent=2,
+                    )
+                )
+            ]
 
         orchestrator = StatelessOrchestrator(
             workspace=self.workspace,

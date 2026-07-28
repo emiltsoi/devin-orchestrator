@@ -156,8 +156,8 @@ class TestLoadConfig:
 
     def test_fallback_to_local_dirs_when_paths_missing(self, tmp_path):
         # When configured directories don't exist, the loader falls back to
-        # the local repository layout (skills/, workflows/, workflow-engine/,
-        # workflow-engine/work/).
+        # the local repository layout (skills/, workflows/, devin_orchestrator/,
+        # devin_orchestrator/work/).
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
             yaml.safe_dump(
@@ -171,7 +171,7 @@ class TestLoadConfig:
             encoding="utf-8",
         )
         config = ConfigLoader.load(config_path=config_path)
-        # All fallback paths should resolve inside the workflow-engine directory.
+        # All fallback paths should resolve inside the devin_orchestrator directory.
         assert config.workflow_engine_dir == Path(__file__).parent
         assert config.session_work_dir == Path(__file__).parent / "work"
 

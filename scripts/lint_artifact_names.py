@@ -24,7 +24,7 @@ def validate_artifact_name(name):
     """
     # Allow only lowercase letters, numbers, hyphens, and underscores (for compatibility)
     # Prefer hyphens, but allow underscores for existing artifacts
-    pattern = r'^[a-z0-9_-]+\.md$'
+    pattern = r"^[a-z0-9_-]+\.md$"
     return bool(re.match(pattern, name))
 
 
@@ -43,24 +43,34 @@ def validate_manifest(manifest_path):
     with open(manifest_path) as f:
         manifest = yaml.safe_load(f)
 
-    if 'stages' in manifest:
-        for stage in manifest['stages']:
+    if "stages" in manifest:
+        for stage in manifest["stages"]:
             # Check required_artifacts
-            if 'required_artifacts' in stage:
-                for artifact in stage['required_artifacts']:
+            if "required_artifacts" in stage:
+                for artifact in stage["required_artifacts"]:
                     if not validate_artifact_name(artifact):
                         errors.append(
-                            manifest_path.name + ": Stage " + str(stage.get('step')) + ", " +
-                            "required_artifact '" + artifact + "' does not follow naming convention"
+                            manifest_path.name
+                            + ": Stage "
+                            + str(stage.get("step"))
+                            + ", "
+                            + "required_artifact '"
+                            + artifact
+                            + "' does not follow naming convention"
                         )
 
             # Check output_artifacts
-            if 'output_artifacts' in stage:
-                for artifact in stage['output_artifacts']:
+            if "output_artifacts" in stage:
+                for artifact in stage["output_artifacts"]:
                     if not validate_artifact_name(artifact):
                         errors.append(
-                            manifest_path.name + ": Stage " + str(stage.get('step')) + ", " +
-                            "output_artifact '" + artifact + "' does not follow naming convention"
+                            manifest_path.name
+                            + ": Stage "
+                            + str(stage.get("step"))
+                            + ", "
+                            + "output_artifact '"
+                            + artifact
+                            + "' does not follow naming convention"
                         )
 
     return errors
@@ -78,7 +88,9 @@ def main():
         sys.exit(1)
 
     # Find all manifest files
-    manifest_files = list(workflows_dir.glob("*.yaml")) + list(workflows_dir.glob("*.yml"))
+    manifest_files = list(workflows_dir.glob("*.yaml")) + list(
+        workflows_dir.glob("*.yml")
+    )
 
     all_errors = []
 
@@ -96,7 +108,9 @@ def main():
         print()
         print("Artifact naming convention:")
         print("  - Use lowercase letters, numbers, hyphens, and underscores")
-        print("  - Prefer hyphens over underscores (e.g., design.md, not design_file.md)")
+        print(
+            "  - Prefer hyphens over underscores (e.g., design.md, not design_file.md)"
+        )
         print("  - Examples: design.md, worktree-info.md, baseline-test-results.md")
         sys.exit(1)
     else:

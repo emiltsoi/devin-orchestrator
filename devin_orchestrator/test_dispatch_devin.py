@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-# Make the workflow-engine importable (for config_loader etc.) and the repo
+# Make the devin_orchestrator importable (for config_loader etc.) and the repo
 # root importable (for dispatch_devin itself).
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(Path(__file__).parent))

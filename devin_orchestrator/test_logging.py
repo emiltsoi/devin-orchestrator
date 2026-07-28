@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add workflow-engine to path
+# Add devin_orchestrator to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from orchestration_logger import LogLevel, get_logger, reset_logger

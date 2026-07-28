@@ -1,4 +1,4 @@
-"""Tests for workflow-engine/model_resolver.py."""
+"""Tests for devin_orchestrator/model_resolver.py."""
 
 from __future__ import annotations
 

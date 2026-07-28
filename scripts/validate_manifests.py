@@ -40,10 +40,10 @@ def extract_referenced_skills(manifest: dict) -> set[str]:
     """Extract all skill references from a manifest."""
     skills = set()
 
-    if 'stages' in manifest:
-        for stage in manifest['stages']:
-            if 'skill' in stage:
-                skills.add(stage['skill'])
+    if "stages" in manifest:
+        for stage in manifest["stages"]:
+            if "skill" in stage:
+                skills.add(stage["skill"])
 
     return skills
 
@@ -56,7 +56,9 @@ def validate_manifests(workflows_dir: Path, skills_dir: Path) -> list[dict]:
     available_skills = find_skill_files(skills_dir)
 
     # Find all manifest files
-    manifest_files = list(workflows_dir.glob("*.yaml")) + list(workflows_dir.glob("*.yml"))
+    manifest_files = list(workflows_dir.glob("*.yaml")) + list(
+        workflows_dir.glob("*.yml")
+    )
 
     for manifest_file in manifest_files:
         try:
@@ -65,16 +67,20 @@ def validate_manifests(workflows_dir: Path, skills_dir: Path) -> list[dict]:
 
             for skill in referenced_skills:
                 if skill not in available_skills:
-                    errors.append({
-                        'manifest': str(manifest_file),
-                        'skill': skill,
-                        'error': f"Skill '{skill}' not found in skills directory"
-                    })
+                    errors.append(
+                        {
+                            "manifest": str(manifest_file),
+                            "skill": skill,
+                            "error": f"Skill '{skill}' not found in skills directory",
+                        }
+                    )
         except Exception as e:
-            errors.append({
-                'manifest': str(manifest_file),
-                'error': f"Failed to load manifest: {str(e)}"
-            })
+            errors.append(
+                {
+                    "manifest": str(manifest_file),
+                    "error": f"Failed to load manifest: {str(e)}",
+                }
+            )
 
     return errors
 
@@ -97,8 +103,10 @@ def main():
     if errors:
         print("❌ Manifest validation failed:")
         for error in errors:
-            if 'skill' in error:
-                print(f"  - {error['manifest']}: references missing skill '{error['skill']}'")
+            if "skill" in error:
+                print(
+                    f"  - {error['manifest']}: references missing skill '{error['skill']}'"
+                )
             else:
                 print(f"  - {error['manifest']}: {error['error']}")
         sys.exit(1)

@@ -55,7 +55,7 @@ class OrchestrationLogger:
 
         Args:
             name: Logger name
-            log_dir: Directory for log files (defaults to workflow-engine/logs)
+            log_dir: Directory for log files (defaults to devin_orchestrator/logs)
             log_level: Minimum log level to capture
             enable_console: Whether to output to console
             enable_file: Whether to output to file

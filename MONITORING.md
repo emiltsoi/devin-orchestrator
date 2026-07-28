@@ -57,35 +57,30 @@ from monitoring import MonitoringConfig, get_monitoring_system
 config = MonitoringConfig(
     # Health check interval in seconds
     health_check_interval=60,
-    
     # Retention settings
     metrics_retention_hours=24,
     alert_retention_hours=168,  # 7 days
     max_alerts=1000,
-    
     # Enable continuous monitoring
     enable_continuous_monitoring=True,
-    
     # Performance thresholds
     performance_thresholds={
-        'stage_duration_warning': 300.0,      # 5 minutes
-        'stage_duration_critical': 600.0,      # 10 minutes
-        'workflow_duration_warning': 1800.0,   # 30 minutes
-        'workflow_duration_critical': 3600.0,  # 1 hour
-        'failure_rate_warning': 0.1,            # 10%
-        'failure_rate_critical': 0.25,          # 25%
+        "stage_duration_warning": 300.0,  # 5 minutes
+        "stage_duration_critical": 600.0,  # 10 minutes
+        "workflow_duration_warning": 1800.0,  # 30 minutes
+        "workflow_duration_critical": 3600.0,  # 1 hour
+        "failure_rate_warning": 0.1,  # 10%
+        "failure_rate_critical": 0.25,  # 25%
     },
-    
     # Resource thresholds
     resource_thresholds={
-        'cpu_warning': 80.0,      # 80%
-        'cpu_critical': 90.0,      # 90%
-        'memory_warning': 80.0,    # 80%
-        'memory_critical': 90.0,    # 90%
-        'disk_warning': 80.0,      # 80%
-        'disk_critical': 90.0,      # 90%
+        "cpu_warning": 80.0,  # 80%
+        "cpu_critical": 90.0,  # 90%
+        "memory_warning": 80.0,  # 80%
+        "memory_critical": 90.0,  # 90%
+        "disk_warning": 80.0,  # 80%
+        "disk_critical": 90.0,  # 90%
     },
-    
     # Email notification settings
     email_enabled=False,
     email_smtp_server="smtp.gmail.com",
@@ -94,11 +89,10 @@ config = MonitoringConfig(
     email_password="your-app-password",
     email_from="your-email@gmail.com",
     email_to=["admin@example.com"],
-    
     # Webhook notification settings
     webhook_enabled=False,
     webhook_url="https://hooks.example.com/alerts",
-    webhook_headers={"Authorization": "Bearer your-token"}
+    webhook_headers={"Authorization": "Bearer your-token"},
 )
 
 # Get monitoring system with custom config
@@ -151,7 +145,7 @@ engine = OrchestrationEngine(work_dir=Path("/path/to/work"))
 result = engine.execute_workflow(
     manifest_path=Path("/path/to/manifest.yaml"),
     session_id="session-123",
-    request_content="Build a web application"
+    request_content="Build a web application",
 )
 
 # The monitoring system will automatically:
@@ -175,7 +169,7 @@ alert = monitoring.alert_manager.create_alert(
     title="Custom Alert",
     message="Something needs attention",
     source="ManualCheck",
-    metadata={"custom_field": "value"}
+    metadata={"custom_field": "value"},
 )
 ```
 
@@ -244,12 +238,12 @@ To enable email notifications:
 1. Set `email_enabled=True` in the configuration
 2. Configure SMTP server settings:
    ```python
-   email_smtp_server="smtp.gmail.com"
-   email_smtp_port=587
-   email_username="your-email@gmail.com"
-   email_password="your-app-password"  # Use app-specific password
-   email_from="your-email@gmail.com"
-   email_to=["admin@example.com", "team@example.com"]
+   email_smtp_server = "smtp.gmail.com"
+   email_smtp_port = 587
+   email_username = "your-email@gmail.com"
+   email_password = "your-app-password"  # Use app-specific password
+   email_from = "your-email@gmail.com"
+   email_to = ["admin@example.com", "team@example.com"]
    ```
 
 For Gmail, you'll need to:
@@ -264,11 +258,8 @@ To enable webhook notifications:
 1. Set `webhook_enabled=True` in the configuration
 2. Configure webhook URL and optional headers:
    ```python
-   webhook_url="https://hooks.example.com/alerts"
-   webhook_headers={
-       "Authorization": "Bearer your-token",
-       "X-Custom-Header": "value"
-   }
+   webhook_url = "https://hooks.example.com/alerts"
+   webhook_headers = {"Authorization": "Bearer your-token", "X-Custom-Header": "value"}
    ```
 
 The webhook will receive a JSON payload with alert details:

@@ -8,4 +8,4 @@ Rules:
 - Prefer `os.path.realpath` or strict path containment to prevent symlink and traversal bypasses.
 - Add focused unit tests that exercise malicious inputs and edge cases.
 - Do not weaken existing behavior; preserve public signatures and defaults.
-- Run the affected tests and `py -3.14 -m ruff check workflow-engine` after changes.
+- Run the affected tests and `py -3.14 -m ruff check devin_orchestrator` after changes.

@@ -14,7 +14,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from artifact_validator import ArtifactValidator
 from config_loader import ConfigLoader
@@ -117,11 +117,19 @@ class OrchestrationEngine:
             Dictionary with execution results
         """
         # Validate inputs and load manifest
-        session_id, manifest_path, manifest, error = self._validate_and_load_manifest(
-            session_id, manifest_path
-        )
+        (
+            validated_session_id,
+            validated_manifest_path,
+            manifest,
+            error,
+        ) = self._validate_and_load_manifest(session_id, manifest_path)
         if error is not None:
             return error
+        assert validated_session_id is not None
+        assert validated_manifest_path is not None
+        assert manifest is not None
+        session_id = validated_session_id
+        manifest_path = validated_manifest_path
         try:
             config_overrides = parse_config_overrides(config_overrides)
         except InvalidInputError as e:
@@ -140,6 +148,7 @@ class OrchestrationEngine:
         )
         if error is not None:
             return error
+        assert session_dir is not None
 
         # Persist manifest name in session.json so a later continue_workflow
         # call can locate the manifest without requiring the caller to resupply it.
@@ -244,11 +253,19 @@ class OrchestrationEngine:
             allow_absolute=True,
         )
 
-        session_id, manifest_path, manifest, error = self._validate_and_load_manifest(
-            session_id, manifest_path
-        )
+        (
+            validated_session_id,
+            validated_manifest_path,
+            manifest,
+            error,
+        ) = self._validate_and_load_manifest(session_id, manifest_path)
         if error is not None:
             return error
+        assert validated_session_id is not None
+        assert validated_manifest_path is not None
+        assert manifest is not None
+        session_id = validated_session_id
+        manifest_path = validated_manifest_path
         try:
             config_overrides = parse_config_overrides(config_overrides)
         except InvalidInputError as e:
@@ -326,7 +343,7 @@ class OrchestrationEngine:
 
     def _validate_and_load_manifest(
         self, session_id: str, manifest_path: Path
-    ) -> tuple[str, Path, dict[str, Any] | None, dict[str, Any] | None]:
+    ) -> tuple[str | None, Path | None, dict[str, Any] | None, dict[str, Any] | None]:
         """
         Validate and sanitize inputs, then load the workflow manifest.
 
@@ -453,7 +470,7 @@ class OrchestrationEngine:
 
     def _init_workflow_session(
         self, session_id: str, request_content: str, manifest: dict[str, Any]
-    ) -> tuple[Path, dict[str, Any] | None]:
+    ) -> tuple[Path | None, dict[str, Any] | None]:
         """
         Initialize the session directory.
 
@@ -760,7 +777,7 @@ Edit this file with your input, then save to continue.
         # No valid input found
         return None
 
-def _print_cli_error(message: str, error_type: str, details: str | None = None) -> None:
+def _print_cli_error(message: str, error_type: str, details: str | None = None) -> NoReturn:
     """Print a CLI error as JSON and exit with code 1."""
     error_data: dict[str, Any] = {"error": message, "error_type": error_type}
     if details is not None:

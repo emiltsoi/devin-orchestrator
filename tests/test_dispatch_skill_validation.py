@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "devin_orchestrator"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from security_utils import SecurityError  # noqa: E402
@@ -54,8 +54,9 @@ def _stub_invoker(monkeypatch, captured: dict) -> None:
         def __init__(self, *args, **kwargs):
             captured["init_kwargs"] = kwargs
 
-        def invoke_skill(self, *, skill_name, context, workspace,
-                         is_reviewer, config_overrides):
+        def invoke_skill(
+            self, *, skill_name, context, workspace, is_reviewer, config_overrides
+        ):
             captured["workspace"] = workspace
             captured["skill_name"] = skill_name
             return SkillInvocationResult(
@@ -109,9 +110,7 @@ def test_dispatch_skill_accepts_workspace_under_global_root_outside_session_work
         assert "Input validation error" not in err
 
 
-def test_dispatch_skill_rejects_workspace_outside_global_root(
-    monkeypatch, capsys
-):
+def test_dispatch_skill_rejects_workspace_outside_global_root(monkeypatch, capsys):
     """A workspace outside global_root must still be rejected."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir) / "root"  # global_root

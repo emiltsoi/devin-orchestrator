@@ -6,7 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
-# Add workflow-engine to path
+# Add devin_orchestrator to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from floor_validator import validate_structural

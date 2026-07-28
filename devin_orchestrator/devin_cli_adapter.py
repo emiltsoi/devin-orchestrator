@@ -4,7 +4,7 @@ Uses devin-cli's native --print flag for non-interactive execution
 Much simpler and more reliable than ACP for basic usage
 
 Supports skill loading via description matching (Devin CLI feature).
-Skills are loaded from workflow-engine/skills/ and injected into prompts
+Skills are loaded from devin_orchestrator/skills/ and injected into prompts
 when their description matches prompt content.
 """
 
@@ -53,7 +53,7 @@ class DevinCliAdapter:
     Simpler and more reliable than ACP for basic skill invocation.
 
     Supports skill loading via description matching. Skills are loaded from
-    workflow-engine/skills/ and injected into prompts when their description
+    devin_orchestrator/skills/ and injected into prompts when their description
     matches prompt content.
     """
 
@@ -148,7 +148,7 @@ class DevinCliAdapter:
 
         Supports two layouts:
 
-        - **Legacy** (used by ``workflow-engine/skills/`` and the existing
+        - **Legacy** (used by ``devin_orchestrator/skills/`` and the existing
           ``test_skill_loading.py`` fixtures): ``<skill_dir>/SKILL.md`` with a
           YAML frontmatter block. The description is extracted with a regex
           for backward compatibility.

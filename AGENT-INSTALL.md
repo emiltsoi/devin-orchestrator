@@ -39,7 +39,7 @@ This single command:
 ```bash
 # Check if installation succeeded
 ls ~/.devin-orchestrator/
-# Should show: skills/, workflows/, workflow-engine/, config.yaml
+# Should show: skills/, workflows/, devin_orchestrator/, config.yaml
 
 # Check if workspace is set up (optional - for local overrides)
 ls .devin/workflows/
@@ -103,7 +103,7 @@ default_permission_mode: dangerous
 
 Test installation by running health check:
 ```bash
-python ~/.devin-orchestrator/workflow-engine/health_check.py
+python ~/.devin-orchestrator/devin_orchestrator/health_check.py
 ```
 
 Expected output: All components should show "healthy" status.
@@ -131,7 +131,7 @@ After successful installation:
 ~/.devin-orchestrator/
 ├── skills/              # Global skills (shared across workspaces)
 ├── workflows/           # Canonical workflow manifests
-├── workflow-engine/     # Orchestration engine
+├── devin_orchestrator/     # Orchestration engine
 ├── config.yaml          # Configuration
 └── dispatch_skill.py    # Dispatch script
 

@@ -81,7 +81,7 @@ function Test-Installation {
         exit 1
     }
 
-    $requiredDirs = @("skills", "workflows", "workflow-engine")
+    $requiredDirs = @("skills", "workflows", "devin_orchestrator")
     foreach ($dir in $requiredDirs) {
         $dirPath = Join-Path $InstallPath $dir
         if (!(Test-Path $dirPath)) {
@@ -116,7 +116,7 @@ function Update-ConfigFile {
     $configContent = $configContent -replace 'global_root:.*', "global_root: $InstallPath"
     $configContent = $configContent -replace 'skills_dir:.*', "skills_dir: $InstallPath\skills"
     $configContent = $configContent -replace 'workflows_dir:.*', "workflows_dir: $InstallPath\workflows"
-    $configContent = $configContent -replace 'workflow_engine_dir:.*', "workflow_engine_dir: $InstallPath\workflow-engine"
+    $configContent = $configContent -replace 'workflow_engine_dir:.*', "workflow_engine_dir: $InstallPath\devin_orchestrator"
     $configContent = $configContent -replace 'session_work_dir:.*', "session_work_dir: $InstallPath\work"
 
     # Update Devin CLI path if provided
@@ -194,7 +194,7 @@ try {
     Set-EnvironmentVariable -Name "DEVIN_ORCHESTRATOR_ROOT" -Value $GlobalInstallPath -Persist $Persist
     Set-EnvironmentVariable -Name "DEVIN_ORCHESTRATOR_SKILLS_DIR" -Value "$GlobalInstallPath\skills" -Persist $Persist
     Set-EnvironmentVariable -Name "DEVIN_ORCHESTRATOR_WORKFLOWS_DIR" -Value "$GlobalInstallPath\workflows" -Persist $Persist
-    Set-EnvironmentVariable -Name "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR" -Value "$GlobalInstallPath\workflow-engine" -Persist $Persist
+    Set-EnvironmentVariable -Name "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR" -Value "$GlobalInstallPath\devin_orchestrator" -Persist $Persist
     Set-EnvironmentVariable -Name "DEVIN_ORCHESTRATOR_WORK_DIR" -Value "$GlobalInstallPath\work" -Persist $Persist
 
     if ($DevinCliPath) {

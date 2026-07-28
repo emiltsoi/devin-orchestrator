@@ -337,13 +337,13 @@ Recover only specific components:
 3. **System Health Check**
    ```powershell
    # Run health check
-   python workflow-engine/health_check.py
+   python devin_orchestrator/health_check.py
    ```
 
 4. **Integration Test**
    ```powershell
    # Run integration tests
-   pytest workflow-engine/test_integration.py
+   pytest devin_orchestrator/test_integration.py
    ```
 
 ### Rollback Procedures

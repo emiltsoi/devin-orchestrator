@@ -34,6 +34,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
+    "mypy>=1.0.0",
     "bandit>=1.7.0",
     "safety>=2.0.0",
     "pip-audit>=2.0.0",
@@ -80,8 +81,6 @@ exclude = [
     "devin_orchestrator/work",
 ]
 
-[tool.hatch.build.hooks.custom]
-
 [tool.hatch.build.targets.wheel]
 packages = ["devin_orchestrator"]
 
@@ -95,3 +94,14 @@ packages = ["devin_orchestrator"]
 "roles" = "roles"
 "config.yaml" = "config.yaml"
 "config.yaml.template" = "config.yaml.template"
+
+[tool.mypy]
+files = [
+    "devin_orchestrator/orchestration_engine.py",
+    "devin_orchestrator/skill_invoker.py",
+    "devin_orchestrator/monitoring.py",
+    "devin_orchestrator/security_utils.py",
+    "mcp_server.py",
+    "dispatch_skill.py",
+]
+ignore_missing_imports = true
