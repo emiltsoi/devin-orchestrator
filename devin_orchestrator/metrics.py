@@ -380,17 +380,17 @@ class MetricsCollector:
             True if the export succeeded, False otherwise.
         """
         with self._lock:
+            workflows_to_export: dict[str, WorkflowMetrics] = {}
             if session_id:
-                # A missing session is not an error; we simply export an empty
-                # dict so callers can still produce a file.
-                workflows_to_export = {session_id: self._workflows.get(session_id)}
+                workflow = self._workflows.get(session_id)
+                if workflow:
+                    workflows_to_export = {session_id: workflow}
             else:
                 workflows_to_export = self._workflows.copy()
 
             # Convert to serializable format
             export_data = {}
             for sid, workflow in workflows_to_export.items():
-                if workflow:
                     export_data[sid] = {
                         "session_id": workflow.session_id,
                         "manifest_name": workflow.manifest_name,
@@ -461,8 +461,11 @@ class MetricsCollector:
             Formatted string with metrics
         """
         with self._lock:
+            workflows_to_export: dict[str, WorkflowMetrics] = {}
             if session_id:
-                workflows_to_export = {session_id: self._workflows.get(session_id)}
+                workflow = self._workflows.get(session_id)
+                if workflow:
+                    workflows_to_export = {session_id: workflow}
             else:
                 workflows_to_export = self._workflows.copy()
 

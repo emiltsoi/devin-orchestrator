@@ -114,7 +114,7 @@ class Guardrails:
         Returns:
             Dict with 'verified' (bool) and 'notes' (str)
         """
-        result = {"verified": False, "notes": []}
+        result: dict[str, Any] = {"verified": False, "notes": []}
 
         # If no file path provided, cannot verify
         if not file_path:

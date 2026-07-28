@@ -64,7 +64,7 @@ class SkillEvaluator:
         }
 
         # Simple cache for semantic evaluation results
-        self.semantic_cache = {}
+        self.semantic_cache: dict[str, dict[str, Any]] = {}
 
     def evaluate_skill_output(
         self, skill_name: str, artifact_path: Path, context: dict[str, Any]
@@ -298,7 +298,8 @@ Respond with JSON only, no other text.
         try:
             import subprocess  # nosec B404
 
-            result = subprocess.run(  # nosec B603
+            assert self.devin_cli_path is not None
+            subprocess_result = subprocess.run(  # nosec B603
                 [
                     self.devin_cli_path,
                     "--permission-mode",
@@ -314,18 +315,18 @@ Respond with JSON only, no other text.
                 cwd=str(session_dir),
             )
 
-            if result.returncode != 0:
+            if subprocess_result.returncode != 0:
                 return {
                     "checked": False,
                     "passed": True,
                     "issues": [],
-                    "error": f"Semantic evaluation failed: {result.stderr}",
+                    "error": f"Semantic evaluation failed: {subprocess_result.stderr}",
                 }
 
             # Parse JSON response
             import json
 
-            eval_output = result.stdout.strip()
+            eval_output = subprocess_result.stdout.strip()
 
             # Try to extract JSON from output
             json_match = re.search(r"\{.*\}", eval_output, re.DOTALL)
@@ -344,7 +345,7 @@ Respond with JSON only, no other text.
                     for item in missing:
                         issues.append(f"Missing requirement: {item}")
 
-                result = {
+                eval_result = {
                     "checked": True,
                     "passed": score >= 0.6 and len(missing) == 0,
                     "issues": issues,
@@ -352,9 +353,9 @@ Respond with JSON only, no other text.
                 }
 
                 # Cache the result
-                self.semantic_cache[cache_key] = result
+                self.semantic_cache[cache_key] = eval_result
 
-                return result
+                return eval_result
             else:
                 # Could not parse JSON, treat as requires user input
                 return {
