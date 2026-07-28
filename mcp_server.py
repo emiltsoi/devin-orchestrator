@@ -49,6 +49,7 @@ from config_loader import ConfigLoader  # noqa: E402
 from security_utils import (  # noqa: E402
     InvalidInputError,
     PathTraversalError,
+    parse_config_overrides,
     validate_path_safe,
     validate_session_id,
     validate_skill_name,
@@ -697,72 +698,6 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
 
         return timeout
 
-    def _parse_config_overrides(self, config_overrides: Any) -> dict:
-        """
-        Parse and validate config_overrides parameter.
-
-        Args:
-            config_overrides: Config overrides (can be dict, JSON string, or other types)
-
-        Returns:
-            Validated config overrides dictionary
-
-        Raises:
-            InvalidInputError: If config_overrides is invalid or malformed JSON
-        """
-        if config_overrides is None:
-            return {}
-
-        # If it's already a dict, validate and return it
-        if isinstance(config_overrides, dict):
-            return self._validate_config_overrides_dict(config_overrides)
-
-        # If it's a string, try to parse as JSON
-        if isinstance(config_overrides, str):
-            try:
-                parsed = json.loads(config_overrides)
-                if not isinstance(parsed, dict):
-                    raise InvalidInputError(
-                        "config_overrides JSON must parse to an object/dictionary"
-                    )
-                return self._validate_config_overrides_dict(parsed)
-            except json.JSONDecodeError as e:
-                raise InvalidInputError(
-                    f"config_overrides contains malformed JSON: {e}"
-                ) from e
-
-        # Any other type is invalid
-        raise InvalidInputError(
-            f"config_overrides must be a dictionary or JSON string, got {type(config_overrides).__name__}"
-        )
-
-    def _validate_config_overrides_dict(self, config_overrides: dict) -> dict:
-        """
-        Validate that config_overrides dictionary contains only safe values.
-
-        Args:
-            config_overrides: Dictionary to validate
-
-        Returns:
-            Validated dictionary
-
-        Raises:
-            InvalidInputError: If dictionary contains invalid keys or values
-        """
-        # Validate config_overrides keys are strings and values are basic types
-        valid_types = (str, int, float, bool, type(None))
-        for key, value in config_overrides.items():
-            if not isinstance(key, str):
-                raise InvalidInputError(
-                    f"config_overrides key must be string, got {type(key).__name__}"
-                )
-            if not isinstance(value, valid_types):
-                raise InvalidInputError(
-                    f"config_overrides value for key '{key}' must be basic type (str, int, float, bool, None), got {type(value).__name__}"
-                )
-
-        return config_overrides
-
     def _error(self, request: dict, code: int, message: str) -> dict:
         return {
             "jsonrpc": "2.0",
@@ -1176,7 +1111,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
 
         # Validate and parse config_overrides
         try:
-            overrides = self._parse_config_overrides(arguments.get("config_overrides"))
+            overrides = parse_config_overrides(arguments.get("config_overrides"))
         except InvalidInputError as e:
             return [self._text_content(f"Invalid config_overrides: {e}")]
 

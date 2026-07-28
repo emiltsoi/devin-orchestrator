@@ -14,11 +14,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from metrics import MetricsCollector
-    from monitoring import MonitoringSystem
+from typing import Any
 
 from artifact_validator import ArtifactValidator
 from config_loader import ConfigLoader
@@ -33,11 +29,12 @@ from deterministic_tools import (
     wait_for_file_change,
 )
 from gate_controller import GateController
-from metrics import get_metrics_collector
-from monitoring import get_monitoring_system
+from metrics import MetricsCollector
+from monitoring import MonitoringSystem
 from security_utils import (
     InvalidInputError,
     PathTraversalError,
+    parse_config_overrides,
     validate_path_safe,
     validate_session_id,
 )
@@ -70,16 +67,19 @@ class OrchestrationEngine:
         Args:
             work_dir: Base work directory for sessions
             config: Optional configuration dictionary
-            metrics: Optional metrics collector (defaults to global instance)
-            monitoring: Optional monitoring system (defaults to global instance)
+            metrics: Optional metrics collector (creates a fresh instance by default)
+            monitoring: Optional monitoring system (creates a fresh instance by default)
         """
         try:
             self.work_dir = work_dir
             self.config = config or {}
-            self.skill_invoker = SkillInvoker(demo_mode=self.config.get("demo_mode", False))
-            # Use provided instances or fall back to global instances for backward compatibility
-            self.metrics = metrics if metrics is not None else get_metrics_collector()
-            self.monitoring = monitoring if monitoring is not None else get_monitoring_system()
+            self.metrics = metrics if metrics is not None else MetricsCollector()
+            self.monitoring = (
+                monitoring if monitoring is not None else MonitoringSystem(metrics_collector=self.metrics)
+            )
+            self.skill_invoker = SkillInvoker(
+                demo_mode=self.config.get("demo_mode", False), metrics=self.metrics
+            )
             self.artifact_validator = ArtifactValidator(self)
             self.triage_evaluator = TriageEvaluator(self)
             self.stage_skill_dispatcher = StageSkillDispatcher(self)
@@ -122,7 +122,17 @@ class OrchestrationEngine:
         )
         if error is not None:
             return error
-        config_overrides = self._normalize_config_overrides(config_overrides)
+        try:
+            config_overrides = parse_config_overrides(config_overrides)
+        except InvalidInputError as e:
+            logger.error(f"Invalid config_overrides: {e}")
+            return {
+                "session_id": session_id,
+                "manifest": manifest["name"],
+                "stages": [],
+                "final_status": "failed",
+                "error": f"Invalid config_overrides: {e}",
+            }
 
         # Initialize session
         session_dir, error = self._init_workflow_session(
@@ -239,7 +249,17 @@ class OrchestrationEngine:
         )
         if error is not None:
             return error
-        config_overrides = self._normalize_config_overrides(config_overrides)
+        try:
+            config_overrides = parse_config_overrides(config_overrides)
+        except InvalidInputError as e:
+            logger.error(f"Invalid config_overrides: {e}")
+            return {
+                "session_id": session_id,
+                "manifest": manifest_name,
+                "stages": [],
+                "final_status": "failed",
+                "error": f"Invalid config_overrides: {e}",
+            }
 
         # Write the gate decision if provided
         if gate_verdict is not None:
@@ -303,29 +323,6 @@ class OrchestrationEngine:
             if stage_name.startswith("gate_") and entry.get("status") == "waiting":
                 return stage_name.replace("gate_", "", 1)
         return None
-
-    @staticmethod
-    def _normalize_config_overrides(config_overrides: Any) -> dict[str, Any]:
-        """
-        Validate and normalize optional config overrides.
-
-        Accepts a dict with string keys or None. Logs and drops invalid
-        entries so downstream code can safely call ``.get()``.
-        """
-        if config_overrides is None:
-            return {}
-        if isinstance(config_overrides, dict):
-            if not all(isinstance(k, str) for k in config_overrides):
-                logger.warning(
-                    "config_overrides contains non-string keys; dropping them"
-                )
-                return {k: v for k, v in config_overrides.items() if isinstance(k, str)}
-            return config_overrides
-        logger.warning(
-            f"Invalid config_overrides type {type(config_overrides).__name__}; "
-            "using empty dict"
-        )
-        return {}
 
     def _validate_and_load_manifest(
         self, session_id: str, manifest_path: Path

@@ -2,17 +2,17 @@
 Skill Invoker - Invokes skills using transport adapters
 """
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from devin_cli_adapter import DevinCliAdapter
-from metrics import get_metrics_collector
-from security_utils import InvalidInputError, validate_skill_name
-
-if TYPE_CHECKING:
-    from metrics import MetricsCollector
+from metrics import MetricsCollector
+from security_utils import (
+    InvalidInputError,
+    parse_config_overrides,
+    validate_skill_name,
+)
 
 
 @dataclass
@@ -55,7 +55,7 @@ class SkillInvoker:
             model: Optional model to use (e.g., "claude-sonnet-4", "claude-opus-4.6")
             permission_mode: Permission mode (auto, smart, dangerous) - defaults to dangerous for automated dispatch
             demo_mode: If True, skip real Devin dispatches and simulate (for testing)
-            metrics: Optional metrics collector (defaults to global instance)
+            metrics: Optional metrics collector (creates a fresh instance by default)
         """
         from config_loader import ConfigLoader
 
@@ -78,74 +78,8 @@ class SkillInvoker:
         self.dispatch_timeout_seconds = getattr(
             config, "dispatch_timeout_seconds", 300
         )
-        # Use provided metrics or fall back to global instance for backward compatibility
-        self.metrics = metrics if metrics is not None else get_metrics_collector()
-
-    def _parse_config_overrides(self, config_overrides: Any) -> dict:
-        """
-        Parse and validate config_overrides parameter.
-
-        Args:
-            config_overrides: Config overrides (can be dict, JSON string, or other types)
-
-        Returns:
-            Validated config overrides dictionary
-
-        Raises:
-            InvalidInputError: If config_overrides is invalid or malformed JSON
-        """
-        if config_overrides is None:
-            return {}
-
-        # If it's already a dict, validate and return it
-        if isinstance(config_overrides, dict):
-            return self._validate_config_overrides_dict(config_overrides)
-
-        # If it's a string, try to parse as JSON
-        if isinstance(config_overrides, str):
-            try:
-                parsed = json.loads(config_overrides)
-                if not isinstance(parsed, dict):
-                    raise InvalidInputError(
-                        "config_overrides JSON must parse to an object/dictionary"
-                    )
-                return self._validate_config_overrides_dict(parsed)
-            except json.JSONDecodeError as e:
-                raise InvalidInputError(
-                    f"config_overrides contains malformed JSON: {e}"
-                ) from e
-
-        # Any other type is invalid
-        raise InvalidInputError(
-            f"config_overrides must be a dictionary or JSON string, got {type(config_overrides).__name__}"
-        )
-
-    def _validate_config_overrides_dict(self, config_overrides: dict) -> dict:
-        """
-        Validate that config_overrides dictionary contains only safe values.
-
-        Args:
-            config_overrides: Dictionary to validate
-
-        Returns:
-            Validated dictionary
-
-        Raises:
-            InvalidInputError: If dictionary contains invalid keys or values
-        """
-        # Validate config_overrides keys are strings and values are basic types
-        valid_types = (str, int, float, bool, type(None))
-        for key, value in config_overrides.items():
-            if not isinstance(key, str):
-                raise InvalidInputError(
-                    f"config_overrides key must be string, got {type(key).__name__}"
-                )
-            if not isinstance(value, valid_types):
-                raise InvalidInputError(
-                    f"config_overrides value for key '{key}' must be basic type (str, int, float, bool, None), got {type(value).__name__}"
-                )
-
-        return config_overrides
+        # Use provided metrics or create a fresh instance by default
+        self.metrics = metrics if metrics is not None else MetricsCollector()
 
     def invoke_skill(
         self,
@@ -227,7 +161,7 @@ class SkillInvoker:
         # Apply config overrides to skill definition with validation
         if config_overrides:
             try:
-                overrides = self._parse_config_overrides(config_overrides)
+                overrides = parse_config_overrides(config_overrides)
             except InvalidInputError as e:
                 return SkillInvocationResult(
                     success=False,

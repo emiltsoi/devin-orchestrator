@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from health_check import HealthChecker
-from metrics import MetricsCollector, get_metrics_collector
+from metrics import MetricsCollector
 from orchestration_logger import LogLevel, get_logger
 
 logger = logging.getLogger(__name__)
@@ -427,6 +427,7 @@ class SystemHealthMonitor:
         config: MonitoringConfig,
         alert_manager: AlertManager,
         health_checker: HealthChecker | None = None,
+        metrics_collector: MetricsCollector | None = None,
     ):
         """
         Initialize system health monitor
@@ -435,10 +436,12 @@ class SystemHealthMonitor:
             config: Monitoring configuration
             alert_manager: Alert manager for generating alerts
             health_checker: Optional health checker instance
+            metrics_collector: Optional metrics collector instance
         """
         self.config = config
         self.alert_manager = alert_manager
         self.health_checker = health_checker or HealthChecker()
+        self.metrics_collector = metrics_collector if metrics_collector is not None else MetricsCollector()
 
         self._monitoring_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -491,8 +494,7 @@ class SystemHealthMonitor:
             component_status[check["component"]] = check["status"]
 
         # Get performance metrics
-        metrics_collector = get_metrics_collector()
-        all_metrics = metrics_collector.get_all_metrics()
+        all_metrics = self.metrics_collector.get_all_metrics()
 
         performance_metrics = {
             "active_workflows": len(all_metrics),
@@ -782,7 +784,7 @@ class WorkflowExecutionMonitor:
         """
         self.config = config
         self.alert_manager = alert_manager
-        self.metrics_collector = metrics_collector or get_metrics_collector()
+        self.metrics_collector = metrics_collector if metrics_collector is not None else MetricsCollector()
 
     def monitor_workflow_completion(self, session_id: str) -> None:
         """
@@ -968,18 +970,25 @@ class MonitoringSystem:
     - Metrics collection
     """
 
-    def __init__(self, config: MonitoringConfig | None = None):
+    def __init__(
+        self,
+        config: MonitoringConfig | None = None,
+        metrics_collector: MetricsCollector | None = None,
+    ):
         """
         Initialize monitoring system
 
         Args:
             config: Optional monitoring configuration
+            metrics_collector: Optional metrics collector instance
         """
         self.config = config or MonitoringConfig()
         self.alert_manager = AlertManager(self.config)
-        self.health_monitor = SystemHealthMonitor(self.config, self.alert_manager)
+        self.health_monitor = SystemHealthMonitor(
+            self.config, self.alert_manager, metrics_collector=metrics_collector
+        )
         self.workflow_monitor = WorkflowExecutionMonitor(
-            self.config, self.alert_manager
+            self.config, self.alert_manager, metrics_collector=metrics_collector
         )
 
         # Set up default alert handler that logs alerts
