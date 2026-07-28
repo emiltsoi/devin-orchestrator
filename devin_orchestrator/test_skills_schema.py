@@ -35,7 +35,7 @@ KEBAB_CASE_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 def _discover_subdir_skills() -> list[tuple[Path, str]]:
     """Return (skills_dir, skill_name) tuples for canonical subdirectory skills."""
-    skills = []
+    skills: list[tuple[Path, str]] = []
     if not SKILLS_DIR.is_dir():
         return skills
 

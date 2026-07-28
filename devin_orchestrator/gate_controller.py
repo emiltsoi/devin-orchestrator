@@ -548,4 +548,6 @@ Please edit this file with your decision.
                 verdict = stripped.split(":", 1)[1].strip()
             elif stripped.startswith("notes:"):
                 notes = stripped.split(":", 1)[1].strip()
+        if verdict is None:
+            return None
         return verdict, notes

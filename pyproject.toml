@@ -47,7 +47,7 @@ dispatch-devin = "dispatch_devin:main"
 dispatch-skill = "dispatch_skill:main"
 
 [project.urls]
-Homepage = "https://github.com/devin-orchestrator/devin-orchestrator"
+Homepage = "https://github.com/emiltsoi/devin-orchestrator"
 Documentation = "README.md"
 
 [tool.hatch.build]
@@ -96,12 +96,5 @@ packages = ["devin_orchestrator"]
 "config.yaml.template" = "config.yaml.template"
 
 [tool.mypy]
-files = [
-    "devin_orchestrator/orchestration_engine.py",
-    "devin_orchestrator/skill_invoker.py",
-    "devin_orchestrator/monitoring.py",
-    "devin_orchestrator/security_utils.py",
-    "mcp_server.py",
-    "dispatch_skill.py",
-]
+files = ["."]
 ignore_missing_imports = true

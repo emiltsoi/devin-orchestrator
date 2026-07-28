@@ -176,7 +176,7 @@ class OrchestrationLogger:
             "auth", "key", "private_key", "access_token", "refresh_token"
         }
 
-        sanitized = {}
+        sanitized: dict[str, Any] = {}
         for key, value in context.items():
             # Check if key contains sensitive keywords
             key_lower = key.lower()

@@ -142,7 +142,7 @@ class DevinCliAdapter:
             )
         return permission_mode
 
-    def _load_skills(self) -> dict[str, dict[str, str]]:
+    def _load_skills(self) -> dict[str, dict[str, Any]]:
         """
         Load skills from skills directory.
 
@@ -162,7 +162,7 @@ class DevinCliAdapter:
         Returns:
             Dict mapping skill name to {description, content}
         """
-        skills: dict[str, dict[str, str]] = {}
+        skills: dict[str, dict[str, Any]] = {}
         if not self.skills_dir.exists():
             return skills
 
@@ -322,7 +322,7 @@ class DevinCliAdapter:
                 injected_skills.append(skill_data["content"])
                 continue
 
-            triggers = skill_data.get("triggers") or []
+            triggers: list[Any] = skill_data.get("triggers") or []
             if any(t and t.lower() in prompt_lower for t in triggers):
                 injected_skills.append(skill_data["content"])
 

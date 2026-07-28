@@ -19,7 +19,7 @@ def check_audit_run_jsonl_parity(session_dir: Path) -> dict[str, Any]:
     audit_path = session_dir / "session-audit.md"
     run_jsonl_path = session_dir / "run.jsonl"
 
-    report = {
+    report: dict[str, Any] = {
         "valid": True,
         "errors": [],
         "audit_stages": set(),
@@ -75,7 +75,7 @@ def check_manifest_runbook_parity(workflows_dir: Path) -> dict[str, Any]:
     Verify that each workflow manifest has a corresponding runbook with matching
     stage sequence.
     """
-    report = {"valid": True, "errors": [], "checked": [], "missing_runbooks": []}
+    report: dict[str, Any] = {"valid": True, "errors": [], "checked": [], "missing_runbooks": []}
 
     if not workflows_dir.exists():
         report["valid"] = False
