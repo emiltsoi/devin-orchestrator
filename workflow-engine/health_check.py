@@ -9,7 +9,7 @@ Checks the health of all devin-orchestrator components:
 - Devin CLI availability
 """
 
-import subprocess
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -258,7 +258,7 @@ class HealthChecker:
 
         # Try to run devin-cli --version
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603
                 [str(cli_path), "--version"], capture_output=True, text=True, timeout=10
             )
 

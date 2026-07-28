@@ -33,24 +33,26 @@ from security_utils import (
 class TestValidatePathSafe:
     """Tests for validate_path_safe function"""
 
-    def test_valid_relative_path(self):
+    def test_valid_relative_path(self, tmp_path):
         """Test that valid relative paths are accepted"""
-        base = Path("/tmp/test")
-        target = Path("/tmp/test/subdir/file.txt")
+        base = tmp_path
+        target = base / "subdir" / "file.txt"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("test", encoding="utf-8")
         result = validate_path_safe(base, target)
         assert result == target.resolve()
 
-    def test_path_traversal_detected(self):
+    def test_path_traversal_detected(self, tmp_path):
         """Test that path traversal attacks are detected"""
-        base = Path("/tmp/test")
-        target = Path("/tmp/test/../etc/passwd")
+        base = tmp_path
+        target = base / ".." / "outside"
         with pytest.raises(PathTraversalError):
             validate_path_safe(base, target)
 
-    def test_absolute_path_rejected(self):
+    def test_absolute_path_rejected(self, tmp_path):
         """Test that absolute paths are rejected when not allowed"""
-        base = Path("/tmp/test")
-        target = Path("/etc/passwd")
+        base = tmp_path
+        target = base.parent / "outside"
         with pytest.raises(PathTraversalError):
             validate_path_safe(base, target, allow_absolute=False)
 

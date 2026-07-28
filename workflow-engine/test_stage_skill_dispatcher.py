@@ -22,12 +22,12 @@ class TestStageSkillDispatcher(unittest.TestCase):
     """Focused tests for StageSkillDispatcher"""
 
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.session_dir = Path(self.temp_dir) / "session"
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.session_dir = self.temp_dir / "session"
         self.session_dir.mkdir()
 
         self.engine = MagicMock()
-        self.engine.config = {"skills_dir": "/tmp/skills"}
+        self.engine.config = {"skills_dir": str(self.temp_dir / "skills")}
         self.engine.skill_invoker = MagicMock()
         self.engine.metrics = MagicMock()
         self.dispatcher = StageSkillDispatcher(self.engine)
@@ -42,7 +42,9 @@ class TestStageSkillDispatcher(unittest.TestCase):
         error = self.dispatcher.load_stage_skill("brainstorming", "brainstorming")
 
         self.assertIsNone(error)
-        self.engine.load_skill.assert_called_once_with("/tmp/skills", "brainstorming")
+        self.engine.load_skill.assert_called_once_with(
+            str(self.temp_dir / "skills"), "brainstorming"
+        )
 
     def test_load_stage_skill_invalid_input(self):
         """InvalidInputError from load_skill produces an escalate error dict."""

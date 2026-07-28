@@ -377,7 +377,7 @@ class TestRunAllChecks:
                     "component": "config_file",
                     "status": "healthy",
                     "message": "ok",
-                    "details": {"path": "/tmp/config.yaml", "list_field": ["a", "b"]},
+                    "details": {"path": "/workspace/config.yaml", "list_field": ["a", "b"]},
                 }
             ],
         }

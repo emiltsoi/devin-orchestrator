@@ -38,6 +38,9 @@ ignore = [
     "E712",   # explicit True/False comparisons in assertions
     "F401",   # unused imports (availability/import tests)
 ]
+"hatch_build.py" = [
+    "ARG002", # Hatch hook interface arguments are intentionally unused
+]
 
 [format]
 indent-style = "space"

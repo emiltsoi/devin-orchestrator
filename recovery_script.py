@@ -4,22 +4,19 @@ Recovery script for devin-orchestrator
 Restores sessions, configurations, and logs from backups
 """
 
-import os
-import shutil
 import argparse
 import datetime
-import json
-import sys
-from pathlib import Path
-import zipfile
 import logging
-import re
+import shutil
+import sys
+import zipfile
+from pathlib import Path
 
 # Import shared security utilities
 script_dir = Path(__file__).parent
 workflow_engine_dir = script_dir.parent / "workflow-engine"
 sys.path.insert(0, str(workflow_engine_dir))
-from security_utils import validate_backup_name
+from security_utils import validate_backup_name  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -32,40 +29,40 @@ logger = logging.getLogger(__name__)
 def validate_path_safe(base_path, target_path, allow_absolute=False):
     """
     Validate that a target path is safe and doesn't escape the base path.
-    
+
     Args:
         base_path: The base directory that paths should be contained within
         target_path: The target path to validate
         allow_absolute: Whether to allow absolute paths (default: False)
-        
+
     Returns:
         The resolved, validated absolute path
-        
+
     Raises:
         ValueError: If the path attempts to escape the base directory
     """
     try:
         resolved_target = Path(target_path).resolve()
-        
+
         # If not allowing absolute paths, check if target is absolute
         if not allow_absolute and Path(target_path).is_absolute():
             raise ValueError(f"Absolute paths not allowed: {target_path}")
-        
+
         resolved_base = Path(base_path).resolve()
-        
+
         # Check if the resolved target is within the base path
         try:
             resolved_target.relative_to(resolved_base)
-        except ValueError:
+        except ValueError as exc:
             raise ValueError(
                 f"Path traversal detected: {target_path} resolves to {resolved_target} "
                 f"which is outside base directory {resolved_base}"
-            )
-        
+            ) from exc
+
         return resolved_target
-        
+
     except (OSError, RuntimeError) as e:
-        raise ValueError(f"Invalid path {target_path}: {e}")
+        raise ValueError(f"Invalid path {target_path}: {e}") from e
 
 
 class RecoveryManager:
@@ -76,19 +73,19 @@ class RecoveryManager:
         else:
             # Validate project root path (allow absolute paths)
             self.project_root = validate_path_safe(Path.cwd(), project_root, allow_absolute=True)
-        
+
         if backup_source is None:
             self.backup_source = self.project_root / "backups"
         else:
             # Validate backup source path (allow absolute paths)
             self.backup_source = validate_path_safe(self.project_root, backup_source, allow_absolute=True)
-        
+
         # Define restore paths
         self.session_restore_paths = {
             'work': self.project_root / "work",
             'devin-orchestrator-work': Path.home() / ".devin-orchestrator" / "work"
         }
-        
+
         self.config_restore_paths = {
             'config.yaml': self.project_root / "config.yaml",
             '.devin': self.project_root / ".devin",
@@ -101,32 +98,32 @@ class RecoveryManager:
             'devin-orchestrator-workflows': Path.home() / ".devin-orchestrator" / "workflows",
             'devin-orchestrator-workflow-engine': Path.home() / ".devin-orchestrator" / "workflow-engine"
         }
-        
+
         self.log_restore_paths = {
             'logs': Path.home() / ".devin-orchestrator" / "logs"
         }
-    
+
     def list_backups(self, backup_type=None):
         """List available backups"""
         if backup_type:
             pattern = f"devin-orchestrator-{backup_type}-*"
         else:
             pattern = "devin-orchestrator-*"
-        
+
         backups = sorted(self.backup_source.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
-        
+
         if not backups:
             logger.info(f"No backups found matching pattern: {pattern}")
             return []
-        
+
         logger.info(f"Found {len(backups)} backup(s):")
         for backup in backups:
             size = self._get_size(backup)
             mtime = datetime.datetime.fromtimestamp(backup.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
             logger.info(f"  {backup.name} - {size} - {mtime}")
-        
+
         return backups
-    
+
     def _get_size(self, path):
         """Get human-readable size of a file or directory"""
         if path.is_file():
@@ -135,7 +132,7 @@ class RecoveryManager:
             total = sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
             return self._format_size(total)
         return "0 B"
-    
+
     def _format_size(self, size_bytes):
         """Format bytes to human-readable size"""
         for unit in ['B', 'KB', 'MB', 'GB']:
@@ -143,22 +140,22 @@ class RecoveryManager:
                 return f"{size_bytes:.2f} {unit}"
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} TB"
-    
+
     def extract_backup(self, backup_name, extract_to=None):
         """Extract a backup archive"""
         # Sanitize backup name to prevent path traversal
         backup_name = validate_backup_name(backup_name)
         backup_path = self.backup_source / backup_name
-        
+
         if not backup_path.exists():
             logger.error(f"Backup not found: {backup_path}")
             return None
-        
+
         if extract_to is None:
             extract_to = self.backup_source / f"temp_{backup_name}"
         else:
             extract_to = Path(extract_to)
-        
+
         try:
             if backup_path.suffix == '.zip':
                 logger.info(f"Extracting {backup_path} to {extract_to}")
@@ -176,19 +173,19 @@ class RecoveryManager:
         except Exception as e:
             logger.error(f"Failed to extract backup: {e}")
             return None
-    
+
     def validate_backup(self, backup_name):
         """Validate a backup before recovery"""
         # Sanitize backup name to prevent path traversal
         backup_name = validate_backup_name(backup_name)
         backup_path = self.backup_source / backup_name
-        
+
         if not backup_path.exists():
             logger.error(f"Backup not found: {backup_path}")
             return False
-        
+
         logger.info(f"Validating backup: {backup_name}")
-        
+
         if backup_path.suffix == '.zip':
             try:
                 with zipfile.ZipFile(backup_path, 'r') as zip_ref:
@@ -212,13 +209,13 @@ class RecoveryManager:
         else:
             logger.error("Invalid backup format")
             return False
-    
+
     def restore_directory(self, source_dir, dest_dir, backup_existing=True):
         """Restore a directory to its destination"""
         if not source_dir.exists():
             logger.warning(f"Source directory does not exist: {source_dir}")
             return False
-        
+
         try:
             # Backup existing directory if it exists
             if dest_dir.exists() and backup_existing:
@@ -227,14 +224,14 @@ class RecoveryManager:
                 backup_path = dest_dir.parent / backup_name
                 logger.info(f"Backing up existing directory: {dest_dir} -> {backup_path}")
                 shutil.copytree(dest_dir, backup_path)
-            
+
             # Create destination parent directory if it doesn't exist
             dest_dir.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Remove existing directory if it exists
             if dest_dir.exists():
                 shutil.rmtree(dest_dir)
-            
+
             # Copy source to destination
             shutil.copytree(source_dir, dest_dir)
             logger.info(f"Restored directory: {source_dir} -> {dest_dir}")
@@ -242,13 +239,13 @@ class RecoveryManager:
         except Exception as e:
             logger.error(f"Failed to restore directory {source_dir}: {e}")
             return False
-    
+
     def restore_file(self, source_file, dest_file, backup_existing=True):
         """Restore a single file to its destination"""
         if not source_file.exists():
             logger.warning(f"Source file does not exist: {source_file}")
             return False
-        
+
         try:
             # Backup existing file if it exists
             if dest_file.exists() and backup_existing:
@@ -257,10 +254,10 @@ class RecoveryManager:
                 backup_path = dest_file.parent / backup_name
                 logger.info(f"Backing up existing file: {dest_file} -> {backup_path}")
                 shutil.copy2(dest_file, backup_path)
-            
+
             # Create destination parent directory if it doesn't exist
             dest_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Copy source to destination
             shutil.copy2(source_file, dest_file)
             logger.info(f"Restored file: {source_file} -> {dest_file}")
@@ -268,16 +265,16 @@ class RecoveryManager:
         except Exception as e:
             logger.error(f"Failed to restore file {source_file}: {e}")
             return False
-    
+
     def restore_sessions(self, backup_name, dry_run=False, backup_existing=True):
         """Restore session data from backup"""
         logger.info(f"Restoring sessions from backup: {backup_name}")
-        
+
         # Extract backup
         extracted_path = self.extract_backup(backup_name)
         if not extracted_path:
             return False
-        
+
         try:
             success_count = 0
             for source_name, dest_path in self.session_restore_paths.items():
@@ -289,11 +286,11 @@ class RecoveryManager:
                     else:
                         if self.restore_directory(source_path, dest_path, backup_existing):
                             success_count += 1
-            
+
             # Clean up extracted directory
             if not dry_run and extracted_path.name.startswith("temp_"):
                 shutil.rmtree(extracted_path)
-            
+
             if success_count > 0:
                 logger.info(f"Session restoration completed: {success_count} directories restored")
                 return True
@@ -303,16 +300,16 @@ class RecoveryManager:
         except Exception as e:
             logger.error(f"Failed to restore sessions: {e}")
             return False
-    
+
     def restore_configs(self, backup_name, dry_run=False, backup_existing=True):
         """Restore configuration data from backup"""
         logger.info(f"Restoring configurations from backup: {backup_name}")
-        
+
         # Extract backup
         extracted_path = self.extract_backup(backup_name)
         if not extracted_path:
             return False
-        
+
         try:
             success_count = 0
             for source_name, dest_path in self.config_restore_paths.items():
@@ -328,11 +325,11 @@ class RecoveryManager:
                         else:
                             if self.restore_file(source_path, dest_path, backup_existing):
                                 success_count += 1
-            
+
             # Clean up extracted directory
             if not dry_run and extracted_path.name.startswith("temp_"):
                 shutil.rmtree(extracted_path)
-            
+
             if success_count > 0:
                 logger.info(f"Configuration restoration completed: {success_count} items restored")
                 return True
@@ -342,16 +339,16 @@ class RecoveryManager:
         except Exception as e:
             logger.error(f"Failed to restore configurations: {e}")
             return False
-    
+
     def restore_logs(self, backup_name, dry_run=False, backup_existing=True):
         """Restore log data from backup"""
         logger.info(f"Restoring logs from backup: {backup_name}")
-        
+
         # Extract backup
         extracted_path = self.extract_backup(backup_name)
         if not extracted_path:
             return False
-        
+
         try:
             success_count = 0
             for source_name, dest_path in self.log_restore_paths.items():
@@ -363,11 +360,11 @@ class RecoveryManager:
                     else:
                         if self.restore_directory(source_path, dest_path, backup_existing):
                             success_count += 1
-            
+
             # Clean up extracted directory
             if not dry_run and extracted_path.name.startswith("temp_"):
                 shutil.rmtree(extracted_path)
-            
+
             if success_count > 0:
                 logger.info(f"Log restoration completed: {success_count} directories restored")
                 return True
@@ -377,20 +374,20 @@ class RecoveryManager:
         except Exception as e:
             logger.error(f"Failed to restore logs: {e}")
             return False
-    
+
     def restore_all(self, backup_name, dry_run=False, backup_existing=True):
         """Restore all data from backup"""
         logger.info(f"Starting full restoration from backup: {backup_name}")
-        
+
         results = {
             'sessions': self.restore_sessions(backup_name, dry_run, backup_existing),
             'configs': self.restore_configs(backup_name, dry_run, backup_existing),
             'logs': self.restore_logs(backup_name, dry_run, backup_existing)
         }
-        
+
         success_count = sum(1 for v in results.values() if v)
         logger.info(f"Full restoration completed: {success_count}/3 components restored")
-        
+
         return all(results.values())
 
 
@@ -423,20 +420,20 @@ def main():
     parser.add_argument('--validate-only',
                         action='store_true',
                         help='Only validate backup, do not perform recovery')
-    
+
     args = parser.parse_args()
-    
+
     # Initialize recovery manager
     manager = RecoveryManager(
         project_root=args.project_root,
         backup_source=args.source
     )
-    
+
     # List backups if requested
     if args.list:
         manager.list_backups()
         sys.exit(0)
-    
+
     # Validate backup if requested
     if args.validate or args.validate_only:
         if not manager.validate_backup(args.backup):
@@ -445,7 +442,7 @@ def main():
         logger.info("Backup validation passed")
         if args.validate_only:
             sys.exit(0)
-    
+
     # Perform recovery based on type
     success = False
     if args.type == 'all':
@@ -456,7 +453,7 @@ def main():
         success = manager.restore_configs(args.backup, args.dry_run, args.backup_existing)
     elif args.type == 'logs':
         success = manager.restore_logs(args.backup, args.dry_run, args.backup_existing)
-    
+
     if success:
         logger.info("Recovery completed successfully")
         sys.exit(0)

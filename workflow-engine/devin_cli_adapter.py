@@ -12,7 +12,7 @@ import contextlib
 import logging
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -438,7 +438,7 @@ class DevinCliAdapter:
             cmd.extend(["--prompt-file", str(prompt_file), "--print"])
 
             try:
-                result = subprocess.run(
+                result = subprocess.run(  # nosec B603
                     cmd,
                     capture_output=True,
                     text=True,

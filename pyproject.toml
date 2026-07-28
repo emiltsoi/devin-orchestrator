@@ -37,6 +37,7 @@ dev = [
     "bandit>=1.7.0",
     "safety>=2.0.0",
     "pip-audit>=2.0.0",
+    "build>=1.0.0",
 ]
 
 [project.scripts]
@@ -58,6 +59,12 @@ exclude = [
     ".windsurf/cache",
     ".windsurf/index",
     ".pytest_cache",
+    ".ruff_cache",
+    ".coverage",
+    ".coverage.*",
+    ".venv",
+    ".venv-review",
+    ".venv-ci",
     "**/__pycache__",
     "**/*.egg-info",
     "build",
