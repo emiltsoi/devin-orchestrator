@@ -23,6 +23,7 @@ ensure_workflow_engine_on_path()
 from config_loader import ConfigLoader
 from security_utils import (
     InvalidInputError,
+    parse_config_overrides,
     validate_session_id,
     validate_skill_name,
     validate_workspace_path,
@@ -66,12 +67,11 @@ def main():
         sys.exit(1)
 
     # Parse config overrides if provided
-    config_overrides = {}
-    if config_overrides_json:
-        try:
-            config_overrides = json.loads(config_overrides_json)
-        except json.JSONDecodeError:
-            print(f"Warning: Invalid JSON for config_overrides: {config_overrides_json}")
+    try:
+        config_overrides = parse_config_overrides(config_overrides_json)
+    except InvalidInputError as e:
+        print(f"Input validation error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Create skill invoker
     skill_invoker = SkillInvoker(demo_mode=demo_mode)

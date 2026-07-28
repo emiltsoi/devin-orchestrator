@@ -9,11 +9,13 @@ Provides:
 - Secrets management helpers
 """
 
+import json
 import logging
 import os
 import re
 import stat
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -513,4 +515,73 @@ def redact_sensitive_data(data: str, patterns: list[str]) -> str:
     for pattern in patterns:
         redacted = re.sub(pattern, "[REDACTED]", redacted, flags=re.IGNORECASE)
     return redacted
+
+
+def parse_config_overrides(config_overrides: Any) -> dict[str, Any]:
+    """
+    Parse and validate an optional config_overrides value.
+
+    Accepts None, a dict with string keys and basic-typed values, or a JSON
+    string that parses to such a dict. Raises InvalidInputError for malformed
+    JSON, non-dict top-level values, non-string keys, or unsafe value types.
+
+    Args:
+        config_overrides: None, dict, or JSON string.
+
+    Returns:
+        Validated config_overrides dictionary.
+
+    Raises:
+        InvalidInputError: If the value is not a dict/JSON-string dict or
+            contains invalid keys/values.
+    """
+    if config_overrides is None:
+        return {}
+
+    if isinstance(config_overrides, dict):
+        return _validate_config_overrides_dict(config_overrides)
+
+    if isinstance(config_overrides, str):
+        try:
+            parsed = json.loads(config_overrides)
+        except json.JSONDecodeError as e:
+            raise InvalidInputError(
+                f"config_overrides contains malformed JSON: {e}"
+            ) from e
+        if not isinstance(parsed, dict):
+            raise InvalidInputError(
+                "config_overrides JSON must parse to an object/dictionary"
+            )
+        return _validate_config_overrides_dict(parsed)
+
+    raise InvalidInputError(
+        f"config_overrides must be a dictionary or JSON string, got {type(config_overrides).__name__}"
+    )
+
+
+def _validate_config_overrides_dict(config_overrides: dict) -> dict[str, Any]:
+    """
+    Validate that a config_overrides dictionary contains only safe keys/values.
+
+    Args:
+        config_overrides: Dictionary to validate.
+
+    Returns:
+        Validated dictionary.
+
+    Raises:
+        InvalidInputError: If dictionary contains invalid keys or values.
+    """
+    valid_types = (str, int, float, bool, type(None))
+    for key, value in config_overrides.items():
+        if not isinstance(key, str):
+            raise InvalidInputError(
+                f"config_overrides key must be string, got {type(key).__name__}"
+            )
+        if not isinstance(value, valid_types):
+            raise InvalidInputError(
+                f"config_overrides value for key '{key}' must be basic type (str, int, float, bool, None), got {type(value).__name__}"
+            )
+
+    return config_overrides
 
