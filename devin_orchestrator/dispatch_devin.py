@@ -28,8 +28,6 @@ import re
 import sys
 from pathlib import Path
 
-
-
 from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
 from devin_orchestrator.devin_cli_adapter import DevinCliAdapter  # noqa: E402
 from devin_orchestrator.model_resolver import resolve_model  # noqa: E402

@@ -13,9 +13,7 @@ from bash to dispatch skills to Devin.
 import json
 import sys
 
-
 # This works regardless of installation location
-
 from devin_orchestrator.config_loader import ConfigLoader
 from devin_orchestrator.security_utils import (
     InvalidInputError,

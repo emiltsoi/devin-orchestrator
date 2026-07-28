@@ -12,7 +12,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError, sanitize_filename
+from devin_orchestrator.security_utils import (
+    InvalidInputError,
+    PathTraversalError,
+    sanitize_filename,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

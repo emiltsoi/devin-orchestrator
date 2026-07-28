@@ -30,7 +30,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
-
 logger = logging.getLogger(__name__)
 
 # security_utils without requiring the harness to be installed as a package.

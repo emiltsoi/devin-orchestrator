@@ -17,8 +17,8 @@ class TestWorkflowManifests(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         repo_root = Path(__file__).resolve().parents[2]
-        self.workflows_dir = str(repo_root / "workflows")
-        self.skills_dir = str(repo_root / "skills")
+        self.workflows_dir = str(repo_root / "devin_orchestrator" / "workflows")
+        self.skills_dir = str(repo_root / "devin_orchestrator" / "skills")
 
         # Available workflow manifests
         self.workflow_files = [

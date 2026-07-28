@@ -126,7 +126,9 @@ def validate_structural(
             'artifact_results': Dict[str, Dict]
         }
     """
-    from devin_orchestrator.floor_validator import validate_structural as _floor_validate_structural
+    from devin_orchestrator.floor_validator import (
+        validate_structural as _floor_validate_structural,
+    )
 
     result = _floor_validate_structural(artifacts, required_artifacts=required_artifacts)
     return {
