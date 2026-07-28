@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
 from devin_orchestrator.security_utils import InvalidInputError
 
 # Allowlist of valid devin-cli permission modes. Must match the allowlist
@@ -64,7 +65,7 @@ class ConfigLoader:
     """
 
     DEFAULT_CONFIG_PATH = Path.home() / ".devin-orchestrator" / "config.yaml"
-    FALLBACK_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+    FALLBACK_CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
     @staticmethod
     def expand_env_vars(value: str) -> str:
@@ -380,7 +381,7 @@ class ConfigLoader:
         # Fallback to the local repository layout when configured paths do not
         # exist. This makes out-of-the-box development/testing work, but we log
         # a warning so users are not surprised when configured values are ignored.
-        repo_skills_dir = Path(__file__).parent.parent / "skills"
+        repo_skills_dir = Path(__file__).parent / "skills"
         if not skills_dir.exists():
             logger.warning(
                 "skills_dir %s does not exist; falling back to %s",
@@ -389,7 +390,7 @@ class ConfigLoader:
             )
             skills_dir = repo_skills_dir
 
-        repo_workflows_dir = Path(__file__).parent.parent / "workflows"
+        repo_workflows_dir = Path(__file__).parent / "workflows"
         if not workflows_dir.exists():
             logger.warning(
                 "workflows_dir %s does not exist; falling back to %s",

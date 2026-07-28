@@ -54,7 +54,7 @@ def install(
     print(f"Would create global root: {global_root}")
 
     # Copy skills
-    source_skills = source_dir / "skills"
+    source_skills = source_dir / "devin_orchestrator" / "skills"
     target_skills = global_root / "skills"
     if source_skills.exists():
         if not dry_run:
@@ -64,7 +64,7 @@ def install(
         print(f"Would copy skills: {source_skills} -> {target_skills}")
 
     # Copy workflows
-    source_workflows = source_dir / "workflows"
+    source_workflows = source_dir / "devin_orchestrator" / "workflows"
     target_workflows = global_root / "workflows"
     if source_workflows.exists():
         if not dry_run:
@@ -84,7 +84,7 @@ def install(
         print(f"Would copy workflow engine: {source_engine} -> {target_engine}")
 
     # Copy config
-    source_config = source_dir / "config.yaml"
+    source_config = source_dir / "devin_orchestrator" / "config.yaml"
     target_config = global_root / "config.yaml"
     if source_config.exists():
         if not dry_run:
@@ -102,7 +102,7 @@ def install(
             print(f"Would copy entry script: {source_script} -> {target_script}")
 
     # Copy role files used by dispatch_devin.py
-    source_roles = source_dir / "roles"
+    source_roles = source_dir / "devin_orchestrator" / "roles"
     target_roles = global_root / "roles"
     if source_roles.exists():
         if not dry_run:

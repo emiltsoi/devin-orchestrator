@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILLS_DIR = REPO_ROOT / "skills"
+SKILLS_DIR = REPO_ROOT / "devin_orchestrator" / "skills"
 
 REQUIRED_YAML_FIELDS = {
     "schema_version",

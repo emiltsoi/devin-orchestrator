@@ -8,7 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from devin_orchestrator.floor_validator import validate_format, validate_iron_law, validate_structural
+from devin_orchestrator.floor_validator import (
+    validate_format,
+    validate_iron_law,
+    validate_structural,
+)
 
 
 @dataclass

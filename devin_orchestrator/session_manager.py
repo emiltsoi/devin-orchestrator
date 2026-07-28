@@ -12,7 +12,11 @@ import logging
 import re
 from pathlib import Path
 
-from devin_orchestrator.security_utils import InvalidInputError, validate_path_safe, validate_session_id
+from devin_orchestrator.security_utils import (
+    InvalidInputError,
+    validate_path_safe,
+    validate_session_id,
+)
 
 logger = logging.getLogger(__name__)
 

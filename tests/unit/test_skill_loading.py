@@ -13,7 +13,7 @@ def _run_skill_loading_test():
 
     # Initialize adapter with skills directory
     devin_cli_path = str(Path.home() / "AppData/Local/devin/cli/bin/devin.exe")
-    skills_dir = Path(__file__).resolve().parents[2] / "devin_orchestrator" / "skills"
+    skills_dir = Path(__file__).parent / "fixtures" / "skills"
 
     adapter = DevinCliAdapter(devin_cli_path=devin_cli_path, skills_dir=str(skills_dir))
 

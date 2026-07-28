@@ -19,7 +19,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError, validate_path_safe
+
+from devin_orchestrator.security_utils import (
+    InvalidInputError,
+    PathTraversalError,
+    validate_path_safe,
+)
 
 logger = logging.getLogger(__name__)
 

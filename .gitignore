@@ -40,10 +40,10 @@ env/
 .coverage.*
 htmlcov/
 
-# Auto-generated build symlink
-# The hatch build hook creates devin_orchestrator from devin_orchestrator at build time;
-# it must not be committed.
-devin_orchestrator
+# Auto-generated build artifacts
+build/
+dist/
+*.egg-info/
 
 # Logs
 logs/

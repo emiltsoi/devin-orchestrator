@@ -36,7 +36,6 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "bandit>=1.7.0",
-    "safety>=2.0.0",
     "pip-audit>=2.0.0",
     "build>=1.0.0",
 ]
@@ -76,20 +75,12 @@ exclude = [
     "archive",
     "sessions",
     "**/test_*.py",
-    "devin_orchestrator/skills",
     "devin_orchestrator/logs",
     "devin_orchestrator/work",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["devin_orchestrator"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"skills" = "skills"
-"workflows" = "workflows"
-"roles" = "roles"
-"config.yaml" = "config.yaml"
-"config.yaml.template" = "config.yaml.template"
 
 [tool.mypy]
 files = ["."]
