@@ -12,11 +12,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-# Import shared security utilities
-script_dir = Path(__file__).parent
-workflow_engine_dir = script_dir.parent / "devin_orchestrator"
-sys.path.insert(0, str(workflow_engine_dir))
-from security_utils import validate_backup_name  # noqa: E402
+from devin_orchestrator.security_utils import validate_backup_name
 
 # Configure logging
 logging.basicConfig(
