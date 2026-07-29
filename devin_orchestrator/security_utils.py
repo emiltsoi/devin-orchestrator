@@ -434,6 +434,49 @@ def validate_workflow_name(workflow_name: str) -> str:
     return sanitized
 
 
+def validate_backup_name(backup_name: str) -> str:
+    """
+    Validate and sanitize a backup name.
+
+    Backup names follow the same safety rules as workflow names to ensure
+    they are safe to use as filenames.
+
+    Args:
+        backup_name: The backup name to validate
+
+    Returns:
+        Sanitized backup name
+
+    Raises:
+        InvalidInputError: If the backup name is invalid
+    """
+    if not backup_name:
+        raise InvalidInputError("Backup name cannot be empty")
+
+    if backup_name != backup_name.strip():
+        raise InvalidInputError(
+            f"Backup name contains leading/trailing whitespace: {backup_name!r}"
+        )
+    if backup_name.startswith(".") or backup_name.endswith("."):
+        raise InvalidInputError(
+            f"Backup name contains leading/trailing dot: {backup_name!r}"
+        )
+    if re.search(r"[\x00-\x1f\x7f-\x9f]", backup_name):
+        raise InvalidInputError(
+            f"Backup name contains control characters: {backup_name!r}"
+        )
+
+    if "/" in backup_name or "\\" in backup_name or ".." in backup_name:
+        raise InvalidInputError(f"Backup name contains invalid characters: {backup_name}")
+
+    sanitized = sanitize_filename(backup_name, max_length=100)
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", sanitized):
+        raise InvalidInputError(f"Backup name contains invalid characters: {backup_name}")
+
+    return sanitized
+
+
 def validate_workspace_path(
     workspace: str, base_allowed_dir: Path | None = None
 ) -> Path:
