@@ -38,7 +38,7 @@ class _FakeTime:
 @pytest.fixture
 def fake_time(monkeypatch):
     ft = _FakeTime()
-    monkeypatch.setattr("metrics.time.time", ft)
+    monkeypatch.setattr("devin_orchestrator.metrics.time.time", ft)
     return ft
 
 
