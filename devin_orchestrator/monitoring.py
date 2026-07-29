@@ -12,7 +12,6 @@ Provides comprehensive monitoring and observability capabilities:
 import json
 import logging
 import smtplib
-import sys
 import threading
 import time
 from collections import deque
@@ -27,10 +26,6 @@ from typing import Any
 
 import psutil
 import requests
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent))
 
 from devin_orchestrator.health_check import HealthChecker
 from devin_orchestrator.metrics import MetricsCollector
