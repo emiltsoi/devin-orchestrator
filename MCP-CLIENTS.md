@@ -21,7 +21,16 @@ The `tools/list` response is ordered from highest-level to lowest-level. Pick th
 
 ## Server installation
 
-Install the harness globally first:
+For a headless Linux VM with multiple agents, the easiest path is the one-click
+deploy script:
+
+```bash
+./deploy.sh
+```
+
+See [DEPLOY.md](DEPLOY.md) for details, dry-run mode, and manual steps.
+
+For Windows or other environments, run the global installer directly:
 
 ```powershell
 py -3.14 install.py
