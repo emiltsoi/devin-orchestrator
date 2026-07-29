@@ -42,6 +42,30 @@ logger = logging.getLogger(__name__)
 _active_threads: list[threading.Thread] = []
 _threads_lock = threading.Lock()
 
+# Per-session cancellation events. Callers signal cancellation by setting the
+# event; background threads check it at safe points and exit early.
+_session_events: dict[str, threading.Event] = {}
+_session_events_lock = threading.Lock()
+
+
+def _get_session_event(session_id: str) -> threading.Event | None:
+    with _session_events_lock:
+        return _session_events.get(session_id)
+
+
+def _set_session_event(session_id: str) -> threading.Event:
+    with _session_events_lock:
+        event = _session_events.get(session_id)
+        if event is None:
+            event = threading.Event()
+            _session_events[session_id] = event
+        return event
+
+
+def _clear_session_event(session_id: str) -> None:
+    with _session_events_lock:
+        _session_events.pop(session_id, None)
+
 
 def _register_thread(thread: threading.Thread) -> None:
     with _threads_lock:
@@ -599,6 +623,24 @@ class StatelessOrchestrator:
             }
         return session_id, session_dir, manifest_path
 
+    def _is_session_cancelled(self, session_dir: Path) -> bool:
+        """Check session.json for a cancelling/cancelled status."""
+        session_file = session_dir / "session.json"
+        try:
+            if session_file.exists():
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+                return data.get("status") in ("cancelling", "cancelled")
+        except (OSError, json.JSONDecodeError):
+            pass
+        return False
+
+    def _check_cancelled_before_start(self, session_id: str, session_dir: Path) -> bool:
+        """Return True if the session was cancelled before it began work."""
+        event = _get_session_event(session_id)
+        if event is not None and event.is_set():
+            return True
+        return self._is_session_cancelled(session_dir)
+
     def _run_workflow_thread(
         self,
         session_id: str,
@@ -608,6 +650,17 @@ class StatelessOrchestrator:
     ) -> None:
         """Background thread body for execute_workflow."""
         try:
+            if self._check_cancelled_before_start(session_id, session_dir):
+                self._write_result_file(
+                    session_dir,
+                    {
+                        "session_id": session_id,
+                        "final_status": "cancelled",
+                        "stages": [],
+                    },
+                )
+                self._update_session_status(session_dir, "cancelled")
+                return
             engine = self._make_engine()
             results = engine.execute_workflow(
                 manifest_path=manifest_path,
@@ -628,6 +681,8 @@ class StatelessOrchestrator:
                     "stages": [],
                 },
             )
+        finally:
+            _clear_session_event(session_id)
 
     def run_workflow_async(self, workflow_name: str, request: str) -> dict[str, Any]:
         """
@@ -641,6 +696,7 @@ class StatelessOrchestrator:
             if isinstance(prepared, dict):
                 return prepared
             session_id, session_dir, manifest_path = prepared
+            _set_session_event(session_id)
 
             self._update_session_status(session_dir, "running")
             thread = threading.Thread(
@@ -705,6 +761,17 @@ class StatelessOrchestrator:
     ) -> None:
         """Background thread body for continue_workflow."""
         try:
+            if self._check_cancelled_before_start(session_id, session_dir):
+                self._write_result_file(
+                    session_dir,
+                    {
+                        "session_id": session_id,
+                        "final_status": "cancelled",
+                        "stages": [],
+                    },
+                )
+                self._update_session_status(session_dir, "cancelled")
+                return
             engine = self._make_engine()
             results = engine.continue_workflow(
                 session_id=session_id,
@@ -726,6 +793,8 @@ class StatelessOrchestrator:
                     "stages": [],
                 },
             )
+        finally:
+            _clear_session_event(session_id)
 
     def continue_workflow_async(
         self,
@@ -742,6 +811,7 @@ class StatelessOrchestrator:
             session_dir = resolve_session(
                 self.config.session_work_dir, session_id
             )
+            _set_session_event(session_id)
             self._update_session_status(session_dir, "running")
             thread = threading.Thread(
                 target=_tracked_target,
@@ -789,6 +859,11 @@ class StatelessOrchestrator:
         result_file = session_dir / "result.json"
         session_data: dict[str, Any] = {}
         result_data: dict[str, Any] | None = None
+        session_type = "workflow"
+        if session_id.startswith("DISPATCH-"):
+            session_type = "dispatch"
+        elif session_id.startswith("SKILL-"):
+            session_type = "skill"
 
         try:
             if session_file.exists():
@@ -806,15 +881,25 @@ class StatelessOrchestrator:
         except (OSError, json.JSONDecodeError) as e:
             logger.warning(f"Could not read result.json for {session_id}: {e}")
 
+        artifacts = []
+        try:
+            for p in sorted(session_dir.rglob("*")):
+                if p.is_file():
+                    artifacts.append(str(p.relative_to(session_dir)))
+        except OSError:
+            pass
+
         return {
             "session_id": session_id,
             "workspace": str(session_dir),
+            "type": session_type,
             "status": session_data.get("status", "unknown"),
             "final_status": result_data.get("final_status")
             if result_data
             else session_data.get("final_status"),
             "stages": session_data.get("stages", []),
             "result": result_data,
+            "artifacts": artifacts,
         }
 
     def _run_skill_thread(
@@ -826,6 +911,17 @@ class StatelessOrchestrator:
     ) -> None:
         """Background thread body for run_skill."""
         try:
+            if self._check_cancelled_before_start(session_id, session_dir):
+                self._write_result_file(
+                    session_dir,
+                    {
+                        "session_id": session_id,
+                        "success": False,
+                        "error": "Session cancelled",
+                    },
+                )
+                self._update_session_status(session_dir, "cancelled")
+                return
             dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
             invoker = SkillInvoker(demo_mode=self.demo_mode)
             context = {"session_id": session_id, "request": request}
@@ -857,6 +953,33 @@ class StatelessOrchestrator:
                     "error": f"Background dispatch failed: {str(e)}",
                 },
             )
+        finally:
+            _clear_session_event(session_id)
+
+    def cancel_session(self, session_id: str) -> dict[str, Any]:
+        """Mark a session as cancelling and signal the background thread."""
+        from devin_orchestrator.session_manager import resolve_session
+
+        try:
+            session_id = validate_session_id(session_id)
+            session_dir = resolve_session(
+                self.config.session_work_dir, session_id
+            )
+        except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
+            return {
+                "session_id": session_id,
+                "status": "not_found",
+                "error": f"Failed to resolve session: {str(e)}",
+            }
+
+        event = _set_session_event(session_id)
+        event.set()
+        self._update_session_status(session_dir, "cancelling")
+        return {
+            "session_id": session_id,
+            "workspace": str(session_dir),
+            "status": "cancelling",
+        }
 
     def run_skill_async(self, skill_name: str, request: str) -> dict[str, Any]:
         """Start a skill invocation in a background thread and return session_id."""
@@ -866,6 +989,7 @@ class StatelessOrchestrator:
             session_id, session_dir = create_session(
                 self.config.session_work_dir, session_format
             )
+            _set_session_event(session_id)
 
             # Scaffold session.json with the request and required top-level keys.
             session_init(session_id, self.config.session_work_dir, request)

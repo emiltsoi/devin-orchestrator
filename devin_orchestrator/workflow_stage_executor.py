@@ -56,6 +56,17 @@ class WorkflowStageExecutor:
         """Forward attribute access to the parent engine."""
         return getattr(self._engine, name)
 
+    def _is_session_cancelled(self, session_dir: Path) -> bool:
+        """Check whether the session has been marked for cancellation."""
+        session_file = session_dir / "session.json"
+        try:
+            if session_file.exists():
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+                return data.get("status") in ("cancelling", "cancelled")
+        except (OSError, json.JSONDecodeError):
+            pass
+        return False
+
     def _run_workflow_stages(
         self,
         manifest: dict[str, Any],
@@ -77,6 +88,15 @@ class WorkflowStageExecutor:
             resume: If True, skip stages already marked completed in session.json
         """
         for stage in manifest["stages"]:
+            if self._is_session_cancelled(session_dir):
+                results["final_status"] = "cancelled"
+                self._engine.update_status(
+                    session_dir,
+                    stage.get("name", "unknown"),
+                    "cancelled",
+                    "Session cancelled",
+                )
+                break
             try:
                 stage_result = self._engine._execute_stage(
                     stage=stage,
