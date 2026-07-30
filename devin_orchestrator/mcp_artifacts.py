@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any
 
+from devin_orchestrator.log_rotate import rotate_if_needed
 from devin_orchestrator.session_manager import resolve_session
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class McpCallLogger:
         self._log_file: IO[str] | None = None
         try:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
+            rotate_if_needed(self.log_path)
             self._log_file = open(  # noqa: SIM115
                 self.log_path, "a", encoding="utf-8", buffering=1
             )

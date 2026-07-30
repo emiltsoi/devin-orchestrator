@@ -49,6 +49,7 @@ except ModuleNotFoundError as e:
 
 from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
 from devin_orchestrator.deterministic_tools import session_init  # noqa: E402
+from devin_orchestrator.log_rotate import cleanup_old_logs, rotate_if_needed  # noqa: E402
 from devin_orchestrator.mcp_artifacts import (  # noqa: E402
     McpCallLogger,
     SubprocessArtifactRunner,
@@ -121,6 +122,8 @@ class McpServer:
         try:
             log_path = Path(message_log_path).expanduser()
             log_path.parent.mkdir(parents=True, exist_ok=True)
+            rotate_if_needed(log_path)
+            cleanup_old_logs(log_path.parent, pattern="*.ndjson", max_age_days=7)
             self._message_log = open(  # noqa: SIM115
                 log_path, "a", encoding="utf-8", buffering=1
             )

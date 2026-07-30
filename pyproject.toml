@@ -42,6 +42,7 @@ dev = [
 
 [project.scripts]
 devin-orchestrator = "devin_orchestrator.mcp_server:main"
+devin-orchestrator-doctor = "devin_orchestrator.doctor:main"
 dispatch-devin = "devin_orchestrator.dispatch_devin:main"
 dispatch-skill = "devin_orchestrator.dispatch_skill:main"
 
