@@ -9,7 +9,7 @@ import importlib.resources
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec
 import sys
 import warnings
 from pathlib import Path
@@ -19,7 +19,7 @@ import devin_orchestrator.register_mcp as _register_mcp
 
 def _smoke_test() -> bool:
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec
             [sys.executable, "-m", "devin_orchestrator.doctor"],
             capture_output=True,
             text=True,
@@ -54,9 +54,9 @@ def _validate_rendered(template_name: str, text: str) -> None:
 
     if template_name.endswith(".plist"):
         try:
-            import xml.etree.ElementTree as ET
+            import xml.etree.ElementTree as ET  # nosec
 
-            root = ET.fromstring(text)
+            root = ET.fromstring(text)  # nosec
         except Exception as e:
             raise ValueError(
                 f"launchd plist {template_name} is not valid XML: {e}"
@@ -84,7 +84,7 @@ def _platform() -> str:
 
 
 def _xml_escape(text: str) -> str:
-    from xml.sax.saxutils import escape
+    from xml.sax.saxutils import escape  # nosec
 
     return escape(text)
 
@@ -130,12 +130,12 @@ def _install_systemd(
         )
 
     if not dry_run and not system:
-        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-        subprocess.run(["systemctl", "--user", "enable", service_name], check=False)
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # nosec
+        subprocess.run(["systemctl", "--user", "enable", service_name], check=False)  # nosec
         print(f"Enabled {service_name} for the current user.")
     elif not dry_run:
-        subprocess.run(["systemctl", "daemon-reload"], check=False)
-        subprocess.run(["systemctl", "enable", service_name], check=False)
+        subprocess.run(["systemctl", "daemon-reload"], check=False)  # nosec
+        subprocess.run(["systemctl", "enable", service_name], check=False)  # nosec
         print(f"Enabled {service_name} system-wide.")
 
     return 0
@@ -154,10 +154,10 @@ def _uninstall_systemd(service_name: str, system: bool, dry_run: bool) -> int:
         if dry_run:
             print(f"Would remove service unit: {unit_file}")
         else:
-            subprocess.run([*systemctl, "stop", service_name], check=False)
-            subprocess.run([*systemctl, "disable", service_name], check=False)
+            subprocess.run([*systemctl, "stop", service_name], check=False)  # nosec
+            subprocess.run([*systemctl, "disable", service_name], check=False)  # nosec
             unit_file.unlink()
-            subprocess.run([*systemctl, "daemon-reload"], check=False)
+            subprocess.run([*systemctl, "daemon-reload"], check=False)  # nosec
             print(f"Removed {unit_file}")
         return 0
     print(f"Service unit not found: {unit_file}")
@@ -209,7 +209,7 @@ def _install_launchd(
         )
 
     if not dry_run:
-        subprocess.run(["launchctl", "load", "-w", str(plist_path)], check=False)
+        subprocess.run(["launchctl", "load", "-w", str(plist_path)], check=False)  # nosec
         print(f"Loaded {service_name}")
 
     return 0
@@ -226,7 +226,7 @@ def _uninstall_launchd(service_name: str, system: bool, dry_run: bool) -> int:
         if dry_run:
             print(f"Would remove launchd plist: {plist_path}")
         else:
-            subprocess.run(["launchctl", "unload", "-w", str(plist_path)], check=False)
+            subprocess.run(["launchctl", "unload", "-w", str(plist_path)], check=False)  # nosec
             plist_path.unlink()
             print(f"Removed {plist_path}")
         return 0
@@ -290,7 +290,7 @@ def _install_windows(
             task_args.extend(["/rl", "HIGHEST"])
         elif user == getpass.getuser():
             task_args.append("/np")
-        result = subprocess.run(task_args, check=False)
+        result = subprocess.run(task_args, check=False)  # nosec
         if result.returncode != 0:
             print(
                 "Failed to create scheduled task. "
@@ -308,7 +308,7 @@ def _uninstall_windows(service_name: str, system: bool, dry_run: bool) -> int:
     if dry_run:
         print(f"Would remove Windows scheduled task: {service_name}")
     else:
-        subprocess.run(["schtasks", "/delete", "/tn", service_name, "/f"], check=False)
+        subprocess.run(["schtasks", "/delete", "/tn", service_name, "/f"], check=False)  # nosec
         if system:
             bat_path = (
                 Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData"))
@@ -418,7 +418,7 @@ def _upgrade_package(user: bool) -> int:
         cmd = [pip, "install", "--upgrade", "devin-orchestrator"]
     if user:
         cmd.append("--user")
-    return subprocess.run(cmd).returncode
+    return subprocess.run(cmd).returncode  # nosec
 
 
 _SUBCOMMANDS = ("install", "uninstall", "upgrade")

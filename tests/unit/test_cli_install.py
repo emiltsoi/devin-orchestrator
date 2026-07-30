@@ -42,6 +42,7 @@ def test_render_template():
 
 def test_install_service_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     fake_run = _FakeRun()
+    monkeypatch.setattr(cli_install, "_platform", lambda: "systemd")
     monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
@@ -66,6 +67,7 @@ def test_install_service_smoke_failure_is_non_fatal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     fake_run = _FakeRun(returncode=1)
+    monkeypatch.setattr(cli_install, "_platform", lambda: "systemd")
     monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
@@ -81,6 +83,7 @@ def test_install_service_smoke_failure_is_non_fatal(
 
 def test_uninstall_service_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     fake_run = _FakeRun()
+    monkeypatch.setattr(cli_install, "_platform", lambda: "systemd")
     monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
@@ -103,6 +106,7 @@ def test_uninstall_service_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_uninstall_service_missing_unit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    monkeypatch.setattr(cli_install, "_platform", lambda: "systemd")
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
     result = cli_install._uninstall_service(
         system=False, service_name="devin-orchestrator"

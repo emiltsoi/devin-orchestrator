@@ -104,7 +104,7 @@ class McpServerMixin(McpServerBase):
 
             _join_active_threads(timeout=2.0)
         except Exception:
-            pass
+            logger.debug("Failed to join active threads during close", exc_info=True)
 
     # --------------------------------------------------------------------- #
     # Tool definitions (exposed via tools/list)
