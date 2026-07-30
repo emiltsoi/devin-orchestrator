@@ -273,7 +273,9 @@ def load_skill(skill_dir: Path, skill_name: str) -> dict[str, Any]:
         # Check for YAML frontmatter. Tolerate both \n and \r\n line endings so
         # CRLF-formatted skill files (e.g. on Windows) parse correctly. This
         # mirrors the pattern used in devin_cli_adapter._parse_frontmatter.
-        frontmatter_match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
+        frontmatter_match = re.match(
+            r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL
+        )
 
         if frontmatter_match:
             # Single file format with frontmatter

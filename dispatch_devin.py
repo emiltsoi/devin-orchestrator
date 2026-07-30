@@ -177,7 +177,11 @@ def main() -> int:
             "falling back to model_profile/default_model",
             file=sys.stderr,
         )
-    if args.agent and config.model_overrides and args.agent not in config.model_overrides:
+    if (
+        args.agent
+        and config.model_overrides
+        and args.agent not in config.model_overrides
+    ):
         print(
             f"Warning: agent {args.agent!r} not found in config.model_overrides; "
             "falling back to models/model_profile/default_model",
@@ -238,7 +242,11 @@ def main() -> int:
         sys.stderr.buffer.write((result.error + "\n").encode("utf-8"))
         sys.stderr.buffer.flush()
 
-    return result.exit_code if result.exit_code is not None else (0 if result.success else 1)
+    return (
+        result.exit_code
+        if result.exit_code is not None
+        else (0 if result.success else 1)
+    )
 
 
 if __name__ == "__main__":

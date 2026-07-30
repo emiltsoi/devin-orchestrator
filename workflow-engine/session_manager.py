@@ -36,7 +36,9 @@ def create_session(work_dir: Path, session_format: str) -> tuple[str, Path]:
     # Format: "PREFIX-NNN" where N is the digit placeholder
     match = re.match(r"^([A-Za-z0-9_-]+)-([N]+)$", session_format)
     if not match:
-        raise InvalidInputError(f"Invalid session format: {session_format}. Expected format: PREFIX-NNN")
+        raise InvalidInputError(
+            f"Invalid session format: {session_format}. Expected format: PREFIX-NNN"
+        )
 
     prefix = match.group(1)
     num_width = len(match.group(2))
@@ -139,7 +141,9 @@ def resolve_session(work_dir: Path, session_id: str) -> Path:
     # Build the session directory path and validate it stays under work_dir.
     # allow_absolute=True is safe here because the path is constructed from
     # the validated session ID joined onto the base work_dir.
-    session_dir = validate_path_safe(work_dir, work_dir / session_id, allow_absolute=True)
+    session_dir = validate_path_safe(
+        work_dir, work_dir / session_id, allow_absolute=True
+    )
 
     # Check if the session directory exists
     if not session_dir.exists():

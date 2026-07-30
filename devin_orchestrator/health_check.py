@@ -352,7 +352,9 @@ class HealthChecker:
                         errors="replace",
                         timeout=15,
                     )
-                    auth_output = (auth_result.stdout or "") + (auth_result.stderr or "")
+                    auth_output = (auth_result.stdout or "") + (
+                        auth_result.stderr or ""
+                    )
                     if "Not logged in" in auth_output:
                         return HealthCheckResult(
                             component="devin_cli",

@@ -124,7 +124,9 @@ class TestRecordHelpers:
         mc.start_workflow("s1", "m")
         with mc.track_stage("stage-a", "skill"):
             mc.record_retry("stage-a", 2)
-            mc.record_stage_result("stage-a", success=False, error="boom", triage_decision="correct")
+            mc.record_stage_result(
+                "stage-a", success=False, error="boom", triage_decision="correct"
+            )
         wf = mc.get_workflow_metrics("s1")
         stage = wf.stage_metrics[0]
         assert stage.retry_count == 2
