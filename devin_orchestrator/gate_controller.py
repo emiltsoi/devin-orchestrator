@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from devin_orchestrator.deterministic_tools import record_gate, wait_for_file_change
 from devin_orchestrator.models import Manifest
+from devin_orchestrator.otel_tracing import trace_span
 from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
 
 if TYPE_CHECKING:
@@ -38,6 +39,26 @@ class GateController:
         self._engine = engine
 
     def handle_gate(
+        self,
+        gate_id: str,
+        stage_name: str,
+        session_dir: Path,
+        manifest: Manifest | None = None,
+        stage_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Traced wrapper around the gate handling implementation."""
+        with trace_span(
+            "handle_gate",
+            {"gate_id": gate_id, "stage_name": stage_name},
+        ) as span:
+            result = self._handle_gate_impl(
+                gate_id, stage_name, session_dir, manifest, stage_result
+            )
+            if isinstance(result, dict) and "verdict" in result:
+                span.set_attribute("verdict", result["verdict"])
+            return result
+
+    def _handle_gate_impl(
         self,
         gate_id: str,
         stage_name: str,

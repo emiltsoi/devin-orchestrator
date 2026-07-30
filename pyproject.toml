@@ -40,6 +40,11 @@ dev = [
     "pip-audit>=2.0.0",
     "build>=1.0.0",
 ]
+otel = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp>=1.20",
+]
 
 [project.scripts]
 devin-orchestrator = "devin_orchestrator.mcp_server:main"

@@ -60,6 +60,7 @@ from devin_orchestrator.mcp_artifacts import (  # noqa: E402
     McpCallLogger,
     SubprocessArtifactRunner,
 )
+from devin_orchestrator.otel_tracing import trace_span  # noqa: E402
 from devin_orchestrator.security_utils import (  # noqa: E402
     InvalidInputError,
     PathTraversalError,
@@ -909,7 +910,13 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             is_error = True
         else:
             try:
-                content = self._run_tool(name, arguments)
+                with trace_span(
+                    "mcp_tool_call", {"tool_name": name, "session_id": "unknown"}
+                ) as span:
+                    content = self._run_tool(name, arguments)
+                    session_id = self._extract_session_id(content)
+                    if session_id:
+                        span.set_attribute("session_id", session_id)
                 is_error = False
             except (
                 FileNotFoundError,
