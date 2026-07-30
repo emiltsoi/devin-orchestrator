@@ -59,7 +59,7 @@ def _parse_mcp_response(data: bytes) -> dict | None:
 def smoke_test(launcher: str, timeout: int = 10) -> dict | None:
     """Send an initialize request to the launcher and return the response."""
     try:
-        proc = subprocess.Popen(
+        proc = subprocess.Popen(  # nosec B603
             [launcher],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
