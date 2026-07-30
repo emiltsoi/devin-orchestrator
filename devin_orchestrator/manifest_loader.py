@@ -84,6 +84,9 @@ class ManifestLoader:
         # Validate gate references
         self._validate_gate_references(data.get("gates", []))
 
+        # Validate stage -> gate references
+        self._validate_stage_gate_references(data["stages"], data.get("gates", []))
+
         return Manifest(
             name=data["name"],
             description=data["description"],
@@ -135,3 +138,45 @@ class ManifestLoader:
 
             if gate["type"] not in ["human", "auto"]:
                 raise ValueError(f"Gate {gate['id']} has invalid type: {gate['type']}")
+
+    def _validate_stage_gate_references(
+        self, stages: list[dict[str, Any]], gates: list[dict[str, Any]]
+    ) -> None:
+        """Validate that each stage ``gate`` field points to a defined gate."""
+        gate_ids = {gate["id"] for gate in gates}
+        for stage in stages:
+            gate = stage.get("gate")
+            if gate is None or gate == "none":
+                continue
+            if gate not in gate_ids:
+                raise ValueError(
+                    f"Stage '{stage.get('name', '<unknown>')}' references "
+                    f"undefined gate '{gate}'"
+                )
+
+    def list_manifests(self) -> list[str]:
+        """Return names of all workflow manifest files."""
+        if not self.workflows_dir.exists():
+            return []
+        return sorted(
+            p.name
+            for p in self.workflows_dir.iterdir()
+            if p.is_file() and p.name.endswith(".manifest.yaml")
+        )
+
+    def validate_all(self) -> tuple[list[str], list[tuple[str, str]]]:
+        """Load and validate every manifest.
+
+        Returns:
+            (valid_names, errors) where ``errors`` is a list of
+            (manifest_name, error_message) tuples.
+        """
+        valid: list[str] = []
+        errors: list[tuple[str, str]] = []
+        for name in self.list_manifests():
+            try:
+                self.load(name)
+                valid.append(name)
+            except Exception as e:  # noqa: BLE001
+                errors.append((name, str(e)))
+        return valid, errors

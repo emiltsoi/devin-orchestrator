@@ -296,6 +296,8 @@ class TestManifestLoader(unittest.TestCase):
         """Gate type 'auto' should be accepted alongside 'human'."""
         manifest_dict = self.valid_manifest.copy()
         manifest_dict["gates"] = [{"id": "g_auto", "name": "Auto Gate", "type": "auto"}]
+        # Stage must reference a defined gate.
+        manifest_dict["stages"][1]["gate"] = "g_auto"
         manifest_path = self.workflows_dir / "auto_gate.manifest.yaml"
         with open(manifest_path, "w", encoding="utf-8") as f:
             yaml.dump(manifest_dict, f)
