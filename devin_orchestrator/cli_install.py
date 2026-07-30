@@ -113,28 +113,57 @@ def _upgrade_package(user: bool) -> int:
     return subprocess.run(cmd).returncode
 
 
+_SUBCOMMANDS = ("install", "uninstall", "upgrade")
+
+
 def _build_parser(prog: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=prog,
         description="Install, uninstall, or upgrade devin-orchestrator as a systemd service.",
     )
+    subparsers = parser.add_subparsers(dest="command")
 
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--uninstall", action="store_true", help="Uninstall the systemd service")
-    mode.add_argument("--upgrade", action="store_true", help="Upgrade the package with pip")
-
-    parser.add_argument("--system", action="store_true", help="Install a system service (requires root)")
-    parser.add_argument("--service-name", default="devin-orchestrator")
-    parser.add_argument("--work-dir", default=str(Path.home()))
-    parser.add_argument("--run-as", default=str(Path.home().name) or "root", help="User account the service runs as")
-    parser.add_argument("--user", dest="user_install", action="store_true", default=True, help="Pass --user to pip when upgrading")
-    parser.add_argument("--no-user", dest="user_install", action="store_false")
-    parser.add_argument(
+    install_cmd = subparsers.add_parser(
+        "install", help="Install the devin-orchestrator service"
+    )
+    install_cmd.add_argument(
+        "--system", action="store_true", help="Install a system service (requires root)"
+    )
+    install_cmd.add_argument("--service-name", default="devin-orchestrator")
+    install_cmd.add_argument("--work-dir", default=str(Path.home()))
+    install_cmd.add_argument(
+        "--run-as",
+        default=str(Path.home().name) or "root",
+        help="User account the service runs as",
+    )
+    install_cmd.add_argument(
         "--exec",
         dest="exec_cmd",
         nargs=argparse.REMAINDER,
         default=None,
         help="Command to run in the service (default: run MCP server)",
+    )
+
+    uninstall_cmd = subparsers.add_parser(
+        "uninstall", help="Uninstall the devin-orchestrator service"
+    )
+    uninstall_cmd.add_argument(
+        "--system", action="store_true", help="Uninstall a system service (requires root)"
+    )
+    uninstall_cmd.add_argument("--service-name", default="devin-orchestrator")
+
+    upgrade_cmd = subparsers.add_parser(
+        "upgrade", help="Upgrade the devin-orchestrator package with pip"
+    )
+    upgrade_cmd.add_argument(
+        "--user",
+        dest="user_install",
+        action="store_true",
+        default=True,
+        help="Pass --user to pip when upgrading",
+    )
+    upgrade_cmd.add_argument(
+        "--no-user", dest="user_install", action="store_false"
     )
 
     return parser
@@ -143,24 +172,43 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
 def install(argv: list[str] | None = None) -> int:
     """Entry point for the `install` subcommand."""
     parser = _build_parser("devin-orchestrator install")
+    argv = list(argv) if argv is not None else []
+
+    if not argv:
+        parser.print_help()
+        return 0
+
+    if argv[0] in ("-h", "--help"):
+        args = parser.parse_args(argv)
+        return 0
+
+    if argv[0] not in _SUBCOMMANDS:
+        # Bare `devin-orchestrator install --service-name ...` defaults to the
+        # `install` subcommand for a friendlier UX.
+        argv = ["install", *argv]
+
     args = parser.parse_args(argv)
 
-    if args.uninstall:
+    if args.command == "uninstall":
         return _uninstall_service(system=args.system, service_name=args.service_name)
 
-    if args.upgrade:
+    if args.command == "upgrade":
         return _upgrade_package(user=args.user_install)
 
-    if args.system and not args.run_as:
-        print("--run-as is required for --system installs.", file=sys.stderr)
-        return 2
-    return _install_service(
-        system=args.system,
-        service_name=args.service_name,
-        work_dir=Path(args.work_dir),
-        user=args.run_as,
-        command=args.exec_cmd,
-    )
+    if args.command == "install":
+        if args.system and not args.run_as:
+            print("--run-as is required for --system installs.", file=sys.stderr)
+            return 2
+        return _install_service(
+            system=args.system,
+            service_name=args.service_name,
+            work_dir=Path(args.work_dir),
+            user=args.run_as,
+            command=args.exec_cmd,
+        )
+
+    parser.print_help()
+    return 0
 
 
 def _legacy_shim(legacy_name: str, argv: list[str] | None) -> int:
@@ -170,6 +218,11 @@ def _legacy_shim(legacy_name: str, argv: list[str] | None) -> int:
             DeprecationWarning,
             stacklevel=2,
         )
+    argv = list(argv) if argv is not None else []
+    if argv and argv[0] == "--uninstall":
+        argv = ["uninstall", *argv[1:]]
+    if argv and argv[0] == "--upgrade":
+        argv = ["upgrade", *argv[1:]]
     return install(argv)
 
 

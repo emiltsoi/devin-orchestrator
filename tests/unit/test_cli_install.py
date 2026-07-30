@@ -102,7 +102,7 @@ def test_install_cli_routes_uninstall(monkeypatch: pytest.MonkeyPatch):
         return 0
 
     monkeypatch.setattr(cli_install, "_uninstall_service", fake_uninstall)
-    result = cli_install.install(["--uninstall", "--system", "--service-name", "x"])
+    result = cli_install.install(["uninstall", "--system", "--service-name", "x"])
     assert result == 0
     assert calls == [(True, "x")]
 
@@ -115,12 +115,12 @@ def test_install_cli_routes_upgrade(monkeypatch: pytest.MonkeyPatch):
         return 0
 
     monkeypatch.setattr(cli_install, "_upgrade_package", fake_upgrade)
-    result = cli_install.install(["--upgrade", "--no-user"])
+    result = cli_install.install(["upgrade", "--no-user"])
     assert result == 0
     assert calls == [False]
 
 
-def test_install_cli_routes_install(monkeypatch: pytest.MonkeyPatch):
+def test_install_cli_routes_install_bare_default(monkeypatch: pytest.MonkeyPatch):
     calls: list[dict[str, Any]] = []
 
     def fake_install(system, service_name, work_dir, user, command=None):
@@ -151,6 +151,37 @@ def test_install_cli_routes_install(monkeypatch: pytest.MonkeyPatch):
     ]
 
 
+def test_install_cli_routes_install_explicit(monkeypatch: pytest.MonkeyPatch):
+    calls: list[dict[str, Any]] = []
+
+    def fake_install(system, service_name, work_dir, user, command=None):
+        calls.append(
+            {
+                "system": system,
+                "service_name": service_name,
+                "work_dir": str(work_dir),
+                "user": user,
+                "command": command,
+            }
+        )
+        return 0
+
+    monkeypatch.setattr(cli_install, "_install_service", fake_install)
+    result = cli_install.install(
+        ["install", "--service-name", "x", "--work-dir", "/tmp", "--run-as", "bob"]
+    )
+    assert result == 0
+    assert calls == [
+        {
+            "system": False,
+            "service_name": "x",
+            "work_dir": "/tmp",
+            "user": "bob",
+            "command": None,
+        }
+    ]
+
+
 def test_install_py_main_deprecation_and_routing(monkeypatch: pytest.MonkeyPatch):
     calls: list[list[str]] = []
 
@@ -163,14 +194,21 @@ def test_install_py_main_deprecation_and_routing(monkeypatch: pytest.MonkeyPatch
         warnings.simplefilter("always")
         result = cli_install.install_py_main(["--uninstall"])
         assert result == 0
-        assert calls == [["--uninstall"]]
+        assert calls == [["uninstall"]]
         assert any(issubclass(x.category, DeprecationWarning) for x in w)
 
 
 def test_deploy_py_main_deprecation(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(cli_install, "install", lambda argv: 0)
+    calls: list[list[str]] = []
+
+    def fake_install(argv):
+        calls.append(argv)
+        return 0
+
+    monkeypatch.setattr(cli_install, "install", fake_install)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         result = cli_install.deploy_py_main(["--upgrade"])
         assert result == 0
+        assert calls == [["upgrade"]]
         assert any(issubclass(x.category, DeprecationWarning) for x in w)
