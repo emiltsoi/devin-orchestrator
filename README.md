@@ -39,9 +39,9 @@ You can also install from PyPI and register manually:
 
 ```bash
 pip install devin-orchestrator
+devin-orchestrator --version
 python3 -m devin_orchestrator.mcp_server --version
-# from the repo
-python3 register_mcp.py
+python3 -m devin_orchestrator.register_mcp
 ```
 
 - [DEPLOY.md](DEPLOY.md) — dry-run mode, manual steps, Windows/macOS notes.
@@ -89,16 +89,20 @@ Platform Layer (Windsurf, Claude Code, Devin CLI, etc.)
 
 Early prototype phase. Design documented in `ARCHITECTURE.md`.
 
-## MCP Server
+## CLI and MCP Server
 
-`mcp_server.py` runs a stateless stdio MCP server that exposes skills, workflows, and Devin dispatch as JSON-RPC tools. Any MCP-compatible client (Claude Desktop, Cursor, OpenClaw, etc.) can connect and run the orchestrator without learning bash paths or local file layouts.
+After installation, the `devin-orchestrator` command is the main entry point. See [DEPLOY.md](DEPLOY.md) for install, uninstall, and service management.
+
+`python -m devin_orchestrator.mcp_server` runs a stateless stdio MCP server that exposes skills, workflows, and Devin dispatch as JSON-RPC tools. Any MCP-compatible client (Claude Desktop, Cursor, OpenClaw, etc.) can connect and run the orchestrator without learning bash paths or local file layouts.
 
 Primary MCP tools include:
 
 - `execute`, `implement`, `review`, `investigate`, `plan`, `run_workflow`, `run_skill` - high-level intent routing and workflow execution
-- `dispatch_skill`, `dispatch_devin` - low-level Devin worker dispatch
-- `list_skills`, `get_skill`, `list_workflows`, `get_workflow`, `read_artifact` - discovery and read-only helpers
-- `gate_decision`, `continue_workflow` - gate control and resume
+- `dispatch_devin`, `dispatch_skill` - low-level Devin worker dispatch
+- `list_skills`, `get_skill`, `list_workflows`, `get_workflow` - discovery helpers
+- `read_artifact`, `list_directory`, `list_artifacts`, `write_artifact`, `apply_patch` - workspace artifact helpers
+- `gate_decision`, `continue_workflow`, `query_workflow_status` - gate control and status polling
+- `list_sessions`, `cancel_session`, `health` - session and health helpers
 
 See [MCP-CLIENTS.md](MCP-CLIENTS.md) for client configuration examples. For the fastest setup, run the deployment script first — it writes the correct configuration for every supported client.
 
@@ -106,11 +110,11 @@ See [MCP-CLIENTS.md](MCP-CLIENTS.md) for client configuration examples. For the 
 
 ```
 devin-orchestrator/
-├── mcp_server.py    # MCP server entry point (stdio JSON-RPC)
 ├── MCP-CLIENTS.md   # MCP client configuration
 ├── skills/          # Skill definitions (YAML + markdown)
 ├── workflows/       # Workflow definitions (YAML manifests + markdown)
-├── devin_orchestrator/ # Orchestration engine and tools
+├── devin_orchestrator/  # Orchestration engine and tools
+│   └── mcp_server.py    # MCP server entry point (stdio JSON-RPC)
 ├── adapters/        # Transport adapter implementations
 ├── contracts/       # Dispatch contract definitions
 └── .windsurf/
