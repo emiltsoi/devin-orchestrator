@@ -6,6 +6,7 @@ Installs devin-orchestrator to a global location (~/.devin-orchestrator/)
 for use across all workspaces.
 """
 
+import glob
 import os
 import shutil
 import stat
@@ -31,13 +32,27 @@ def _rmtree(path: Path):
         shutil.rmtree(path, onerror=_on_rm_error)
 
 
-def _backup_path(path: Path) -> Path:
+def _prune_backups(backups_dir: Path, keep: int) -> None:
+    """Keep only the ``keep`` most recent backups in a directory."""
+    if keep <= 0:
+        return
+    pattern = str(backups_dir / "*.bak")
+    backups = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    for old in backups[keep:]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
+
+def _backup_path(path: Path, keep_backups: int = 10) -> Path:
     """Create a timestamped backup of a file in its parent backups/ directory."""
     backups_dir = path.parent / "backups"
     backups_dir.mkdir(parents=True, exist_ok=True)
     suffix = str(int(time.time()))
     backup = backups_dir / f"{path.name}.{suffix}.bak"
     shutil.copy2(path, backup)
+    _prune_backups(backups_dir, keep_backups)
     return backup
 
 
@@ -46,6 +61,7 @@ def write_launcher(
     python: str | None = None,
     dry_run: bool = False,
     bin_dir: Path | None = None,
+    keep_backups: int = 10,
 ):
     """Write the devin-orchestrator launcher."""
     if bin_dir is None:
@@ -77,7 +93,7 @@ exec "{python}" "{mcp_server_str}" "$@"
 
     bin_dir.mkdir(parents=True, exist_ok=True)
     if launcher.exists():
-        _backup_path(launcher)
+        _backup_path(launcher, keep_backups)
     launcher.write_text(content)
     if sys.platform != "win32":
         launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -89,6 +105,7 @@ def install(
     source_dir: Path | None = None,
     dry_run: bool = False,
     python: str | None = None,
+    keep_backups: int = 10,
 ):
     """
     Install devin-orchestrator to global location
@@ -158,7 +175,7 @@ def install(
     if source_config.exists():
         if not dry_run:
             if target_config.exists():
-                _backup_path(target_config)
+                _backup_path(target_config, keep_backups)
             shutil.copy2(source_config, target_config)
         print(f"Would copy config: {source_config} -> {target_config}")
 
@@ -200,7 +217,7 @@ def install(
     print(f"Would create logs directory: {logs_dir}")
 
     # Create a stable launcher
-    write_launcher(global_root, python=python, dry_run=dry_run)
+    write_launcher(global_root, python=python, dry_run=dry_run, keep_backups=keep_backups)
 
     if dry_run:
         print()
@@ -265,10 +282,22 @@ if __name__ == "__main__":
         default=None,
         help="Python executable to use in the launcher (default: this interpreter)",
     )
+    parser.add_argument(
+        "--keep-backups",
+        type=int,
+        default=10,
+        help="Number of backups to retain (default: 10)",
+    )
 
     args = parser.parse_args()
 
     global_root = Path(args.global_root) if args.global_root else None
     source_dir = Path(args.source_dir) if args.source_dir else None
 
-    install(global_root, source_dir, dry_run=args.dry_run, python=args.python)
+    install(
+        global_root,
+        source_dir,
+        dry_run=args.dry_run,
+        python=args.python,
+        keep_backups=args.keep_backups,
+    )
