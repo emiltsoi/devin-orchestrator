@@ -44,7 +44,7 @@ After installation, create a systemd user service and a smoke test:
 devin-orchestrator install
 ```
 
-Remove the service with `devin-orchestrator install --uninstall` or upgrade the package with `devin-orchestrator install --upgrade`. The legacy `install.py` and `deploy.py` scripts still work but print a deprecation warning.
+Remove the service with `devin-orchestrator install uninstall` or upgrade the package with `devin-orchestrator install upgrade`. The legacy `install.py` and `deploy.py` scripts still work but print a deprecation warning.
 
 ### Option 3: Deployment Scripts (New)
 

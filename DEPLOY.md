@@ -17,7 +17,7 @@ pipx install devin-orchestrator
 devin-orchestrator install
 ```
 
-Then register the MCP server with your agent. Use `devin-orchestrator install --uninstall` to remove the service and `devin-orchestrator install --upgrade` to update the package.
+Then register the MCP server with your agent. Use `devin-orchestrator install uninstall` to remove the service and `devin-orchestrator install upgrade` to update the package.
 
 ### Legacy Python scripts
 
