@@ -727,6 +727,11 @@ class McpServer:
                     "required": ["session_id"],
                 },
             },
+            {
+                "name": "health",
+                "description": "Return the health status of the devin-orchestrator installation and active sessions.",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
         ]
 
     # --------------------------------------------------------------------- #
@@ -2030,6 +2035,14 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
             return [self._text_content(json.dumps(result, indent=2))]
         except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
             return [self._text_content(f"Failed to cancel session: {e}")]
+
+    def _tool_health(self, _arguments: dict) -> list[dict]:
+        """Return the JSON health report for this orchestrator installation."""
+        from devin_orchestrator.health_check import health
+
+        work_dir = getattr(self.config, "session_work_dir", None)
+        report = health(work_dir=work_dir)
+        return [self._text_content(json.dumps(report, indent=2, default=str))]
 
     # --------------------------------------------------------------------- #
     # stdio transport

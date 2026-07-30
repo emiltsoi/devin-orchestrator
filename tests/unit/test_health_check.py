@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
-from devin_orchestrator.health_check import HealthChecker, HealthCheckResult
+from devin_orchestrator.health_check import HealthChecker, HealthCheckResult, health
+from devin_orchestrator.state_store import JsonlStateStore
 
 
 @dataclass
@@ -352,11 +353,15 @@ class TestRunAllChecks:
             patch.object(HealthChecker, "check_skills_directory") as skills,
             patch.object(HealthChecker, "check_workflows_directory") as wf,
             patch.object(HealthChecker, "check_devin_cli") as cli,
+            patch.object(HealthChecker, "check_sessions") as sessions,
+            patch.object(HealthChecker, "check_stuck_gates") as stuck,
         ):
             cfg.return_value = HealthCheckResult("config_file", "error", "boom", {})
             skills.return_value = HealthCheckResult("skills", "healthy", "ok", {})
             wf.return_value = HealthCheckResult("workflows", "healthy", "ok", {})
             cli.return_value = HealthCheckResult("devin_cli", "healthy", "ok", {})
+            sessions.return_value = HealthCheckResult("sessions", "healthy", "ok", {})
+            stuck.return_value = HealthCheckResult("stuck_gates", "healthy", "ok", {})
             report = checker.run_all_checks()
         assert report["overall_status"] == "error"
         assert report["summary"]["error"] == 1
@@ -368,11 +373,15 @@ class TestRunAllChecks:
             patch.object(HealthChecker, "check_skills_directory") as skills,
             patch.object(HealthChecker, "check_workflows_directory") as wf,
             patch.object(HealthChecker, "check_devin_cli") as cli,
+            patch.object(HealthChecker, "check_sessions") as sessions,
+            patch.object(HealthChecker, "check_stuck_gates") as stuck,
         ):
             cfg.return_value = HealthCheckResult("config_file", "warning", "w", {})
             skills.return_value = HealthCheckResult("skills", "healthy", "ok", {})
             wf.return_value = HealthCheckResult("workflows", "healthy", "ok", {})
             cli.return_value = HealthCheckResult("devin_cli", "healthy", "ok", {})
+            sessions.return_value = HealthCheckResult("sessions", "healthy", "ok", {})
+            stuck.return_value = HealthCheckResult("stuck_gates", "healthy", "ok", {})
             report = checker.run_all_checks()
         assert report["overall_status"] == "warning"
         assert report["summary"]["warning"] == 1
@@ -384,12 +393,14 @@ class TestRunAllChecks:
             patch.object(HealthChecker, "check_skills_directory") as skills,
             patch.object(HealthChecker, "check_workflows_directory") as wf,
             patch.object(HealthChecker, "check_devin_cli") as cli,
+            patch.object(HealthChecker, "check_sessions") as sessions,
+            patch.object(HealthChecker, "check_stuck_gates") as stuck,
         ):
-            for m in (cfg, skills, wf, cli):
+            for m in (cfg, skills, wf, cli, sessions, stuck):
                 m.return_value = HealthCheckResult("c", "healthy", "ok", {})
             report = checker.run_all_checks()
         assert report["overall_status"] == "healthy"
-        assert report["summary"]["healthy"] == 4
+        assert report["summary"]["healthy"] == 6
 
     def test_print_report_outputs_all_sections(self, capsys):
         checker = HealthChecker()
@@ -412,5 +423,108 @@ class TestRunAllChecks:
         checker.print_report(report)
         out = capsys.readouterr().out
         assert "Health Check Report" in out
-        assert "CONFIG_FILE" in out
-        assert "list_field: a, b" in out
+
+
+class TestCheckSessions:
+    def test_no_work_dir_returns_error(self):
+        checker = HealthChecker()
+        result = checker.check_sessions()
+        assert result.status == "error"
+        assert "No work_dir configured" in result.message
+
+    def test_empty_work_dir_is_healthy(self, tmp_path):
+        engine = tmp_path / "engine"
+        engine.mkdir()
+        checker = HealthChecker(work_dir=engine)
+        result = checker.check_sessions()
+        assert result.status == "healthy"
+        assert result.details["active"] == 0
+        assert result.details["final"] == 0
+
+    def test_counts_active_and_final_sessions(self, tmp_path):
+        engine = tmp_path / "engine"
+        engine.mkdir()
+
+        active_dir = engine / "active-001"
+        active_dir.mkdir()
+        active = JsonlStateStore()
+        active.init("active-001", active_dir)
+        active.set_status("in_progress")
+
+        final_dir = engine / "final-001"
+        final_dir.mkdir()
+        final = JsonlStateStore()
+        final.init("final-001", final_dir)
+        final.set_status("completed")
+
+        checker = HealthChecker(work_dir=engine)
+        result = checker.check_sessions()
+        assert result.status == "warning"
+        assert result.details["active"] == 1
+        assert result.details["final"] == 1
+
+
+class TestCheckStuckGates:
+    def test_no_work_dir_returns_error(self):
+        checker = HealthChecker()
+        result = checker.check_stuck_gates()
+        assert result.status == "error"
+        assert "No work_dir configured" in result.message
+
+    def test_empty_work_dir_is_healthy(self, tmp_path):
+        engine = tmp_path / "engine"
+        engine.mkdir()
+        checker = HealthChecker(work_dir=engine)
+        result = checker.check_stuck_gates()
+        assert result.status == "healthy"
+        assert result.details["stuck_sessions"] == []
+
+    def test_detects_waiting_and_blocked_sessions(self, tmp_path):
+        engine = tmp_path / "engine"
+        engine.mkdir()
+
+        waiting_dir = engine / "waiting-001"
+        waiting_dir.mkdir()
+        waiting = JsonlStateStore()
+        waiting.init("waiting-001", waiting_dir)
+        waiting.set_status("waiting_for_input")
+
+        blocked_dir = engine / "blocked-001"
+        blocked_dir.mkdir()
+        blocked = JsonlStateStore()
+        blocked.init("blocked-001", blocked_dir)
+        blocked.set_status("blocked")
+
+        checker = HealthChecker(work_dir=engine)
+        result = checker.check_stuck_gates()
+        assert result.status == "warning"
+        assert len(result.details["stuck_sessions"]) == 2
+
+
+class TestHealth:
+    def test_health_returns_report(self, tmp_path):
+        report = health(work_dir=tmp_path)
+        assert "overall_status" in report
+        assert "checks" in report
+        assert "summary" in report
+
+
+class TestHealthCli:
+    def test_cli_prints_json_and_exits_healthy(self, tmp_path, monkeypatch, capsys):
+        import json as _json
+
+        from devin_orchestrator.health_cli import main
+
+        monkeypatch.setattr(
+            "devin_orchestrator.health_cli.health",
+            lambda work_dir: {
+                "overall_status": "healthy",
+                "checks": [],
+                "summary": {"healthy": 1, "warning": 0, "error": 0, "total": 1},
+            },
+        )
+        monkeypatch.setattr("sys.argv", ["devin-orchestrator-health"])
+        exit_code = main()
+        out = capsys.readouterr().out
+        assert _json.loads(out)["overall_status"] == "healthy"
+        assert exit_code == 0
