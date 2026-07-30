@@ -76,7 +76,9 @@ class McpServer:
     MIN_TIMEOUT_SECONDS = 1
     MAX_TIMEOUT_SECONDS = 3600
 
-    DEFAULT_MESSAGE_LOG = Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+    DEFAULT_MESSAGE_LOG = (
+        Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+    )
 
     def __init__(
         self, workspace: str | None = None, message_log_path: str | None = None
@@ -108,17 +110,13 @@ class McpServer:
             self._message_log_path = None
             self._message_log = None
 
-    def _log_message(
-        self, direction: str, payload: dict[str, Any] | bytes
-    ) -> None:
+    def _log_message(self, direction: str, payload: dict[str, Any] | bytes) -> None:
         """Append a JSON-RPC message (or raw bytes) to the message log."""
         if self._message_log is None:
             return
         try:
             if isinstance(payload, bytes):
-                message: Any = {
-                    "_raw": payload.decode("utf-8", errors="replace")
-                }
+                message: Any = {"_raw": payload.decode("utf-8", errors="replace")}
             else:
                 message = payload
             entry = {
@@ -525,13 +523,22 @@ class McpServer:
 
         # Check rate limit for this tool
         if not self._check_rate_limit(name):
-            content = [self._text_content(f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds.")]
+            content = [
+                self._text_content(
+                    f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds."
+                )
+            ]
             is_error = True
         else:
             try:
                 content = self._run_tool(name, arguments)
                 is_error = False
-            except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
+            except (
+                FileNotFoundError,
+                ValueError,
+                InvalidInputError,
+                PathTraversalError,
+            ) as e:
                 content = [self._text_content(f"Error: {e}")]
                 is_error = True
             except (KeyError, TypeError) as e:
@@ -559,7 +566,8 @@ class McpServer:
         current_time = time.time()
         # Clean up old calls outside the time window
         self._tool_call_history[tool_name] = [
-            timestamp for timestamp in self._tool_call_history[tool_name]
+            timestamp
+            for timestamp in self._tool_call_history[tool_name]
             if current_time - timestamp < self.RATE_LIMIT_WINDOW_SECONDS
         ]
 
@@ -588,13 +596,19 @@ class McpServer:
             return self.DEFAULT_TIMEOUT_SECONDS
 
         if not isinstance(timeout, int):
-            raise InvalidInputError(f"Timeout must be an integer, got {type(timeout).__name__}")
+            raise InvalidInputError(
+                f"Timeout must be an integer, got {type(timeout).__name__}"
+            )
 
         if timeout < self.MIN_TIMEOUT_SECONDS:
-            raise InvalidInputError(f"Timeout must be at least {self.MIN_TIMEOUT_SECONDS} seconds")
+            raise InvalidInputError(
+                f"Timeout must be at least {self.MIN_TIMEOUT_SECONDS} seconds"
+            )
 
         if timeout > self.MAX_TIMEOUT_SECONDS:
-            raise InvalidInputError(f"Timeout cannot exceed {self.MAX_TIMEOUT_SECONDS} seconds")
+            raise InvalidInputError(
+                f"Timeout cannot exceed {self.MAX_TIMEOUT_SECONDS} seconds"
+            )
 
         return timeout
 
@@ -701,9 +715,9 @@ class McpServer:
                 yaml_file = entry / f"{entry.name}.yaml"
                 if entry.is_dir() and yaml_file.exists():
                     try:
-                        data = yaml.safe_load(
-                            yaml_file.read_text(encoding="utf-8")
-                        ) or {}
+                        data = (
+                            yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+                        )
                     except yaml.YAMLError as e:
                         # Skip malformed skill YAML files so a single corrupt
                         # file does not crash the listing operation.
@@ -784,7 +798,9 @@ class McpServer:
         use_cases_file = workflows_dir / "use-cases.yaml"
         if use_cases_file.exists():
             try:
-                use_cases_data = yaml.safe_load(use_cases_file.read_text(encoding="utf-8")) or {}
+                use_cases_data = (
+                    yaml.safe_load(use_cases_file.read_text(encoding="utf-8")) or {}
+                )
                 for uc in use_cases_data.get("use_cases", []):
                     wf_name = uc.get("workflow")
                     if not wf_name:
@@ -806,9 +822,7 @@ class McpServer:
         if workflows_dir.exists():
             for manifest in sorted(workflows_dir.glob("*.manifest.yaml")):
                 try:
-                    data = yaml.safe_load(
-                        manifest.read_text(encoding="utf-8")
-                    ) or {}
+                    data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
                 except yaml.YAMLError as e:
                     # Skip malformed workflow manifests so a single corrupt
                     # file does not crash the listing operation.
@@ -996,9 +1010,9 @@ class McpServer:
                 cwd=str(work_dir),
             )
         except subprocess.TimeoutExpired:
-            return [self._text_content(
-                f"Devin dispatch timed out after {timeout} seconds."
-            )]
+            return [
+                self._text_content(f"Devin dispatch timed out after {timeout} seconds.")
+            ]
         text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
         if result.stderr:
             text += f"\n\nSTDERR:\n{result.stderr}"
@@ -1078,9 +1092,9 @@ class McpServer:
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return [self._text_content(
-                f"Skill dispatch timed out after {timeout} seconds."
-            )]
+            return [
+                self._text_content(f"Skill dispatch timed out after {timeout} seconds.")
+            ]
         text = f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}"
         if result.stderr:
             text += f"\n\nSTDERR:\n{result.stderr}"
@@ -1113,7 +1127,9 @@ class McpServer:
             try:
                 workspace = resolve_session(self.config.session_work_dir, session_id)
             except (FileNotFoundError, ValueError) as e:
-                return [self._text_content(f"Failed to resolve session {session_id}: {e}")]
+                return [
+                    self._text_content(f"Failed to resolve session {session_id}: {e}")
+                ]
             base = Path(workspace)
         else:
             # Without a session_id, use the caller-supplied workspace (or the

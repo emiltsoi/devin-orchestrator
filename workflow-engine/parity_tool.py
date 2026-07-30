@@ -106,7 +106,9 @@ def check_manifest_runbook_parity(workflows_dir: Path) -> dict[str, Any]:
             name = name.lower()
             name = re.sub(r"\s*\([^)]*\)", "", name)  # remove parenthetical text
             name = name.replace("_", "-")  # normalize underscores to hyphens
-            name = re.sub(r"[^a-z0-9\-]+", "-", name)  # replace spaces/punctuation with hyphens
+            name = re.sub(
+                r"[^a-z0-9\-]+", "-", name
+            )  # replace spaces/punctuation with hyphens
             return name.strip("-")
 
         manifest_stages = [s["name"] for s in manifest.get("stages", [])]

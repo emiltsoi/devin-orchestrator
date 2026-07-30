@@ -55,7 +55,9 @@ def test_initialize():
     )
     assert response["jsonrpc"] == "2.0"
     assert response["id"] == 1
-    assert response["result"]["protocolVersion"] == mcp_server.McpServer.PROTOCOL_VERSION
+    assert (
+        response["result"]["protocolVersion"] == mcp_server.McpServer.PROTOCOL_VERSION
+    )
     assert response["result"]["serverInfo"]["name"] == mcp_server.McpServer.SERVER_NAME
 
 
@@ -190,9 +192,7 @@ def test_dispatch_devin_builds_command(server):
     prompt_file.write_text("# prompt", encoding="utf-8")
 
     with patch("mcp_server.subprocess.run") as mock_run:
-        mock_run.return_value = Mock(
-            returncode=0, stdout="ok", stderr="", args=[]
-        )
+        mock_run.return_value = Mock(returncode=0, stdout="ok", stderr="", args=[])
         response = server.handle(
             {
                 "jsonrpc": "2.0",

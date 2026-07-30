@@ -46,7 +46,10 @@ class TestExpandEnvVars:
     def test_default_value_when_var_missing(self):
         env_without = {k: v for k, v in os.environ.items() if k != "MISSING_VAR_XYZ"}
         with patch.dict(os.environ, env_without, clear=True):
-            assert ConfigLoader.expand_env_vars("${MISSING_VAR_XYZ:-fallback}") == "fallback"
+            assert (
+                ConfigLoader.expand_env_vars("${MISSING_VAR_XYZ:-fallback}")
+                == "fallback"
+            )
 
     def test_default_value_ignored_when_var_set(self):
         with patch.dict(os.environ, {"FOO": "real"}):
@@ -250,7 +253,10 @@ class TestModelRoutingFields:
         config_path.write_text(
             yaml.safe_dump(
                 {
-                    "models": {"verify": "${VERIFY_MODEL}", "execute": "${EXEC_MODEL:-swe-1.6}"},
+                    "models": {
+                        "verify": "${VERIFY_MODEL}",
+                        "execute": "${EXEC_MODEL:-swe-1.6}",
+                    },
                     "model_overrides": {"coder": "${CODER_MODEL}"},
                 }
             ),

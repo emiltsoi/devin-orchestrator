@@ -43,14 +43,16 @@ from skill_invoker import SkillInvoker
 def main():
     # Parse command line arguments
     if len(sys.argv) < 4:
-        print("Usage: dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]")
+        print(
+            "Usage: dispatch_skill.py <skill_name> <session_id> <workspace> [is_reviewer] [demo_mode] [config_overrides]"
+        )
         sys.exit(1)
 
     skill_name = sys.argv[1]
     session_id = sys.argv[2]
     workspace = sys.argv[3]
-    is_reviewer = len(sys.argv) > 4 and sys.argv[4].lower() == 'true'
-    demo_mode = len(sys.argv) > 5 and sys.argv[5].lower() == 'true'
+    is_reviewer = len(sys.argv) > 4 and sys.argv[4].lower() == "true"
+    demo_mode = len(sys.argv) > 5 and sys.argv[5].lower() == "true"
     config_overrides_json = sys.argv[6] if len(sys.argv) > 6 else None
 
     # Load config first so we can constrain workspace validation to the
@@ -67,9 +69,7 @@ def main():
         # accepts any workspace the MCP server would accept (including those
         # under global_root but outside session_work_dir).
         workspace = str(
-            validate_workspace_path(
-                workspace, base_allowed_dir=config.global_root
-            )
+            validate_workspace_path(workspace, base_allowed_dir=config.global_root)
         )
     except InvalidInputError as e:
         print(f"Input validation error: {e}", file=sys.stderr)
@@ -81,17 +81,19 @@ def main():
         try:
             config_overrides = json.loads(config_overrides_json)
         except json.JSONDecodeError:
-            print(f"Warning: Invalid JSON for config_overrides: {config_overrides_json}")
+            print(
+                f"Warning: Invalid JSON for config_overrides: {config_overrides_json}"
+            )
 
     # Create skill invoker
     skill_invoker = SkillInvoker(demo_mode=demo_mode)
 
     # Prepare context
     context = {
-        'session_id': session_id,
-        'stage': skill_name,
-        'skill': skill_name,
-        'config_overrides': config_overrides
+        "session_id": session_id,
+        "stage": skill_name,
+        "skill": skill_name,
+        "config_overrides": config_overrides,
     }
 
     # Invoke skill
@@ -100,21 +102,22 @@ def main():
         context=context,
         workspace=workspace,
         is_reviewer=is_reviewer,
-        config_overrides=config_overrides
+        config_overrides=config_overrides,
     )
 
     # Output result as JSON
     output = {
-        'success': result.success,
-        'session_id': result.session_id,
-        'output': result.output,
-        'error': result.error
+        "success": result.success,
+        "session_id": result.session_id,
+        "output": result.output,
+        "error": result.error,
     }
 
     print(json.dumps(output, indent=2))
 
     # Exit with appropriate code
     sys.exit(0 if result.success else 1)
+
 
 if __name__ == "__main__":
     main()

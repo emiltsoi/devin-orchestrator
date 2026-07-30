@@ -97,7 +97,9 @@ class StatelessOrchestrator:
                             "workflow": uc.get("workflow"),
                             "session_id_format": uc.get("session_id_format"),
                         }
-                logger.info(f"Loaded {len(self.use_cases)} use cases from {use_cases_file}")
+                logger.info(
+                    f"Loaded {len(self.use_cases)} use cases from {use_cases_file}"
+                )
             except (FileNotFoundError, yaml.YAMLError, ValueError, KeyError) as e:
                 logger.warning(f"Failed to load use-cases.yaml: {e}")
 
@@ -204,16 +206,33 @@ class StatelessOrchestrator:
         # Keywords for each intent with word boundary matching
         # Higher-weight keywords are listed first for clarity
         review_keywords = [
-            r"\breview\b", r"\baudit\b", r"\bcheck\b", r"\bverify\b",
-            r"\bpr\b", r"\bpull request\b", r"\bcode review\b"
+            r"\breview\b",
+            r"\baudit\b",
+            r"\bcheck\b",
+            r"\bverify\b",
+            r"\bpr\b",
+            r"\bpull request\b",
+            r"\bcode review\b",
         ]
         investigate_keywords = [
-            r"\bdebug\b", r"\binvestigate\b", r"\brca\b", r"\broot cause\b",
-            r"\bincident\b", r"\berror\b", r"\bfailure\b", r"\bbug\b", r"\bfix\b"
+            r"\bdebug\b",
+            r"\binvestigate\b",
+            r"\brca\b",
+            r"\broot cause\b",
+            r"\bincident\b",
+            r"\berror\b",
+            r"\bfailure\b",
+            r"\bbug\b",
+            r"\bfix\b",
         ]
         plan_keywords = [
-            r"\bplan\b", r"\bdesign\b", r"\barchitecture\b", r"\bspec\b",
-            r"\bproposal\b", r"\bdraft\b", r"\boutline\b"
+            r"\bplan\b",
+            r"\bdesign\b",
+            r"\barchitecture\b",
+            r"\bspec\b",
+            r"\bproposal\b",
+            r"\bdraft\b",
+            r"\boutline\b",
         ]
 
         # Score each intent based on keyword matches
@@ -330,7 +349,9 @@ class StatelessOrchestrator:
                     break
 
             # Create session
-            session_id, session_dir = create_session(self.config.session_work_dir, session_format)
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, session_format
+            )
 
             # Write prompt file
             write_request_prompt(session_dir, request)
@@ -382,7 +403,9 @@ class StatelessOrchestrator:
                 "workspace": str(session_dir),
                 "success": results.get("final_status") == "completed",
                 "output": json.dumps(results, indent=2, default=_json_default),
-                "error": results.get("error") if results.get("final_status") != "completed" else None,
+                "error": results.get("error")
+                if results.get("final_status") != "completed"
+                else None,
             }
 
         except (InvalidInputError, ValueError) as e:
@@ -446,7 +469,8 @@ class StatelessOrchestrator:
                 work_dir=self.config.session_work_dir,
                 config={
                     "demo_mode": self.demo_mode,
-                    "dispatch_timeout_seconds": self.timeout or self.config.dispatch_timeout_seconds,
+                    "dispatch_timeout_seconds": self.timeout
+                    or self.config.dispatch_timeout_seconds,
                     "gate_mode": self.gate_mode,
                     "workflows_dir": str(self.config.workflows_dir),
                 },
@@ -463,7 +487,9 @@ class StatelessOrchestrator:
                 "workspace": str(session_dir),
                 "success": results.get("final_status") == "completed",
                 "output": json.dumps(results, indent=2, default=_json_default),
-                "error": results.get("error") if results.get("final_status") != "completed" else None,
+                "error": results.get("error")
+                if results.get("final_status") != "completed"
+                else None,
             }
         except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
             logger.error(f"Failed to continue workflow {session_id}: {e}")
@@ -495,7 +521,9 @@ class StatelessOrchestrator:
 
             # Create session with default format
             session_format = "SKILL-NNN"
-            session_id, session_dir = create_session(self.config.session_work_dir, session_format)
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, session_format
+            )
 
             # Write prompt file
             write_request_prompt(session_dir, request)

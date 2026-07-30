@@ -125,9 +125,7 @@ def test_audit_run_jsonl_parity_invalid_json():
     """Invalid JSON lines in run.jsonl should be reported as errors."""
     with tempfile.TemporaryDirectory() as tmpdir:
         session_dir = Path(tmpdir)
-        (session_dir / "run.jsonl").write_text(
-            "not-json-at-all\n", encoding="utf-8"
-        )
+        (session_dir / "run.jsonl").write_text("not-json-at-all\n", encoding="utf-8")
         report = check_audit_run_jsonl_parity(session_dir)
         assert report["valid"] is True  # No stages to mismatch
         assert any("Invalid JSON" in e for e in report["errors"])
@@ -141,8 +139,10 @@ def test_audit_run_jsonl_parity_extra_stage_in_run():
             "## Stage: brainstorming\n", encoding="utf-8"
         )
         (session_dir / "run.jsonl").write_text(
-            json.dumps({"stage": "brainstorming"}) + "\n"
-            + json.dumps({"stage": "implementation"}) + "\n",
+            json.dumps({"stage": "brainstorming"})
+            + "\n"
+            + json.dumps({"stage": "implementation"})
+            + "\n",
             encoding="utf-8",
         )
         report = check_audit_run_jsonl_parity(session_dir)
@@ -158,8 +158,10 @@ def test_audit_run_jsonl_parity_entry_without_stage_ignored():
             "## Stage: brainstorming\n", encoding="utf-8"
         )
         (session_dir / "run.jsonl").write_text(
-            json.dumps({"event": "no_stage"}) + "\n"
-            + json.dumps({"stage": "brainstorming"}) + "\n",
+            json.dumps({"event": "no_stage"})
+            + "\n"
+            + json.dumps({"stage": "brainstorming"})
+            + "\n",
             encoding="utf-8",
         )
         report = check_audit_run_jsonl_parity(session_dir)
@@ -210,8 +212,7 @@ def test_manifest_runbook_parity_normalizes_stage_names():
         manifest = workflows_dir / "feature.manifest.yaml"
         runbook = workflows_dir / "feature.runbook.md"
         manifest.write_text(
-            "schema_version: 1\nname: feature\nstages:\n"
-            "  - name: writing_plans\n",
+            "schema_version: 1\nname: feature\nstages:\n  - name: writing_plans\n",
             encoding="utf-8",
         )
         # Runbook uses spaces; normalization should make them match.
@@ -224,9 +225,7 @@ def test_main_cli_dispatches_to_audit_parity(tmp_path, capsys, monkeypatch):
     """main() should dispatch to audit parity when session files exist."""
     from parity_tool import main
 
-    (tmp_path / "session-audit.md").write_text(
-        "## Stage: s1\n", encoding="utf-8"
-    )
+    (tmp_path / "session-audit.md").write_text("## Stage: s1\n", encoding="utf-8")
     (tmp_path / "run.jsonl").write_text(
         json.dumps({"stage": "s1"}) + "\n", encoding="utf-8"
     )

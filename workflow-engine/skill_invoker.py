@@ -75,9 +75,7 @@ class SkillInvoker:
             else config.default_permission_mode
         )
         self.demo_mode = demo_mode
-        self.dispatch_timeout_seconds = getattr(
-            config, "dispatch_timeout_seconds", 300
-        )
+        self.dispatch_timeout_seconds = getattr(config, "dispatch_timeout_seconds", 300)
         # Use provided metrics or fall back to global instance for backward compatibility
         self.metrics = metrics if metrics is not None else get_metrics_collector()
 
@@ -297,15 +295,24 @@ class SkillInvoker:
 
         except (InvalidInputError, ValueError) as e:
             return SkillInvocationResult(
-                success=False, session_id=None, output=None, error=f"Validation error: {str(e)}"
+                success=False,
+                session_id=None,
+                output=None,
+                error=f"Validation error: {str(e)}",
             )
         except OSError as e:
             return SkillInvocationResult(
-                success=False, session_id=None, output=None, error=f"File system error: {str(e)}"
+                success=False,
+                session_id=None,
+                output=None,
+                error=f"File system error: {str(e)}",
             )
         except Exception as e:
             return SkillInvocationResult(
-                success=False, session_id=None, output=None, error=f"Unexpected error: {str(e)}"
+                success=False,
+                session_id=None,
+                output=None,
+                error=f"Unexpected error: {str(e)}",
             )
 
     def build_skill_prompt(

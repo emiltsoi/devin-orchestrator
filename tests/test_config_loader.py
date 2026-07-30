@@ -69,8 +69,7 @@ def test_config_loader_workspace_override():
         workspace_config_path.write_text('default_model: "workspace-model"\n')
 
         config = ConfigLoader.load(
-            config_path=global_config_path,
-            workspace=workspace_dir
+            config_path=global_config_path, workspace=workspace_dir
         )
         assert config.default_model == "workspace-model"
 

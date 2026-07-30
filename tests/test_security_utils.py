@@ -73,8 +73,11 @@ class TestValidatePathSafe:
         """Test that symlink traversal is rejected"""
         # Skip on Windows due to permission requirements for symlink creation
         import platform
+
         if platform.system() == "Windows":
-            pytest.skip("Symlink test skipped on Windows due to permission requirements")
+            pytest.skip(
+                "Symlink test skipped on Windows due to permission requirements"
+            )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir) / "base"

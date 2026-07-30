@@ -204,7 +204,9 @@ class ConfigLoader:
                 )
 
             except (OSError, RuntimeError) as e:
-                raise InvalidInputError(f"Path validation failed for {context}={path}: {e}") from e
+                raise InvalidInputError(
+                    f"Path validation failed for {context}={path}: {e}"
+                ) from e
 
         # Build configuration with environment variable overrides
         try:
@@ -215,7 +217,7 @@ class ConfigLoader:
                         config_data.get("global_root", "~/.devin-orchestrator"),
                     )
                 ),
-                "global_root"
+                "global_root",
             )
         except InvalidInputError as e:
             raise InvalidInputError(f"Invalid global_root configuration: {e}") from e
@@ -228,7 +230,7 @@ class ConfigLoader:
                         config_data.get("skills_dir", "~/.devin-orchestrator/skills"),
                     )
                 ),
-                "skills_dir"
+                "skills_dir",
             )
         except InvalidInputError as e:
             raise InvalidInputError(f"Invalid skills_dir configuration: {e}") from e
@@ -238,10 +240,12 @@ class ConfigLoader:
                 expand_path(
                     os.getenv(
                         "DEVIN_ORCHESTRATOR_WORKFLOWS_DIR",
-                        config_data.get("workflows_dir", "~/.devin-orchestrator/workflows"),
+                        config_data.get(
+                            "workflows_dir", "~/.devin-orchestrator/workflows"
+                        ),
                     )
                 ),
-                "workflows_dir"
+                "workflows_dir",
             )
         except InvalidInputError as e:
             raise InvalidInputError(f"Invalid workflows_dir configuration: {e}") from e
@@ -252,14 +256,17 @@ class ConfigLoader:
                     os.getenv(
                         "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR",
                         config_data.get(
-                            "workflow_engine_dir", "~/.devin-orchestrator/workflow-engine"
+                            "workflow_engine_dir",
+                            "~/.devin-orchestrator/workflow-engine",
                         ),
                     )
                 ),
-                "workflow_engine_dir"
+                "workflow_engine_dir",
             )
         except InvalidInputError as e:
-            raise InvalidInputError(f"Invalid workflow_engine_dir configuration: {e}") from e
+            raise InvalidInputError(
+                f"Invalid workflow_engine_dir configuration: {e}"
+            ) from e
 
         try:
             devin_cli_path = str(
@@ -268,13 +275,14 @@ class ConfigLoader:
                         os.getenv(
                             "DEVIN_CLI_PATH",
                             config_data.get(
-                                "devin_cli_path", "~/AppData/Local/devin/cli/bin/devin.exe"
-                        ),
-                    )
-                ),
-                "devin_cli_path"
+                                "devin_cli_path",
+                                "~/AppData/Local/devin/cli/bin/devin.exe",
+                            ),
+                        )
+                    ),
+                    "devin_cli_path",
+                )
             )
-        )
         except InvalidInputError as e:
             raise InvalidInputError(f"Invalid devin_cli_path configuration: {e}") from e
 
@@ -306,13 +314,17 @@ class ConfigLoader:
                 expand_path(
                     os.getenv(
                         "DEVIN_SESSION_WORK_DIR",
-                        config_data.get("session_work_dir", "~/.devin-orchestrator/work"),
+                        config_data.get(
+                            "session_work_dir", "~/.devin-orchestrator/work"
+                        ),
                     )
                 ),
-                "session_work_dir"
+                "session_work_dir",
             )
         except InvalidInputError as e:
-            raise InvalidInputError(f"Invalid session_work_dir configuration: {e}") from e
+            raise InvalidInputError(
+                f"Invalid session_work_dir configuration: {e}"
+            ) from e
 
         # Dispatch timeout for devin-cli calls; prevents hung agents from blocking
         # the orchestrator indefinitely.

@@ -79,6 +79,7 @@ class OrchestrationLogger:
         if max_bytes is None or backup_count is None:
             try:
                 from config_loader import ConfigLoader
+
                 config = ConfigLoader.load()
                 if max_bytes is None:
                     max_bytes = config.log_max_bytes
@@ -172,8 +173,16 @@ class OrchestrationLogger:
             return {}
 
         sensitive_keys = {
-            "password", "token", "api_key", "secret", "credential",
-            "auth", "key", "private_key", "access_token", "refresh_token"
+            "password",
+            "token",
+            "api_key",
+            "secret",
+            "credential",
+            "auth",
+            "key",
+            "private_key",
+            "access_token",
+            "refresh_token",
         }
 
         sanitized = {}

@@ -1929,9 +1929,7 @@ class TestArtifactPathValidation(unittest.TestCase):
         session_dir.mkdir()
         # A traversal attempt in the artifact name should be sanitized such
         # that the resulting path stays inside the session directory.
-        safe_path = self.engine._validate_artifact_path(
-            "../../evil.md", session_dir
-        )
+        safe_path = self.engine._validate_artifact_path("../../evil.md", session_dir)
         # The sanitized path must resolve inside session_dir
         self.assertTrue(
             str(safe_path).startswith(str(session_dir.resolve()))
@@ -1975,9 +1973,7 @@ class TestArtifactPathValidation(unittest.TestCase):
         )
         self.assertFalse(result["valid"])
         self.assertEqual(artifact_paths, [])
-        self.assertTrue(
-            any("Invalid artifact path" in e for e in result["errors"])
-        )
+        self.assertTrue(any("Invalid artifact path" in e for e in result["errors"]))
 
     def test_manifest_path_traversal_rejected(self):
         """_validate_and_load_manifest should reject traversal manifest paths"""

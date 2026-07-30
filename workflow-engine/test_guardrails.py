@@ -108,7 +108,9 @@ class TestVerifyComplianceBlock:
         assert "No file path" in " ".join(result["notes"])
 
     def test_missing_file(self, tmp_path):
-        result = Guardrails.verify_compliance_block("BLOCK", file_path=tmp_path / "x.py")
+        result = Guardrails.verify_compliance_block(
+            "BLOCK", file_path=tmp_path / "x.py"
+        )
         assert result["verified"] is False
         assert "File does not exist" in " ".join(result["notes"])
 
@@ -142,9 +144,7 @@ class TestVerifyComplianceBlock:
 
 class TestCheckLeafModuleBoundary:
     def test_missing_module_zero_coupling(self, tmp_path):
-        result = Guardrails.check_leaf_module_boundary(
-            tmp_path / "nope.py", tmp_path
-        )
+        result = Guardrails.check_leaf_module_boundary(tmp_path / "nope.py", tmp_path)
         assert result["is_leaf"] is True
         assert result["coupling_count"] == 0
 
@@ -158,7 +158,9 @@ class TestCheckLeafModuleBoundary:
         assert result["is_leaf"] is False
 
     def test_stdlib_only_is_leaf(self, tmp_path):
-        path = _write(tmp_path / "mod.py", "import os\nimport sys\nfrom pathlib import Path\n")
+        path = _write(
+            tmp_path / "mod.py", "import os\nimport sys\nfrom pathlib import Path\n"
+        )
         result = Guardrails.check_leaf_module_boundary(path, tmp_path)
         # `from pathlib import Path` extracts "Path" (not in stdlib set), so
         # coupling_count is 1. Still within the leaf threshold of 2.

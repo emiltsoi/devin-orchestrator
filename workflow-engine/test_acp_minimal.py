@@ -10,7 +10,9 @@ import subprocess
 import pytest
 
 
-@pytest.mark.skip(reason="Interactive ACP server test; run manually with `py workflow-engine/test_acp_minimal.py`")
+@pytest.mark.skip(
+    reason="Interactive ACP server test; run manually with `py workflow-engine/test_acp_minimal.py`"
+)
 def test_acp_minimal():
     """Test minimal ACP communication by calling the working batch file"""
     print("=" * 60)

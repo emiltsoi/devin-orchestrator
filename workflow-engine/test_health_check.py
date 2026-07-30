@@ -30,7 +30,9 @@ class _FakeConfig:
     default_permission_mode: str = "dangerous"
 
 
-def _make_checker_with_config(tmp_path: Path, *, skills=True, workflows=True) -> HealthChecker:
+def _make_checker_with_config(
+    tmp_path: Path, *, skills=True, workflows=True
+) -> HealthChecker:
     checker = HealthChecker()
     checker.config = _FakeConfig(
         global_root=tmp_path / "root",
@@ -43,7 +45,9 @@ def _make_checker_with_config(tmp_path: Path, *, skills=True, workflows=True) ->
         (tmp_path / "skills" / "demo").mkdir(parents=True)
     if workflows:
         (tmp_path / "workflows").mkdir(parents=True)
-        (tmp_path / "workflows" / "demo.yaml").write_text("name: demo\n", encoding="utf-8")
+        (tmp_path / "workflows" / "demo.yaml").write_text(
+            "name: demo\n", encoding="utf-8"
+        )
     return checker
 
 
@@ -59,8 +63,9 @@ class TestCheckConfigFile:
         )
         config_path = tmp_path / "config.yaml"
         config_path.write_text("name: x\n", encoding="utf-8")
-        with patch("health_check.ConfigLoader.load", return_value=fake_cfg), patch(
-            "health_check.ConfigLoader.DEFAULT_CONFIG_PATH", config_path
+        with (
+            patch("health_check.ConfigLoader.load", return_value=fake_cfg),
+            patch("health_check.ConfigLoader.DEFAULT_CONFIG_PATH", config_path),
         ):
             result = checker.check_config_file()
         assert result.component == "config_file"
@@ -77,9 +82,11 @@ class TestCheckConfigFile:
             devin_cli_path=str(tmp_path / "devin.exe"),
         )
         missing = tmp_path / "missing.yaml"
-        with patch("health_check.ConfigLoader.load", return_value=fake_cfg), patch(
-            "health_check.ConfigLoader.DEFAULT_CONFIG_PATH", missing
-        ), patch("health_check.ConfigLoader.FALLBACK_CONFIG_PATH", missing):
+        with (
+            patch("health_check.ConfigLoader.load", return_value=fake_cfg),
+            patch("health_check.ConfigLoader.DEFAULT_CONFIG_PATH", missing),
+            patch("health_check.ConfigLoader.FALLBACK_CONFIG_PATH", missing),
+        ):
             result = checker.check_config_file()
         assert result.status == "error"
         assert "Config file not found" in result.message
@@ -325,11 +332,12 @@ class TestRunAllChecks:
     def test_overall_status_error_when_any_error(self, tmp_path):
         checker = HealthChecker()
         # No config file -> error path
-        with patch.object(HealthChecker, "check_config_file") as cfg, patch.object(
-            HealthChecker, "check_skills_directory"
-        ) as skills, patch.object(
-            HealthChecker, "check_workflows_directory"
-        ) as wf, patch.object(HealthChecker, "check_devin_cli") as cli:
+        with (
+            patch.object(HealthChecker, "check_config_file") as cfg,
+            patch.object(HealthChecker, "check_skills_directory") as skills,
+            patch.object(HealthChecker, "check_workflows_directory") as wf,
+            patch.object(HealthChecker, "check_devin_cli") as cli,
+        ):
             cfg.return_value = HealthCheckResult("config_file", "error", "boom", {})
             skills.return_value = HealthCheckResult("skills", "healthy", "ok", {})
             wf.return_value = HealthCheckResult("workflows", "healthy", "ok", {})
@@ -340,11 +348,12 @@ class TestRunAllChecks:
 
     def test_overall_status_warning_when_only_warnings(self):
         checker = HealthChecker()
-        with patch.object(HealthChecker, "check_config_file") as cfg, patch.object(
-            HealthChecker, "check_skills_directory"
-        ) as skills, patch.object(
-            HealthChecker, "check_workflows_directory"
-        ) as wf, patch.object(HealthChecker, "check_devin_cli") as cli:
+        with (
+            patch.object(HealthChecker, "check_config_file") as cfg,
+            patch.object(HealthChecker, "check_skills_directory") as skills,
+            patch.object(HealthChecker, "check_workflows_directory") as wf,
+            patch.object(HealthChecker, "check_devin_cli") as cli,
+        ):
             cfg.return_value = HealthCheckResult("config_file", "warning", "w", {})
             skills.return_value = HealthCheckResult("skills", "healthy", "ok", {})
             wf.return_value = HealthCheckResult("workflows", "healthy", "ok", {})
@@ -355,11 +364,12 @@ class TestRunAllChecks:
 
     def test_overall_status_healthy(self):
         checker = HealthChecker()
-        with patch.object(HealthChecker, "check_config_file") as cfg, patch.object(
-            HealthChecker, "check_skills_directory"
-        ) as skills, patch.object(
-            HealthChecker, "check_workflows_directory"
-        ) as wf, patch.object(HealthChecker, "check_devin_cli") as cli:
+        with (
+            patch.object(HealthChecker, "check_config_file") as cfg,
+            patch.object(HealthChecker, "check_skills_directory") as skills,
+            patch.object(HealthChecker, "check_workflows_directory") as wf,
+            patch.object(HealthChecker, "check_devin_cli") as cli,
+        ):
             for m in (cfg, skills, wf, cli):
                 m.return_value = HealthCheckResult("c", "healthy", "ok", {})
             report = checker.run_all_checks()

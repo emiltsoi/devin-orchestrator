@@ -133,9 +133,7 @@ def load_state(path: str | Path) -> dict[str, Any]:
             raise ValueError(f"State artifact {p} must be a mapping")
         return _normalize(data)
 
-    raise ValueError(
-        f"State artifact {p} has no YAML frontmatter and is not JSON"
-    )
+    raise ValueError(f"State artifact {p} has no YAML frontmatter and is not JSON")
 
 
 def save_state(path: str | Path, state: dict[str, Any]) -> None:

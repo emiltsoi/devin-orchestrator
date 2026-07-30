@@ -31,7 +31,7 @@ def v1_skills_dir(tmp_path):
     foo.mkdir()
     (foo / "foo.md").write_text(
         "---\n"
-        'name: foo\n'
+        "name: foo\n"
         'description: "Use when doing foo things."\n'
         "---\n\n"
         "# Foo\n\nBody of foo skill.\n",
@@ -41,7 +41,7 @@ def v1_skills_dir(tmp_path):
         "schema_version: 1\n"
         "name: foo\n"
         'description: "Use when doing foo things."\n'
-        "iron_law: \"do not skip\"\n",
+        'iron_law: "do not skip"\n',
         encoding="utf-8",
     )
 
@@ -50,7 +50,7 @@ def v1_skills_dir(tmp_path):
     bar.mkdir()
     (bar / "bar.md").write_text(
         "---\n"
-        'name: bar\n'
+        "name: bar\n"
         'description: "Use when doing bar things."\n'
         "---\n\n"
         "# Bar\n\nBody of bar skill.\n",
@@ -66,8 +66,7 @@ def v1_skills_dir(tmp_path):
         encoding="utf-8",
     )
     (baz / "baz.yaml").write_text(
-        "name: baz\n"
-        'description: "Use when doing baz things."\n',
+        'name: baz\ndescription: "Use when doing baz things."\n',
         encoding="utf-8",
     )
 
@@ -127,7 +126,7 @@ class TestLegacySkillLoading:
         legacy.mkdir()
         (legacy / "SKILL.md").write_text(
             "---\n"
-            'name: ponytail\n'
+            "name: ponytail\n"
             'description: "Triggers on coding dispatches and implementation tasks."\n'
             "---\n\n"
             "# Ponytail\n\nBody.\n",
@@ -251,7 +250,7 @@ class TestTriggersAutoInjection:
         triggered.mkdir()
         (triggered / "triggered-skill.md").write_text(
             "---\n"
-            'name: triggered-skill\n'
+            "name: triggered-skill\n"
             'description: "Use when something happens."\n'
             "---\n\n# Triggered\n\nBody.\n",
             encoding="utf-8",
@@ -269,7 +268,7 @@ class TestTriggersAutoInjection:
         plain.mkdir()
         (plain / "plain-skill.md").write_text(
             "---\n"
-            'name: plain-skill\n'
+            "name: plain-skill\n"
             'description: "Use when plain."\n'
             "---\n\n# Plain\n\nBody.\n",
             encoding="utf-8",
