@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+"""
+Generic Devin dispatcher.
+
+If you are an agent connected to the devin-orchestrator MCP server, use the
+`mcp0_dispatch_devin` MCP tool instead of this script. This script is a legacy
+CLI entry point for environments without the MCP server.
+
+Dispatches a Devin run with a model, a predefined role markdown file, and a task
+prompt markdown file. Replaces one-off per-wave dispatch scripts.
+
+Usage example (fallback only):
+    py -3.14 dispatch_devin.py \
+        --model glm-5-2 \
+        --role coder \
+        --prompt-file prompts/security_hardening.md \
+        --output-file work/SECURITY-001/output.md \
+        --focused-context devin_orchestrator/security_utils.py
+
+A role name resolves to roles/<role>.md under the repo root. A full path to a
+markdown file is also accepted.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import sys
+from pathlib import Path
+
+from devin_orchestrator import __version__  # noqa: E402
+from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
+from devin_orchestrator.devin_cli_adapter import DevinCliAdapter  # noqa: E402
+from devin_orchestrator.model_resolver import resolve_model  # noqa: E402
+from devin_orchestrator.security_utils import (  # noqa: E402
+    InvalidInputError,
+    PathTraversalError,
+    validate_path_safe,
+)
+
+# Safe characters allowed in a role short name. Path separators, dots, and
+# traversal segments are rejected so a short name cannot resolve outside the
+# roles/ directory.
+_ROLE_SHORT_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def resolve_role_file(role: str) -> Path:
+    """Resolve a role name or path to a markdown role file.
+
+    A full path to an existing markdown file is accepted directly, provided it
+    has a ``.md`` extension and contains no path-traversal segments. A short
+    name (e.g. ``coder``) is restricted to ``[a-zA-Z0-9_-]+`` and resolved to
+    ``roles/<role>.md`` under the repo root.
+    """
+    # Reject traversal attempts and dangerous characters up-front. This covers
+    # both short names and explicit file paths.
+    if ".." in role or "\x00" in role or re.search(r"[\x00-\x1f\x7f-\x9f]", role):
+        raise FileNotFoundError(f"Invalid role path: {role!r}")
+
+    candidate = Path(role)
+
+    # If an explicit file path is provided, it must be a markdown file and
+    # must not contain path-traversal segments (checked above).
+    if candidate.is_file():
+        if candidate.suffix.lower() != ".md":
+            raise FileNotFoundError(
+                f"Role file must be a markdown file (.md): {candidate}"
+            )
+        return candidate
+
+    # Short name: reject anything that looks like a path or traversal attempt
+    # before joining it into the roles directory.
+    if not _ROLE_SHORT_NAME_RE.match(role):
+        raise FileNotFoundError(
+            f"Invalid role name: {role!r} (only alphanumeric, '-' and '_' "
+            "are allowed in short names; path separators and traversal are "
+            "rejected)"
+        )
+
+    script_dir = Path(__file__).resolve().parent
+    # Support both package install (roles at site-packages/roles) and
+    # legacy root install (roles at ~/.devin-orchestrator/roles).
+    role_path = script_dir / "roles" / f"{role}.md"
+    if not role_path.is_file():
+        role_path = script_dir.parent / "roles" / f"{role}.md"
+    if not role_path.is_file():
+        raise FileNotFoundError(
+            f"Role file not found: {role!r} (looked at {role_path})"
+        )
+    return role_path
+
+
+def build_prompt(role_file: Path, prompt_file: Path) -> str:
+    """Combine role and task prompt into a single prompt."""
+    role_content = role_file.read_text(encoding="utf-8").strip()
+    prompt_content = prompt_file.read_text(encoding="utf-8").strip()
+
+    if not role_content:
+        raise ValueError(f"Role file is empty: {role_file}")
+    if not prompt_content:
+        raise ValueError(f"Prompt file is empty: {prompt_file}")
+
+    return f"{role_content}\n\n# Task\n\n{prompt_content}"
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="dispatch-devin",
+        description="Generic Devin dispatcher with role and prompt files.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "Devin model to use. If omitted, the model is resolved via "
+            "resolve_model(agent, phase, config) using the new model routing "
+            "config (model_overrides -> models -> model_profile -> default_model)."
+        ),
+    )
+    parser.add_argument(
+        "--agent",
+        default=None,
+        help=(
+            "Agent name (e.g. 'coder', 'reviewer'). Used for model routing "
+            "and to look up agent_skills in config.yaml."
+        ),
+    )
+    parser.add_argument(
+        "--phase",
+        default=None,
+        help=(
+            "Phase type (e.g. 'plan', 'execute', 'verify'). Used for model "
+            "routing via models.<phase_type> in config.yaml."
+        ),
+    )
+    parser.add_argument(
+        "--role",
+        required=True,
+        help="Role name (resolves to roles/<role>.md) or path to a role markdown file",
+    )
+    parser.add_argument(
+        "--prompt-file", required=True, help="Path to the task prompt markdown file"
+    )
+    parser.add_argument(
+        "--output-file",
+        help="Path to write Devin output to; defaults to stdout",
+    )
+    parser.add_argument(
+        "--work-dir",
+        help="Workspace directory; defaults to current directory",
+    )
+    parser.add_argument(
+        "--permission-mode",
+        default=None,
+        help="Devin permission mode (defaults to config or 'dangerous')",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=300,
+        help="Invocation timeout in seconds (default: 300)",
+    )
+    parser.add_argument(
+        "--focused-context",
+        action="append",
+        default=[],
+        help="Optional artifact path to include in the prompt; repeatable",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+
+    role_file = resolve_role_file(args.role)
+    prompt_file = Path(args.prompt_file)
+
+    if not prompt_file.is_file():
+        print(f"Prompt file not found: {prompt_file}", file=sys.stderr)
+        return 1
+
+    prompt = build_prompt(role_file, prompt_file)
+
+    config = ConfigLoader.load(workspace=args.work_dir)
+    devin_cli_path = config.devin_cli_path
+    work_dir = args.work_dir or str(Path.cwd())
+    permission_mode = args.permission_mode or config.default_permission_mode
+
+    # Model resolution: explicit --model wins; otherwise route via config.
+    model = args.model or resolve_model(args.agent, args.phase, config)
+
+    # Warn on likely configuration typos when routing config is populated.
+    if args.phase and config.models and args.phase not in config.models:
+        print(
+            f"Warning: phase {args.phase!r} not found in config.models; "
+            "falling back to model_profile/default_model",
+            file=sys.stderr,
+        )
+    if (
+        args.agent
+        and config.model_overrides
+        and args.agent not in config.model_overrides
+    ):
+        print(
+            f"Warning: agent {args.agent!r} not found in config.model_overrides; "
+            "falling back to models/model_profile/default_model",
+            file=sys.stderr,
+        )
+
+    # Agent skill injection: if the agent is configured in agent_skills,
+    # point the adapter at the configured skills_dir and pass the skill list
+    # as a skill_filter so only the configured skills are eligible.
+    agent_skills_map = config.agent_skills or {}
+    selected_skills: list[str] | None = None
+    skills_dir: str | None = None
+    enable_skills = False
+    if args.agent and args.agent in agent_skills_map:
+        selected_skills = list(agent_skills_map[args.agent])
+        skills_dir = str(config.skills_dir)
+        enable_skills = True
+
+    adapter = DevinCliAdapter(
+        devin_cli_path=devin_cli_path,
+        workspace=work_dir,
+        model=model,
+        permission_mode=permission_mode,
+        skills_dir=skills_dir,
+    )
+
+    # Warn if the agent is configured for skills but some selected skills are missing.
+    if selected_skills and args.agent:
+        missing = [s for s in selected_skills if s not in adapter.skills]
+        if missing:
+            print(
+                f"Warning: agent_skills for {args.agent!r} references missing skills: "
+                f"{missing}",
+                file=sys.stderr,
+            )
+    if args.agent and agent_skills_map and args.agent not in agent_skills_map:
+        print(
+            f"Warning: agent {args.agent!r} not found in config.agent_skills; "
+            "no skills will be injected",
+            file=sys.stderr,
+        )
+
+    result = adapter.invoke(
+        prompt,
+        timeout=args.timeout,
+        focused_context=args.focused_context or None,
+        enable_skills=enable_skills,
+        skill_filter=selected_skills,
+    )
+
+    if args.output_file:
+        try:
+            output_path = validate_path_safe(
+                Path(work_dir), Path(args.output_file), allow_absolute=True
+            )
+            output_path.write_text(result.output, encoding="utf-8")
+        except (InvalidInputError, PathTraversalError, OSError) as e:
+            print(f"Invalid output file {args.output_file}: {e}", file=sys.stderr)
+            return 1
+
+    if result.output:
+        sys.stdout.buffer.write((result.output + "\n").encode("utf-8"))
+        sys.stdout.buffer.flush()
+    if result.error:
+        sys.stderr.buffer.write((result.error + "\n").encode("utf-8"))
+        sys.stderr.buffer.flush()
+
+    return (
+        result.exit_code
+        if result.exit_code is not None
+        else (0 if result.success else 1)
+    )
+
+
+def shim() -> int:
+    """Deprecated legacy entry point; routes through the unified CLI."""
+    import warnings
+
+    warnings.warn(
+        "dispatch-devin is deprecated; use 'devin-orchestrator dispatch' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    os.environ["DEVIN_ORCHESTRATOR_NO_DEPRECATION"] = "1"
+    from devin_orchestrator.cli import main as cli_main
+
+    return cli_main(sys.argv)
+
+
+if __name__ == "__main__":
+    sys.exit(shim())

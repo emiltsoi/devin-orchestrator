@@ -1,0 +1,36 @@
+schema_version: 1
+name: brainstorming
+description: "Use when starting non-trivial creative work — new features, components, or behavior changes — to refine intent, requirements, and design before implementation."
+iron_law: "Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it."
+triggers:
+  - new_feature
+  - behavior_change
+  - refactor
+checklist:
+  - id: explore_context
+    description: Explore project context — check files, docs, recent commits
+  - id: check_interactive_mode
+    description: Check if interactive mode is enabled
+  - id: ask_clarifying_questions
+    description: If interactive, ask clarifying questions one at a time to understand purpose/constraints/success criteria
+  - id: make_assumptions
+    description: If non-interactive, make reasonable assumptions based on context and request content
+  - id: propose_approaches
+    description: Propose 2-3 approaches with trade-offs and your recommendation
+  - id: present_design
+    description: Present design in sections scaled to their complexity
+  - id: adversarial_review
+    description: Conditional — adversarial review auto-triggered if complexity/risk thresholds met
+  - id: write_design_doc
+    description: Write design doc to design.md (include adversarial review findings if conducted)
+  - id: spec_self_review
+    description: Spec self-review — quick inline check for placeholders, contradictions, ambiguity, scope
+  - id: note_human_review
+    description: Note that human review happens via gate after brainstorming stage, not during skill execution
+terminal_state: writing-plans
+announcement: "Using the brainstorming skill to refine <topic> before writing design.md."
+red_flags:
+  - Writing design.md before design approval
+  - Jumping to implementation without approval gate
+  - Asking batch questions instead of one at a time
+  - Presenting only one approach

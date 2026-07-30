@@ -12,14 +12,12 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from mcp_server import McpServer
+from devin_orchestrator.mcp_server import McpServer
 
 
 def _make_server_with_workspace(tmpdir: str) -> McpServer:
@@ -57,7 +55,7 @@ class TestReadArtifactWorkspaceContainment:
 
     def test_read_artifact_rejects_workspace_outside_root(self):
         """A workspace outside global_root must be rejected."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             # Create an outside directory with a secret file
@@ -76,7 +74,7 @@ class TestReadArtifactWorkspaceContainment:
 
     def test_read_artifact_reads_file_inside_workspace(self):
         """A file inside an allowed workspace can be read."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             workspace = Path(tmpdir) / "root" / "proj"
@@ -91,7 +89,7 @@ class TestReadArtifactWorkspaceContainment:
 
     def test_read_artifact_falls_back_to_session_work_dir(self):
         """With no workspace/session_id, reads are contained to session_work_dir."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
             # Clear the pre-loaded workspace so neither argument nor server
             # workspace is set, exercising the session_work_dir fallback.
@@ -110,7 +108,7 @@ class TestGetWorkflowNameValidation:
 
     def test_get_workflow_accepts_underscore_name(self):
         """get_workflow('code_review') must not fail validation (file may be absent)."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             workflows_dir = Path(tmpdir) / "workflows"
@@ -124,7 +122,7 @@ class TestGetWorkflowNameValidation:
 
     def test_get_workflow_rejects_traversal_name(self):
         """get_workflow must reject path-traversal workflow names."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             result = server._tool_get_workflow({"name": "../etc/passwd"})
@@ -139,7 +137,7 @@ class TestRunWorkflowNameValidation:
     def test_run_workflow_rejects_traversal_name(self):
         """run_workflow must reject path-traversal workflow names before
         reaching the orchestrator."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             # Plant a fake manifest inside a session directory to simulate the
@@ -163,7 +161,7 @@ class TestRunWorkflowNameValidation:
 
     def test_run_workflow_rejects_path_separator_name(self):
         """run_workflow must reject workflow names containing path separators."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             result = server._tool_run_workflow(
@@ -174,7 +172,7 @@ class TestRunWorkflowNameValidation:
 
     def test_run_workflow_rejects_missing_workflow_param(self):
         """run_workflow must report a clear error when workflow is missing."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             result = server._tool_run_workflow({"request": "do something"})
@@ -189,7 +187,7 @@ class TestGetSkillPathResolution:
     def test_get_skill_reads_existing_skill(self):
         """get_skill for an existing skill returns its YAML/Markdown content,
         not a 'Path validation failed' error."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             skills_dir = Path(tmpdir) / "skills"
@@ -213,7 +211,7 @@ class TestGetSkillPathResolution:
 
     def test_get_skill_rejects_traversal_name(self):
         """get_skill must still reject path-traversal skill names."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             result = server._tool_get_skill({"name": "../etc/passwd"})
@@ -228,23 +226,20 @@ class TestDispatchDevinRelativePaths:
     def test_dispatch_devin_accepts_relative_prompt_file(self, monkeypatch):
         """A workspace-relative prompt_file must pass validation and reach the
         subprocess dispatch step."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
             work_dir.mkdir(parents=True, exist_ok=True)
             (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
 
-            captured: dict = {}
-
             def fake_run(cmd, **kwargs):
-                captured["cmd"] = cmd
-                captured["cwd"] = kwargs.get("cwd")
                 return subprocess.CompletedProcess(
                     args=cmd, returncode=0, stdout="ok", stderr=""
                 )
 
             monkeypatch.setattr(subprocess, "run", fake_run)
+            monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
             result = server._tool_dispatch_devin(
                 {
@@ -254,19 +249,24 @@ class TestDispatchDevinRelativePaths:
                 }
             )
 
-            text = result[0]["text"]
-            assert "Invalid prompt_file" not in text
-            assert "Exit code: 0" in text
-            # The prompt file path passed to the subprocess must resolve under
-            # work_dir, not CWD.
-            prompt_arg = captured["cmd"][
-                captured["cmd"].index("--prompt-file") + 1
-            ]
-            assert str(work_dir / "prompt.md") == prompt_arg
+            data = json.loads(result[0]["text"])
+            assert data["status"] == "started"
+            assert data["session_id"].startswith("DISPATCH")
+            dispatch_dir = Path(data["workspace"])
+
+            # Validate the captured command and background dispatch artifacts.
+            cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
+            prompt_arg = cmd_data["cmd"][cmd_data["cmd"].index("--prompt-file") + 1]
+            assert (work_dir / "prompt.md").resolve() == Path(prompt_arg)
+            assert Path(cmd_data["cwd"]).resolve() == work_dir.resolve()
+
+            result_data = json.loads((dispatch_dir / "result.json").read_text())
+            assert result_data["exit_code"] == 0
+            assert result_data["success"] is True
 
     def test_dispatch_devin_accepts_relative_output_file(self, monkeypatch):
         """A workspace-relative output_file must pass validation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
@@ -279,6 +279,7 @@ class TestDispatchDevinRelativePaths:
                 )
 
             monkeypatch.setattr(subprocess, "run", fake_run)
+            monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
             result = server._tool_dispatch_devin(
                 {
@@ -289,19 +290,26 @@ class TestDispatchDevinRelativePaths:
                 }
             )
 
-            text = result[0]["text"]
-            assert "Invalid output_file" not in text
-            assert "Invalid prompt_file" not in text
-            assert "Exit code: 0" in text
+            data = json.loads(result[0]["text"])
+            assert data["status"] == "started"
+            dispatch_dir = Path(data["workspace"])
+
+            cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
+            assert "--output-file" in cmd_data["cmd"]
+            output_arg = cmd_data["cmd"][cmd_data["cmd"].index("--output-file") + 1]
+            assert (work_dir / "out.log").resolve() == Path(output_arg)
+
+            result_data = json.loads((dispatch_dir / "result.json").read_text())
+            assert result_data["success"] is True
 
     def test_dispatch_devin_rejects_prompt_file_outside_work_dir(self, monkeypatch):
         """A relative prompt_file that escapes work_dir via traversal must be
         rejected. PathTraversalError propagates out of the tool (mirroring the
         _tool_read_artifact pattern) and is surfaced as an error by
         _tools_call."""
-        from security_utils import PathTraversalError
+        from devin_orchestrator.security_utils import PathTraversalError
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
@@ -312,10 +320,8 @@ class TestDispatchDevinRelativePaths:
             outside = Path(tmpdir) / "secret.txt"
             outside.write_text("TOPSECRET", encoding="utf-8")
 
-            def fake_run(cmd, **kwargs):
-                return subprocess.CompletedProcess(
-                    args=cmd, returncode=0, stdout="ok", stderr=""
-                )
+            def fake_run(cmd, **kwargs):  # pragma: no cover - should not run
+                raise AssertionError("subprocess should not be invoked")
 
             monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -355,7 +361,7 @@ class TestDispatchDevinTimeout:
 
     def test_dispatch_devin_timeout_returns_graceful_error(self, monkeypatch):
         """A timed-out Devin dispatch must return a clear error, not raise."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
@@ -366,6 +372,7 @@ class TestDispatchDevinTimeout:
                 raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
 
             monkeypatch.setattr(subprocess, "run", fake_run)
+            monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
             result = server._tool_dispatch_devin(
                 {
@@ -376,13 +383,18 @@ class TestDispatchDevinTimeout:
                 }
             )
 
-            text = result[0]["text"]
-            assert "timed out" in text.lower()
-            assert "5" in text
+            data = json.loads(result[0]["text"])
+            assert data["status"] == "started"
+            dispatch_dir = Path(data["workspace"])
+            result_data = json.loads((dispatch_dir / "result.json").read_text())
+            assert result_data["success"] is False
+            assert result_data["exit_code"] == -1
+            assert "Timeout after" in result_data["error"]
+            assert "5" in result_data["error"]
 
     def test_dispatch_devin_timeout_surfaces_via_tools_call(self, monkeypatch):
         """The public _tools_call path must surface a graceful error response."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
@@ -393,6 +405,7 @@ class TestDispatchDevinTimeout:
                 raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
 
             monkeypatch.setattr(subprocess, "run", fake_run)
+            monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
             response = server._tools_call(
                 {
@@ -410,14 +423,19 @@ class TestDispatchDevinTimeout:
                 }
             )
             assert response["result"]["isError"] is False
-            assert "timed out" in response["result"]["content"][0]["text"].lower()
+            data = json.loads(response["result"]["content"][0]["text"])
+            assert data["status"] == "started"
+            dispatch_dir = Path(data["workspace"])
+            result_data = json.loads((dispatch_dir / "result.json").read_text())
+            assert result_data["success"] is False
+            assert "Timeout after" in result_data["error"]
 
 
 class TestDispatchSkillTimeout:
     """I-1: _tool_dispatch_skill must not crash on subprocess.TimeoutExpired."""
 
     def test_dispatch_skill_timeout_returns_graceful_error(self, monkeypatch):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             workspace = Path(tmpdir) / "root" / "proj"
@@ -427,6 +445,7 @@ class TestDispatchSkillTimeout:
                 raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
 
             monkeypatch.setattr(subprocess, "run", fake_run)
+            monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
             result = server._tool_dispatch_skill(
                 {
@@ -437,16 +456,21 @@ class TestDispatchSkillTimeout:
                 }
             )
 
-            text = result[0]["text"]
-            assert "timed out" in text.lower()
-            assert "5" in text
+            data = json.loads(result[0]["text"])
+            assert data["status"] == "started"
+            dispatch_dir = Path(data["workspace"])
+            result_data = json.loads((dispatch_dir / "result.json").read_text())
+            assert result_data["success"] is False
+            assert result_data["exit_code"] == -1
+            assert "Timeout after" in result_data["error"]
+            assert "5" in result_data["error"]
 
 
 class TestListSkillsMalformedYaml:
     """I-2: _tool_list_skills must skip malformed skill YAML instead of crashing."""
 
     def test_list_skills_skips_malformed_yaml(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             skills_dir = Path(tmpdir) / "skills"
@@ -466,6 +490,7 @@ class TestListSkillsMalformedYaml:
             result = server._tool_list_skills({})
 
             import json as _json
+
             data = _json.loads(result[0]["text"])
             names = [s["name"] for s in data]
             assert "good-skill" in names
@@ -476,7 +501,7 @@ class TestListWorkflowsMalformedYaml:
     """I-2: _tool_list_workflows must skip malformed manifests instead of crashing."""
 
     def test_list_workflows_skips_malformed_manifest(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             workflows_dir = Path(tmpdir) / "workflows"
@@ -491,6 +516,7 @@ class TestListWorkflowsMalformedYaml:
             result = server._tool_list_workflows({})
 
             import json as _json
+
             data = _json.loads(result[0]["text"])
             names = [w["name"] for w in data]
             assert "good" in names
@@ -498,23 +524,18 @@ class TestListWorkflowsMalformedYaml:
 
 
 class TestDispatchDevinOutputFileFromWorkDir:
-    """M-1: _tool_dispatch_devin must read a relative output_file from work_dir,
-    not CWD."""
+    """M-1: _tool_dispatch_devin must resolve a relative output_file against
+    work_dir, not CWD, and pass the resolved path to the dispatch subprocess."""
 
-    def test_relative_output_file_read_from_work_dir(self, monkeypatch):
-        with tempfile.TemporaryDirectory() as tmpdir:
+    def test_relative_output_file_passed_to_dispatch(self, monkeypatch):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
             work_dir.mkdir(parents=True, exist_ok=True)
             (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
-            # Write the output file inside work_dir
-            (work_dir / "out.log").write_text(
-                "OUTPUT-CONTENT", encoding="utf-8"
-            )
-            # Also write a same-named file at CWD to ensure it is NOT used.
-            # (Don't actually pollute CWD; the absence at CWD plus presence
-            # under work_dir proves the read resolves against work_dir.)
+            # Write the output file inside work_dir and nowhere else.
+            (work_dir / "out.log").write_text("OUTPUT-CONTENT", encoding="utf-8")
 
             def fake_run(cmd, **kwargs):
                 return subprocess.CompletedProcess(
@@ -522,6 +543,7 @@ class TestDispatchDevinOutputFileFromWorkDir:
                 )
 
             monkeypatch.setattr(subprocess, "run", fake_run)
+            monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
             result = server._tool_dispatch_devin(
                 {
@@ -532,9 +554,17 @@ class TestDispatchDevinOutputFileFromWorkDir:
                 }
             )
 
-            text = result[0]["text"]
-            assert "OUTPUT-CONTENT" in text
-            assert "OUTPUT FILE" in text
+            data = json.loads(result[0]["text"])
+            assert data["status"] == "started"
+            dispatch_dir = Path(data["workspace"])
+
+            cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
+            assert "--output-file" in cmd_data["cmd"]
+            output_arg = cmd_data["cmd"][cmd_data["cmd"].index("--output-file") + 1]
+            assert (work_dir / "out.log").resolve() == Path(output_arg)
+
+            result_data = json.loads((dispatch_dir / "result.json").read_text())
+            assert result_data["success"] is True
 
 
 class TestDispatchDevinRoleShortName:
@@ -545,7 +575,7 @@ class TestDispatchDevinRoleShortName:
     def test_dispatch_devin_rejects_traversal_role_short_name(self, monkeypatch):
         """A role short name containing path separators / traversal must be
         rejected before the subprocess is invoked."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
@@ -569,7 +599,7 @@ class TestDispatchDevinRoleShortName:
             assert "Invalid role name" in text
 
     def test_dispatch_devin_rejects_path_separator_role_short_name(self, monkeypatch):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
@@ -594,22 +624,20 @@ class TestDispatchDevinRoleShortName:
     def test_dispatch_devin_short_name_resolved_under_roles_dir(self, monkeypatch):
         """A valid short name must be resolved to global_root/roles/<role>.md
         and the resolved absolute path passed to the subprocess."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
             work_dir.mkdir(parents=True, exist_ok=True)
             (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
 
-            captured: dict = {}
-
             def fake_run(cmd, **kwargs):
-                captured["cmd"] = cmd
                 return subprocess.CompletedProcess(
                     args=cmd, returncode=0, stdout="ok", stderr=""
                 )
 
             monkeypatch.setattr(subprocess, "run", fake_run)
+            monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
             result = server._tool_dispatch_devin(
                 {
@@ -619,15 +647,22 @@ class TestDispatchDevinRoleShortName:
                 }
             )
 
-            assert "Exit code: 0" in result[0]["text"]
-            role_arg = captured["cmd"][captured["cmd"].index("--role") + 1]
-            expected = str(Path(tmpdir) / "root" / "roles" / "coder.md")
-            assert role_arg == expected
+            data = json.loads(result[0]["text"])
+            assert data["status"] == "started"
+            dispatch_dir = Path(data["workspace"])
+
+            cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
+            role_arg = cmd_data["cmd"][cmd_data["cmd"].index("--role") + 1]
+            expected = (Path(tmpdir) / "root" / "roles" / "coder.md").resolve()
+            assert Path(role_arg).resolve() == expected
+
+            result_data = json.loads((dispatch_dir / "result.json").read_text())
+            assert result_data["success"] is True
 
     def test_dispatch_devin_short_name_missing_role_file_rejected(self, monkeypatch):
         """A short name with no matching role file under roles/ must be
         rejected before invoking the subprocess."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = _make_server_with_workspace(tmpdir)
 
             work_dir = Path(tmpdir) / "root" / "proj"
@@ -661,7 +696,7 @@ class TestReadMessageNdjsonLengthLimit:
     def test_oversized_ndjson_line_returns_parse_error(self, monkeypatch):
         import io
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = self._make_server(tmpdir)
 
             # Build a line larger than MAX_MESSAGE_SIZE with no newline.
@@ -677,7 +712,7 @@ class TestReadMessageNdjsonLengthLimit:
     def test_valid_small_ndjson_line_parses(self, monkeypatch):
         import io
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             server = self._make_server(tmpdir)
 
             payload = b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n'

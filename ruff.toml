@@ -1,6 +1,6 @@
 exclude = [
-    "workflow-engine/work",
-    "workflow-engine/.pytest_cache",
+    "devin_orchestrator/work",
+    "devin_orchestrator/.pytest_cache",
     ".git",
     ".github",
     "__pycache__",
@@ -45,4 +45,4 @@ quote-style = "double"
 line-ending = "auto"
 
 [lint.isort]
-known-first-party = ["workflow_engine"]
+known-first-party = ["devin_orchestrator"]

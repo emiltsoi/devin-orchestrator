@@ -1,6 +1,5 @@
 # Windsurf
-.windsurf/cache/
-.windsurf/index/
+.windsurf/
 
 # OS
 .DS_Store
@@ -17,12 +16,34 @@ archive/
 
 # Per-workspace deployment directories
 .devin/workflows/
+.devin/execution-plan.md
 
 # Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.ruff_cache/
+.coverage
+
+# Build/packaging
+*.egg-info/
+build/
+dist/
+.venv/
+.venv*/
+venv/
+env/
+.tox/
+
+# Coverage reports
+.coverage.*
+htmlcov/
+
+# Auto-generated build artifacts
+build/
+dist/
+*.egg-info/
 
 # Logs
 logs/

@@ -263,7 +263,7 @@ Cascade dispatches to SWE-1.6 (free tier) via Devin CLI with specific guardrails
 
 ### Skill Loading via Description Matching
 
-Devin CLI loads skills via description matching in `-p` mode. Skills are installed in `workflow-engine/skills/` and automatically injected when their description matches prompt content.
+Devin CLI loads skills via description matching in `-p` mode. Skills are installed in `devin_orchestrator/skills/` and automatically injected when their description matches prompt content.
 
 **Installed skills:**
 - `ponytail` - YAGNI/laziness discipline (triggers on "coding dispatch and implementation task")

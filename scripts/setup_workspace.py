@@ -62,7 +62,7 @@ def setup_workspace(
 global_root: {global_root.as_posix()}
 skills_dir: {(global_root / "skills").as_posix()}
 workflows_dir: {(global_root / "workflows").as_posix()}
-workflow_engine_dir: {(global_root / "workflow-engine").as_posix()}
+workflow_engine_dir: {(global_root / "devin_orchestrator").as_posix()}
 
 # Sessions for this workspace are isolated under the workspace itself.
 session_work_dir: {workspace.as_posix()}

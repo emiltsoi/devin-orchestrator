@@ -2,10 +2,12 @@
 
 **Purpose:** Document the hybrid deployment model for orchestrator–worker workflows.
 
+> For the public one-click deploy instructions, see [DEPLOY.md](DEPLOY.md).
+
 **See Also:**
-- [INSTALL.md](INSTALL.md) - Installation instructions
+- [DEPLOY.md](DEPLOY.md) - One-click cross-platform deployment
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
-- [AGENT-INSTALL.md](AGENT-INSTALL.md) - Agent-specific installation guide
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Developer/release workflow
 
 ## Deployment Model
 
@@ -20,19 +22,26 @@ The hybrid deployment model combines global installation with optional per-works
 The canonical source of truth is installed globally:
 
 ```bash
-# Install devin-orchestrator globally
-python install.py
-
-# Or use automated installation
-python install_automated.py
+# Install devin-orchestrator from PyPI or from source
+pipx install devin-orchestrator
+# or, from the repo
+pip install -e .
 ```
 
-This installs to `~/.devin-orchestrator/`:
+Then create the global data directory and register the MCP server:
+
+```bash
+devin-orchestrator install
+```
+
+`~/.devin-orchestrator/` then contains:
 - `skills/*` - Skill definitions (.yaml) and narratives (.md)
 - `workflows/*.manifest.yaml` - Structured workflow manifests
 - `workflows/*.runbook.md` - Agent-facing orchestration runbooks
-- `workflow-engine/*` - Deterministic tools and dispatch mechanics
 - `config.yaml` - Configuration file
+- `logs/` - Optional MCP message and call logs
+
+The package itself lives in the active Python environment (site-packages or the editable checkout).
 
 ## Local Overrides (Optional)
 
@@ -66,14 +75,14 @@ vim workflows/superpower.manifest.yaml
 vim workflows/superpower.runbook.md
 
 # 3. Validate parity
-python -m pytest workflow-engine/test_parity_tool.py -q
+python -m pytest devin_orchestrator/test_parity_tool.py -q
 
 # 4. Commit changes
 git add workflows/superpower.manifest.yaml workflows/superpower.runbook.md
 git commit -m "Update superpower workflow: <description>"
 
-# 5. Reinstall globally
-python install.py
+# 5. Reinstall/update the package
+devin-orchestrator install upgrade
 ```
 
 ### Adding Local Override
@@ -119,8 +128,9 @@ This allows workspace-specific customization while maintaining a global baseline
 
 If a global update causes issues:
 1. Revert canonical source changes
-2. Reinstall globally: `python install.py`
-3. Verify all workspaces work correctly
+2. Reinstall/update the package: `pip install -e .` or `pipx install --force devin-orchestrator`
+3. Re-run `devin-orchestrator install` to refresh the service and agent registrations
+4. Verify all workspaces work correctly
 
 ### Local Override Rollback
 

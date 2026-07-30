@@ -9,9 +9,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
-
-from deterministic_tools import load_skill
+from devin_orchestrator.deterministic_tools import load_skill
 
 
 def test_load_skill_frontmatter_lf():

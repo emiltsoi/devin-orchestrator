@@ -31,18 +31,18 @@ result = subprocess.run(
     capture_output=True,
     text=True,
     timeout=30,
-    cwd=workspace
+    cwd=workspace,
 )
 ```
 
 **After:**
 ```python
 result = subprocess.run(
-    ['cmd', '/c', str(batch_file)],
+    ["cmd", "/c", str(batch_file)],
     capture_output=True,
     text=True,
     timeout=30,
-    cwd=workspace
+    cwd=workspace,
 )
 ```
 
@@ -91,7 +91,7 @@ from security_utils import (
     validate_session_id,
     validate_skill_name,
     validate_workspace_path,
-    InvalidInputError
+    InvalidInputError,
 )
 
 # Validate session ID
@@ -239,9 +239,10 @@ New `security_utils.py` module provides:
    ```python
    # Good
    from config_loader import ConfigLoader
+
    config = ConfigLoader.load()
    path = config.devin_cli_path
-   
+
    # Bad
    path = r"C:\Users\username\AppData\Local\devin\cli\bin\devin.exe"
    ```
@@ -277,8 +278,8 @@ New `security_utils.py` module provides:
 6. **Avoid shell=True in subprocess calls**
    ```python
    # Good
-   subprocess.run(['cmd', '/c', str(batch_file)], capture_output=True, text=True)
-   
+   subprocess.run(["cmd", "/c", str(batch_file)], capture_output=True, text=True)
+
    # Bad
    subprocess.run(f'cmd /c "{batch_file}"', shell=True, capture_output=True, text=True)
    ```

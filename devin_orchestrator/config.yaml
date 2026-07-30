@@ -1,0 +1,74 @@
+# Global Configuration for Devin Orchestrator
+# This file defines the global paths for skills, workflows, and workflow engine
+# Environment variables can override these values
+
+global_root: ~/.devin-orchestrator
+skills_dir: ~/.devin-orchestrator/skills
+workflows_dir: ~/.devin-orchestrator/workflows
+workflow_engine_dir: ~/.devin-orchestrator/devin_orchestrator
+
+# Devin CLI configuration
+# Set DEVIN_CLI_PATH environment variable or update this path
+# Default assumes Linux/macOS. For Windows use:
+#   C:/Users/<username>/AppData/Local/devin/cli/bin/devin.exe
+devin_cli_path: ${DEVIN_CLI_PATH:-~/.local/bin/devin}
+
+# Model configuration
+# Set DEVIN_DEFAULT_MODEL environment variable or update this value
+default_model: ${DEVIN_DEFAULT_MODEL:-swe-1.6}
+
+# Model routing (optional; empty by default)
+# Resolution precedence for resolve_model(agent, phase_type, config):
+#   1. model_overrides[agent]
+#   2. models[phase_type]
+#   3. model_profile
+#   4. default_model
+# Valid values are model IDs like "swe-1.6", "glm-5-2", or "claude-sonnet-4".
+model_profile: ""
+models: {}
+model_overrides: {}
+
+# Agent skill injection (optional; maps agent names to lists of skill names)
+# When dispatch_devin.py runs with --agent <name>, the listed skills become
+# eligible for injection via DevinCliAdapter.invoke(..., skill_filter=[...]).
+agent_skills: {}
+
+# Permission mode configuration
+# Allowed values: "dangerous", "smart", "auto"
+# - "dangerous": non-interactive; required for automated orchestrator dispatch
+# - "smart": interactive prompts for sensitive operations
+# - "auto": automated with conservative prompting
+# NOTE: default_permission_mode is set to "dangerous" for automated dispatch workflows.
+# This is intentional because:
+# 1. Automated dispatch (via skill_invoker.py) cannot handle interactive permission prompts
+# 2. The orchestrator-worker pattern requires non-interactive execution
+# 3. Security is maintained through other means: path validation, input sanitization, audit trails
+# For interactive sessions, consider using "smart" or "auto" mode instead.
+# An invalid value here is logged as a warning by ConfigLoader and falls back to
+# "dangerous" so an unvalidated string is never forwarded to the devin CLI.
+# Set DEVIN_DEFAULT_PERMISSION_MODE environment variable or update this value
+default_permission_mode: ${DEVIN_DEFAULT_PERMISSION_MODE:-dangerous}
+
+# Session configuration
+session_work_dir: ~/.devin-orchestrator/work
+
+# Gate interaction mode
+# Allowed values: "interactive", "signal", "auto"
+# - "interactive": block and wait for a decision file edit (legacy CLI behaviour)
+# - "signal": return immediately when a gate is reached and ask the calling agent
+#   to write a verdict to the gate decision file and call continue_workflow
+# - "auto": evaluate bypass conditions; auto-approve when none trigger, otherwise
+#   signal the calling agent. This is the recommended default for MCP use.
+# Set DEVIN_GATE_MODE environment variable or update this value.
+gate_mode: ${DEVIN_GATE_MODE:-auto}
+
+# Gate bypass/escalation overrides. These are evaluated by
+# orchestration_engine._evaluate_gate_bypass_conditions alongside the built-in
+# default conditions. When a bypass condition is satisfied, a non-security gate
+# can be auto-approved in gate_mode: "auto".
+#
+# Supported bypass keys:
+#   confidence_high_non_security: true  # auto-approve when stage succeeds with HIGH confidence
+#   demo_mode: true                     # auto-approve all gates during simulation (also hard-coded)
+gate_bypass_conditions:
+  confidence_high_non_security: true
