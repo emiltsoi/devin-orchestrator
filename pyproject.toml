@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "devin-orchestrator"
-version = "0.1.5"
+version = "0.1.6"
 description = "Stateless orchestration layer for Devin workflows and skills"
 readme = "README.md"
 license = {text = "MIT"}
