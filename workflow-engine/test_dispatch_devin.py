@@ -50,8 +50,15 @@ class _FakeAdapter:
 
     instances: list[_FakeAdapter] = []
 
-    def __init__(self, devin_cli_path=None, workspace=None, model=None,
-                 permission_mode=None, skills_dir=None, **_kwargs):
+    def __init__(
+        self,
+        devin_cli_path=None,
+        workspace=None,
+        model=None,
+        permission_mode=None,
+        skills_dir=None,
+        **_kwargs,
+    ):
         self.devin_cli_path = devin_cli_path
         self.workspace = workspace
         self.model = model
@@ -63,9 +70,15 @@ class _FakeAdapter:
         self.invoke_calls: list[dict] = []
         _FakeAdapter.instances.append(self)
 
-    def invoke(self, prompt, timeout=120, focused_context=None,
-               correction_artifact=None, enable_skills=True,
-               skill_filter=None):
+    def invoke(
+        self,
+        prompt,
+        timeout=120,
+        focused_context=None,
+        correction_artifact=None,
+        enable_skills=True,
+        skill_filter=None,
+    ):
         self.invoke_calls.append(
             {
                 "prompt": prompt,
@@ -136,8 +149,9 @@ def patch_adapter(monkeypatch):
 class TestModelResolutionPrecedence:
     """--model wins; otherwise resolve_model(agent, phase, config) is used."""
 
-    def test_explicit_model_wins(self, tmp_path, role_and_prompt, patch_argv,
-                                 patch_config, patch_adapter):
+    def test_explicit_model_wins(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -148,18 +162,23 @@ class TestModelResolutionPrecedence:
             )
         )
         patch_argv(
-            "--model", "explicit-model",
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "coder",
-            "--phase", "execute",
+            "--model",
+            "explicit-model",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "coder",
+            "--phase",
+            "execute",
         )
         assert dispatch_devin.main() == 0
         assert patch_adapter.instances[-1].model == "explicit-model"
 
-    def test_agent_override_wins_when_no_model(self, tmp_path, role_and_prompt,
-                                               patch_argv, patch_config,
-                                               patch_adapter):
+    def test_agent_override_wins_when_no_model(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -170,18 +189,22 @@ class TestModelResolutionPrecedence:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "coder",
-            "--phase", "execute",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "coder",
+            "--phase",
+            "execute",
         )
         assert dispatch_devin.main() == 0
         # model_overrides["coder"] wins over models["execute"] and profile.
         assert patch_adapter.instances[-1].model == "claude-opus-4.6"
 
-    def test_phase_models_wins_when_agent_unknown(self, tmp_path, role_and_prompt,
-                                                  patch_argv, patch_config,
-                                                  patch_adapter):
+    def test_phase_models_wins_when_agent_unknown(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -192,19 +215,22 @@ class TestModelResolutionPrecedence:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "reviewer",
-            "--phase", "verify",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "reviewer",
+            "--phase",
+            "verify",
         )
         assert dispatch_devin.main() == 0
         # Unknown agent -> models["verify"] wins.
         assert patch_adapter.instances[-1].model == "glm-5-2"
 
-    def test_profile_wins_when_agent_and_phase_unknown(self, tmp_path,
-                                                       role_and_prompt,
-                                                       patch_argv, patch_config,
-                                                       patch_adapter):
+    def test_profile_wins_when_agent_and_phase_unknown(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -215,10 +241,14 @@ class TestModelResolutionPrecedence:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "reviewer",
-            "--phase", "execute",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "reviewer",
+            "--phase",
+            "execute",
         )
         assert dispatch_devin.main() == 0
         assert patch_adapter.instances[-1].model == "claude-sonnet-4"
@@ -228,8 +258,9 @@ class TestUnknownAgentPhaseWarnings:
     """Stderr warnings are emitted for unknown --agent / --phase when the
     config has entries."""
 
-    def test_unknown_phase_warns(self, tmp_path, role_and_prompt, patch_argv,
-                                 patch_config, patch_adapter, capsys):
+    def test_unknown_phase_warns(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -238,17 +269,21 @@ class TestUnknownAgentPhaseWarnings:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--phase", "bogus-phase",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--phase",
+            "bogus-phase",
         )
         assert dispatch_devin.main() == 0
         err = capsys.readouterr().err
         assert "bogus-phase" in err
         assert "config.models" in err
 
-    def test_unknown_agent_warns(self, tmp_path, role_and_prompt, patch_argv,
-                                 patch_config, patch_adapter, capsys):
+    def test_unknown_agent_warns(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -257,26 +292,33 @@ class TestUnknownAgentPhaseWarnings:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "bogus-agent",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "bogus-agent",
         )
         assert dispatch_devin.main() == 0
         err = capsys.readouterr().err
         assert "bogus-agent" in err
         assert "config.model_overrides" in err
 
-    def test_no_warning_when_config_empty(self, tmp_path, role_and_prompt,
-                                          patch_argv, patch_config, patch_adapter,
-                                          capsys):
+    def test_no_warning_when_config_empty(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
+    ):
         # If models / model_overrides are empty, no typo warning is emitted.
         role_file, prompt_file = role_and_prompt
         patch_config(_StubConfig(default_model="swe-1.6"))
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "anyone",
-            "--phase", "anything",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "anyone",
+            "--phase",
+            "anything",
         )
         assert dispatch_devin.main() == 0
         err = capsys.readouterr().err
@@ -287,9 +329,9 @@ class TestUnknownAgentPhaseWarnings:
 class TestAgentSkillsWiring:
     """agent_skills maps agent names to skill_filter lists and enables skills."""
 
-    def test_skills_enabled_and_filter_passed(self, tmp_path, role_and_prompt,
-                                              patch_argv, patch_config,
-                                              patch_adapter, capsys):
+    def test_skills_enabled_and_filter_passed(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
+    ):
         role_file, prompt_file = role_and_prompt
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
@@ -303,9 +345,12 @@ class TestAgentSkillsWiring:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "coder",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "coder",
         )
         assert dispatch_devin.main() == 0
         adapter = patch_adapter.instances[-1]
@@ -315,8 +360,9 @@ class TestAgentSkillsWiring:
         assert invoke["enable_skills"] is True
         assert invoke["skill_filter"] == ["using-devin-orchestrator", "writing-plans"]
 
-    def test_missing_agent_skill_warns(self, tmp_path, role_and_prompt, patch_argv,
-                                       patch_config, patch_adapter, capsys):
+    def test_missing_agent_skill_warns(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
+    ):
         role_file, prompt_file = role_and_prompt
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
@@ -330,9 +376,12 @@ class TestAgentSkillsWiring:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "coder",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "coder",
         )
         assert dispatch_devin.main() == 0
         err = capsys.readouterr().err
@@ -342,8 +391,9 @@ class TestAgentSkillsWiring:
         invoke = patch_adapter.instances[-1].invoke_calls[-1]
         assert invoke["skill_filter"] == ["using-devin-orchestrator", "ghost-skill"]
 
-    def test_unknown_agent_skills_warns(self, tmp_path, role_and_prompt, patch_argv,
-                                        patch_config, patch_adapter, capsys):
+    def test_unknown_agent_skills_warns(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
+    ):
         # agent has no entry in agent_skills map -> warning, no skills injected.
         role_file, prompt_file = role_and_prompt
         skills_dir = tmp_path / "skills"
@@ -356,9 +406,12 @@ class TestAgentSkillsWiring:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--agent", "reviewer",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--agent",
+            "reviewer",
         )
         assert dispatch_devin.main() == 0
         err = capsys.readouterr().err
@@ -368,8 +421,9 @@ class TestAgentSkillsWiring:
         assert invoke["enable_skills"] is False
         assert invoke["skill_filter"] is None
 
-    def test_no_agent_no_skills(self, tmp_path, role_and_prompt, patch_argv,
-                                patch_config, patch_adapter, capsys):
+    def test_no_agent_no_skills(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -378,8 +432,10 @@ class TestAgentSkillsWiring:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
         )
         assert dispatch_devin.main() == 0
         err = capsys.readouterr().err
@@ -393,8 +449,9 @@ class TestAdapterConstructorAndInvoke:
     """DevinCliAdapter is constructed with the resolved model and the
     configured permission mode, and invoke receives the merged prompt."""
 
-    def test_constructor_and_invoke_args(self, tmp_path, role_and_prompt,
-                                         patch_argv, patch_config, patch_adapter):
+    def test_constructor_and_invoke_args(
+        self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter
+    ):
         role_file, prompt_file = role_and_prompt
         patch_config(
             _StubConfig(
@@ -405,10 +462,14 @@ class TestAdapterConstructorAndInvoke:
             )
         )
         patch_argv(
-            "--role", str(role_file),
-            "--prompt-file", str(prompt_file),
-            "--permission-mode", "auto",
-            "--timeout", "42",
+            "--role",
+            str(role_file),
+            "--prompt-file",
+            str(prompt_file),
+            "--permission-mode",
+            "auto",
+            "--timeout",
+            "42",
         )
         assert dispatch_devin.main() == 0
         adapter = patch_adapter.instances[-1]

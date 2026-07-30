@@ -69,7 +69,13 @@ class TriageDecision(Enum):
 class OrchestrationEngine:
     """Actual orchestration engine for workflow execution"""
 
-    def __init__(self, work_dir: Path, config: dict[str, Any] | None = None, metrics: "MetricsCollector | None" = None, monitoring: "MonitoringSystem | None" = None):
+    def __init__(
+        self,
+        work_dir: Path,
+        config: dict[str, Any] | None = None,
+        metrics: "MetricsCollector | None" = None,
+        monitoring: "MonitoringSystem | None" = None,
+    ):
         """
         Initialize orchestration engine
 
@@ -82,10 +88,14 @@ class OrchestrationEngine:
         try:
             self.work_dir = work_dir
             self.config = config or {}
-            self.skill_invoker = SkillInvoker(demo_mode=self.config.get("demo_mode", False))
+            self.skill_invoker = SkillInvoker(
+                demo_mode=self.config.get("demo_mode", False)
+            )
             # Use provided instances or fall back to global instances for backward compatibility
             self.metrics = metrics if metrics is not None else get_metrics_collector()
-            self.monitoring = monitoring if monitoring is not None else get_monitoring_system()
+            self.monitoring = (
+                monitoring if monitoring is not None else get_monitoring_system()
+            )
             logger.info(f"OrchestrationEngine initialized with work_dir: {work_dir}")
         except Exception as e:
             logger.error(f"Error initializing OrchestrationEngine: {e}")
@@ -178,11 +188,19 @@ class OrchestrationEngine:
 
         # Enrich results with artifact paths and a stateless resume ticket
         results["artifact_paths"] = self._list_session_artifacts(session_dir)
-        waiting_gate_id = self._find_waiting_gate_id(results) if results["final_status"] == "waiting_for_input" else None
+        waiting_gate_id = (
+            self._find_waiting_gate_id(results)
+            if results["final_status"] == "waiting_for_input"
+            else None
+        )
         failing_stage = None
         if results["final_status"] in ("escalated", "blocked"):
             for entry in reversed(results.get("stages", [])):
-                if entry.get("triage_decision") in (TriageDecision.ESCALATE, TriageDecision.RETRY) or entry.get("success") is False:
+                if (
+                    entry.get("triage_decision")
+                    in (TriageDecision.ESCALATE, TriageDecision.RETRY)
+                    or entry.get("success") is False
+                ):
                     failing_stage = entry.get("stage")
                     break
         results["resume"] = self._build_resume(
@@ -287,7 +305,9 @@ class OrchestrationEngine:
             return error
 
         # Load original inputs if caller did not resupply them
-        original_request, original_focused_context, original_output_file = self._load_session_inputs(session_dir)
+        original_request, original_focused_context, original_output_file = (
+            self._load_session_inputs(session_dir)
+        )
         if focused_context is None:
             focused_context = original_focused_context
         if output_file is None:
@@ -363,11 +383,19 @@ class OrchestrationEngine:
 
         # Enrich results with artifact paths and a stateless resume ticket
         results["artifact_paths"] = self._list_session_artifacts(session_dir)
-        waiting_gate_id = self._find_waiting_gate_id(results) if results["final_status"] == "waiting_for_input" else None
+        waiting_gate_id = (
+            self._find_waiting_gate_id(results)
+            if results["final_status"] == "waiting_for_input"
+            else None
+        )
         failing_stage = None
         if results["final_status"] in ("escalated", "blocked"):
             for entry in reversed(results.get("stages", [])):
-                if entry.get("triage_decision") in (TriageDecision.ESCALATE, TriageDecision.RETRY) or entry.get("success") is False:
+                if (
+                    entry.get("triage_decision")
+                    in (TriageDecision.ESCALATE, TriageDecision.RETRY)
+                    or entry.get("success") is False
+                ):
                     failing_stage = entry.get("stage")
                     break
         results["resume"] = self._build_resume(
@@ -422,7 +450,9 @@ class OrchestrationEngine:
             session_data.get("output_file", None),
         )
 
-    def _seed_focused_context(self, session_dir: Path, focused_context: list[str]) -> list[str]:
+    def _seed_focused_context(
+        self, session_dir: Path, focused_context: list[str]
+    ) -> list[str]:
         """Copy focused context files into the session directory and return their paths."""
         if not focused_context:
             return []
@@ -472,7 +502,9 @@ class OrchestrationEngine:
                     for s in results.get("stages", [])
                 ],
             }
-            out_path.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+            out_path.write_text(
+                json.dumps(summary, indent=2, default=str), encoding="utf-8"
+            )
         except (InvalidInputError, PathTraversalError, OSError) as e:
             logger.warning(f"Failed to write output_file {output_file}: {e}")
 
@@ -509,7 +541,9 @@ class OrchestrationEngine:
                 "arguments": {"session_id": session_id},
             }
         elif final_status in ("escalated", "blocked"):
-            resume["arguments"]["feedback"] = error or "<agent fills this with correction/feedback>"
+            resume["arguments"]["feedback"] = (
+                error or "<agent fills this with correction/feedback>"
+            )
             if stage_name:
                 resume["arguments"]["stage"] = stage_name
             if artifact_paths:
@@ -559,14 +593,19 @@ class OrchestrationEngine:
                 )
             except (InvalidInputError, PathTraversalError) as e:
                 logger.error(f"Input validation failed: {e}")
-                return None, None, None, {
-                    "session_id": session_id,
-                    "manifest": "unknown",
-                    "stages": [],
-                    "final_status": "failed",
-                    "error": f"Input validation failed: {str(e)}",
-                    "error_type": "InvalidInputError",
-                }
+                return (
+                    None,
+                    None,
+                    None,
+                    {
+                        "session_id": session_id,
+                        "manifest": "unknown",
+                        "stages": [],
+                        "final_status": "failed",
+                        "error": f"Input validation failed: {str(e)}",
+                        "error_type": "InvalidInputError",
+                    },
+                )
 
             # Load manifest
             manifest = load_manifest(manifest_path)
@@ -581,50 +620,66 @@ class OrchestrationEngine:
             return session_id, manifest_path, manifest, None
         except FileNotFoundError as e:
             logger.error(f"Manifest file not found: {manifest_path} - {e}")
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"Manifest file not found: {manifest_path}",
-                "error_type": "FileNotFoundError",
-            }
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"Manifest file not found: {manifest_path}",
+                    "error_type": "FileNotFoundError",
+                },
+            )
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in manifest file {manifest_path}: {e}")
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"Invalid JSON in manifest file: {e}",
-                "error_type": "JSONDecodeError",
-            }
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"Invalid JSON in manifest file: {e}",
+                    "error_type": "JSONDecodeError",
+                },
+            )
         except WorkflowManifestError as e:
             logger.error(f"Invalid YAML in manifest file {manifest_path}: {e}")
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"Invalid YAML in manifest file: {e}",
-                "error_type": "WorkflowManifestError",
-            }
-        except (OSError, RuntimeError) as e:
-            logger.error(
-                f"System error loading manifest {manifest_path}: {e}"
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"Invalid YAML in manifest file: {e}",
+                    "error_type": "WorkflowManifestError",
+                },
             )
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"System error loading manifest: {str(e)}",
-                "error_type": type(e).__name__,
-            }
+        except (OSError, RuntimeError) as e:
+            logger.error(f"System error loading manifest {manifest_path}: {e}")
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"System error loading manifest: {str(e)}",
+                    "error_type": type(e).__name__,
+                },
+            )
 
-    def _validate_manifest_structure(
-        self, manifest: Any, manifest_path: Path
-    ) -> None:
+    def _validate_manifest_structure(self, manifest: Any, manifest_path: Path) -> None:
         """Validate that a parsed manifest has the required structure.
 
         Raises ``WorkflowManifestError`` if the manifest is not a mapping, is
@@ -744,8 +799,7 @@ class OrchestrationEngine:
                 results["stages"].append(stage_result)
             except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
                 logger.error(
-                    f"Error executing stage "
-                    f"{stage.get('name', 'unknown')}: {e}"
+                    f"Error executing stage {stage.get('name', 'unknown')}: {e}"
                 )
                 results["stages"].append(
                     {
@@ -809,7 +863,9 @@ class OrchestrationEngine:
                         session_dir,
                         f"gate_{stage['gate']}",
                         "waiting",
-                        gate_result.get("notes", f"Gate {stage['gate']} waiting for agent decision"),
+                        gate_result.get(
+                            "notes", f"Gate {stage['gate']} waiting for agent decision"
+                        ),
                     )
                     break
                 if gate_result.get("verdict") == "request_changes":
@@ -834,7 +890,11 @@ class OrchestrationEngine:
                             "error": gate_result.get(
                                 "notes", f"Gate {stage['gate']} requested changes"
                             ),
-                            "validation": {"valid": False, "errors": [], "artifact_results": {}},
+                            "validation": {
+                                "valid": False,
+                                "errors": [],
+                                "artifact_results": {},
+                            },
                             "triage_decision": TriageDecision.RETRY,
                         },
                         results,
@@ -908,10 +968,13 @@ class OrchestrationEngine:
                     f"Error: {last_error}\n\n"
                     "Please fix the issue and re-run the stage."
                 )
-                logger.info(
-                    f"Created correction artifact: {correction_artifact}"
-                )
-            except (OSError, PermissionError, InvalidInputError, PathTraversalError) as e:
+                logger.info(f"Created correction artifact: {correction_artifact}")
+            except (
+                OSError,
+                PermissionError,
+                InvalidInputError,
+                PathTraversalError,
+            ) as e:
                 logger.error(f"Error creating correction artifact: {e}")
                 update_status(
                     session_dir,
@@ -1175,9 +1238,7 @@ input: [your input here]
 
 Edit this file with your input, then save to continue.
 """)
-            logger.info(
-                f"Created pause file for interactive mode: {pause_file}"
-            )
+            logger.info(f"Created pause file for interactive mode: {pause_file}")
         except PermissionError as e:
             logger.error(f"Permission error creating pause file: {e}")
             return {
@@ -1420,14 +1481,11 @@ Edit this file with your input, then save to continue.
                 cancel_token=cancel_token,
             )
             logger.info(
-                f"Skill {skill_name} invocation completed with "
-                f"success={result.success}"
+                f"Skill {skill_name} invocation completed with success={result.success}"
             )
 
             # Record skill result in metrics
-            self.metrics.record_skill_result(
-                skill_name, result.success, result.error
-            )
+            self.metrics.record_skill_result(skill_name, result.success, result.error)
             return result, None
         except (InvalidInputError, ValueError) as e:
             logger.error(
@@ -1471,9 +1529,7 @@ Edit this file with your input, then save to continue.
             }
         except TimeoutError as e:
             logger.error(f"Timeout during skill invocation for {skill_name}: {e}")
-            self.metrics.record_skill_result(
-                skill_name, False, f"Timeout: {str(e)}"
-            )
+            self.metrics.record_skill_result(skill_name, False, f"Timeout: {str(e)}")
             return None, {
                 "stage": stage_name,
                 "skill": skill_name,
@@ -1488,12 +1544,8 @@ Edit this file with your input, then save to continue.
                 "triage_decision": TriageDecision.RETRY,
             }
         except (RuntimeError, PathTraversalError) as e:
-            logger.error(
-                f"Error during skill invocation for {skill_name}: {e}"
-            )
-            self.metrics.record_skill_result(
-                skill_name, False, f"Error: {str(e)}"
-            )
+            logger.error(f"Error during skill invocation for {skill_name}: {e}")
+            self.metrics.record_skill_result(skill_name, False, f"Error: {str(e)}")
             return None, {
                 "stage": stage_name,
                 "skill": skill_name,
@@ -1508,9 +1560,7 @@ Edit this file with your input, then save to continue.
                 "triage_decision": TriageDecision.ESCALATE,
             }
 
-    def _validate_artifact_path(
-        self, artifact_name: str, session_dir: Path
-    ) -> Path:
+    def _validate_artifact_path(self, artifact_name: str, session_dir: Path) -> Path:
         """
         Validate and resolve a stage artifact path so it is contained within
         the session directory.
@@ -1554,9 +1604,7 @@ Edit this file with your input, then save to continue.
                     self._validate_artifact_path(artifact, session_dir)
                 )
             except (InvalidInputError, PathTraversalError) as e:
-                logger.error(
-                    f"Invalid artifact path for stage {stage_name}: {e}"
-                )
+                logger.error(f"Invalid artifact path for stage {stage_name}: {e}")
                 return (
                     {
                         "valid": False,
@@ -1597,9 +1645,7 @@ Edit this file with your input, then save to continue.
                 artifact_paths,
             )
         except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-            logger.error(
-                f"Error during validation for stage {stage_name}: {e}"
-            )
+            logger.error(f"Error during validation for stage {stage_name}: {e}")
             return (
                 {
                     "valid": False,
@@ -1645,13 +1691,9 @@ Edit this file with your input, then save to continue.
                     correction_artifact=correction_artifact,
                 )
                 if review_artifact_path and review_output:
-                    review_artifact_path.write_text(
-                        review_output, encoding="utf-8"
-                    )
+                    review_artifact_path.write_text(review_output, encoding="utf-8")
             except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                logger.error(
-                    f"Reviewer dispatch failed for stage {stage_name}: {e}"
-                )
+                logger.error(f"Reviewer dispatch failed for stage {stage_name}: {e}")
                 reviewer_verdict = "FAIL"
                 confidence = "LOW"
 
@@ -1764,9 +1806,7 @@ Edit this file with your input, then save to continue.
             r"overall quality assessment[:\s]+([a-z]+)", review_lower
         )
         critical_count = 0
-        critical_match = re.search(
-            r"critical issues? found[:\s]*(\d+)", review_lower
-        )
+        critical_match = re.search(r"critical issues? found[:\s]*(\d+)", review_lower)
         if critical_match:
             critical_count = int(critical_match.group(1))
 
@@ -1937,7 +1977,12 @@ Edit this file with your input, then save to continue.
                         f"Gate {verdict}: {gate_id}",
                     )
                     logger.info(f"Gate {gate_id} decision recorded: {verdict}")
-                except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
+                except (
+                    OSError,
+                    RuntimeError,
+                    InvalidInputError,
+                    PathTraversalError,
+                ) as e:
                     logger.error(f"Error recording gate decision: {e}")
                     update_status(
                         session_dir,
@@ -1970,9 +2015,10 @@ Edit this file with your input, then save to continue.
         )
         verdict = bypass["verdict"]
         conditions = bypass["conditions"]
-        notes = "; ".join(
-            c["reason"] for c in conditions if c["triggered"]
-        ) or "No escalation triggers detected"
+        notes = (
+            "; ".join(c["reason"] for c in conditions if c["triggered"])
+            or "No escalation triggers detected"
+        )
 
         if verdict == "approve":
             try:
@@ -2002,7 +2048,13 @@ Edit this file with your input, then save to continue.
 
         # request_changes or block: signal the calling agent.
         signal = self._build_gate_signal(
-            gate_id, stage_name, session_dir, gate_decision_file, verdict, notes, conditions
+            gate_id,
+            stage_name,
+            session_dir,
+            gate_decision_file,
+            verdict,
+            notes,
+            conditions,
         )
         return signal
 
@@ -2154,9 +2206,7 @@ Edit this file with your input, then save to continue.
 
         # Config-driven bypass: auto-approve non-security gates when the
         # preceding stage succeeded and reported HIGH confidence.
-        has_block = any(
-            c["triggered"] and c["verdict"] == "block" for c in conditions
-        )
+        has_block = any(c["triggered"] and c["verdict"] == "block" for c in conditions)
         bypass_config = self.config.get("gate_bypass_conditions") or {}
         if (
             not has_block
@@ -2275,10 +2325,13 @@ Please edit this file with your decision.
                             verdict,
                             f"Gate {verdict}: {gate_id}",
                         )
-                        logger.info(
-                            f"Gate {gate_id} decision recorded: {verdict}"
-                        )
-                    except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
+                        logger.info(f"Gate {gate_id} decision recorded: {verdict}")
+                    except (
+                        OSError,
+                        RuntimeError,
+                        InvalidInputError,
+                        PathTraversalError,
+                    ) as e:
                         logger.error(f"Error recording gate decision: {e}")
                         update_status(
                             session_dir,
@@ -2304,9 +2357,7 @@ Please edit this file with your decision.
                 "timeout",
                 f"Gate timeout: {gate_id}",
             )
-            logger.warning(
-                f"Gate {gate_id} timeout after {max_wait_seconds} seconds"
-            )
+            logger.warning(f"Gate {gate_id} timeout after {max_wait_seconds} seconds")
         except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
             logger.error(f"Error recording gate timeout: {e}")
             update_status(
@@ -2318,9 +2369,7 @@ Please edit this file with your decision.
 
         return {"gate_id": gate_id, "verdict": verdict, "blocked": True}
 
-    def _parse_gate_verdict(
-        self, content: str
-    ) -> tuple[str, str] | None:
+    def _parse_gate_verdict(self, content: str) -> tuple[str, str] | None:
         """
         Parse verdict and notes from gate decision file content.
 
@@ -2381,18 +2430,28 @@ def _load_cli_config() -> tuple:
         _print_cli_error(
             "Invalid JSON in configuration file", "JSONDecodeError", str(e)
         )
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error loading configuration: {e}")
-        _print_cli_error(
-            "Error loading configuration", type(e).__name__, str(e)
-        )
+        _print_cli_error("Error loading configuration", type(e).__name__, str(e))
 
 
 def _create_cli_engine(work_dir: Path, config: Any) -> OrchestrationEngine:
     """Create orchestration engine, exiting on error."""
     try:
         return OrchestrationEngine(work_dir, config.__dict__)
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error initializing orchestration engine: {e}")
         _print_cli_error(
             "Error initializing orchestration engine", type(e).__name__, str(e)
@@ -2412,11 +2471,15 @@ def _run_cli_workflow(
             manifest_path, session_id, request_content, skip_brainstorming
         )
         print(json.dumps(results, indent=2, default=str))
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error executing workflow: {e}")
-        _print_cli_error(
-            "Error executing workflow", type(e).__name__, str(e)
-        )
+        _print_cli_error("Error executing workflow", type(e).__name__, str(e))
 
 
 def main():
@@ -2445,7 +2508,13 @@ def main():
             )
         )
         sys.exit(130)
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error in main: {e}")
         print(
             json.dumps(

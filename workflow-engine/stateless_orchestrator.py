@@ -101,7 +101,9 @@ class StatelessOrchestrator:
                             "workflow": uc.get("workflow"),
                             "session_id_format": uc.get("session_id_format"),
                         }
-                logger.info(f"Loaded {len(self.use_cases)} use cases from {use_cases_file}")
+                logger.info(
+                    f"Loaded {len(self.use_cases)} use cases from {use_cases_file}"
+                )
             except (FileNotFoundError, yaml.YAMLError, ValueError, KeyError) as e:
                 logger.warning(f"Failed to load use-cases.yaml: {e}")
 
@@ -145,7 +147,11 @@ class StatelessOrchestrator:
         raw = plan_artifact.strip()
         if not raw:
             return None
-        base = Path(self.workspace).resolve() if self.workspace else self.config.global_root
+        base = (
+            Path(self.workspace).resolve()
+            if self.workspace
+            else self.config.global_root
+        )
         try:
             source = validate_path_safe(base, Path(raw), allow_absolute=True)
             return source
@@ -232,11 +238,20 @@ class StatelessOrchestrator:
                 skip_brainstorming=skip_brainstorming,
             )
         elif intent == "review":
-            return self.review(request, focused_context=focused_context, ready_callback=ready_callback)
+            return self.review(
+                request, focused_context=focused_context, ready_callback=ready_callback
+            )
         elif intent == "investigate":
-            return self.investigate(request, focused_context=focused_context, ready_callback=ready_callback)
+            return self.investigate(
+                request, focused_context=focused_context, ready_callback=ready_callback
+            )
         elif intent == "plan":
-            return self.plan(request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
+            return self.plan(
+                request,
+                focused_context=focused_context,
+                output_file=output_file,
+                ready_callback=ready_callback,
+            )
         else:
             return {
                 "session_id": None,
@@ -286,16 +301,33 @@ class StatelessOrchestrator:
         # Keywords for each intent with word boundary matching
         # Higher-weight keywords are listed first for clarity
         review_keywords = [
-            r"\breview\b", r"\baudit\b", r"\bcheck\b", r"\bverify\b",
-            r"\bpr\b", r"\bpull request\b", r"\bcode review\b"
+            r"\breview\b",
+            r"\baudit\b",
+            r"\bcheck\b",
+            r"\bverify\b",
+            r"\bpr\b",
+            r"\bpull request\b",
+            r"\bcode review\b",
         ]
         investigate_keywords = [
-            r"\bdebug\b", r"\binvestigate\b", r"\brca\b", r"\broot cause\b",
-            r"\bincident\b", r"\berror\b", r"\bfailure\b", r"\bbug\b", r"\bfix\b"
+            r"\bdebug\b",
+            r"\binvestigate\b",
+            r"\brca\b",
+            r"\broot cause\b",
+            r"\bincident\b",
+            r"\berror\b",
+            r"\bfailure\b",
+            r"\bbug\b",
+            r"\bfix\b",
         ]
         plan_keywords = [
-            r"\bplan\b", r"\bdesign\b", r"\barchitecture\b", r"\bspec\b",
-            r"\bproposal\b", r"\bdraft\b", r"\boutline\b"
+            r"\bplan\b",
+            r"\bdesign\b",
+            r"\barchitecture\b",
+            r"\bspec\b",
+            r"\bproposal\b",
+            r"\bdraft\b",
+            r"\boutline\b",
         ]
 
         # Score each intent based on keyword matches
@@ -386,7 +418,12 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("code_review", request, focused_context=focused_context, ready_callback=ready_callback)
+        return self.run_workflow(
+            "code_review",
+            request,
+            focused_context=focused_context,
+            ready_callback=ready_callback,
+        )
 
     def investigate(
         self,
@@ -404,7 +441,12 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, resume
         """
-        return self.run_workflow("rca", request, focused_context=focused_context, ready_callback=ready_callback)
+        return self.run_workflow(
+            "rca",
+            request,
+            focused_context=focused_context,
+            ready_callback=ready_callback,
+        )
 
     def plan(
         self,
@@ -424,7 +466,13 @@ class StatelessOrchestrator:
         Returns:
             Dictionary with session_id, workspace, success, output, error, artifact_paths, output_file
         """
-        return self.run_skill("writing-plans", request, focused_context=focused_context, output_file=output_file, ready_callback=ready_callback)
+        return self.run_skill(
+            "writing-plans",
+            request,
+            focused_context=focused_context,
+            output_file=output_file,
+            ready_callback=ready_callback,
+        )
 
     def run_workflow(
         self,
@@ -466,7 +514,9 @@ class StatelessOrchestrator:
                     break
 
             # Create session
-            session_id, session_dir = create_session(self.config.session_work_dir, session_format)
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, session_format
+            )
 
             # Seed focused context files into the session directory
             if focused_context:
@@ -489,8 +539,15 @@ class StatelessOrchestrator:
                         design_path.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(plan_path, design_path)
                         skip_brainstorming = True
-                        logger.info(f"Seeded plan artifact: {plan_path} -> {design_path}")
-                except (InvalidInputError, PathTraversalError, OSError, ValueError) as e:
+                        logger.info(
+                            f"Seeded plan artifact: {plan_path} -> {design_path}"
+                        )
+                except (
+                    InvalidInputError,
+                    PathTraversalError,
+                    OSError,
+                    ValueError,
+                ) as e:
                     logger.warning(f"Failed to seed plan artifact {plan_artifact}: {e}")
 
             # Let the caller return as soon as the session is established.
@@ -543,7 +600,11 @@ class StatelessOrchestrator:
             result["session_id"] = session_id
             result["workspace"] = str(session_dir)
             result["success"] = results.get("final_status") == "completed"
-            result["error"] = results.get("error") if results.get("final_status") != "completed" else None
+            result["error"] = (
+                results.get("error")
+                if results.get("final_status") != "completed"
+                else None
+            )
             # The full engine result (including stages) is serialized into output.
             # Remove the raw stages list from the top-level dict so the MCP layer
             # can json.dumps the response without hitting TriageDecision enum objects.
@@ -633,7 +694,9 @@ class StatelessOrchestrator:
             logger.warning(f"Could not read session state for {session_id}: {e}")
             session_data = {}
 
-        status = session_data.get("status") or session_data.get("final_status") or "unknown"
+        status = (
+            session_data.get("status") or session_data.get("final_status") or "unknown"
+        )
         artifact_paths = self._list_session_artifacts(session_dir)
 
         if not has_resume_input and status != "completed":
@@ -664,7 +727,8 @@ class StatelessOrchestrator:
                 work_dir=self.config.session_work_dir,
                 config={
                     "demo_mode": self.demo_mode,
-                    "dispatch_timeout_seconds": self.timeout or self.config.dispatch_timeout_seconds,
+                    "dispatch_timeout_seconds": self.timeout
+                    or self.config.dispatch_timeout_seconds,
                     "gate_mode": self.gate_mode,
                     "workflows_dir": str(self.config.workflows_dir),
                 },
@@ -683,7 +747,11 @@ class StatelessOrchestrator:
             result["session_id"] = session_id
             result["workspace"] = str(session_dir)
             result["success"] = results.get("final_status") == "completed"
-            result["error"] = results.get("error") if results.get("final_status") != "completed" else None
+            result["error"] = (
+                results.get("error")
+                if results.get("final_status") != "completed"
+                else None
+            )
             # The full engine result (including stages) is serialized into output.
             # Remove the raw stages list from the top-level dict so the MCP layer
             # can json.dumps the response without hitting TriageDecision enum objects.
@@ -713,7 +781,9 @@ class StatelessOrchestrator:
         artifact_paths: list[str],
     ) -> dict[str, Any]:
         """Build a lightweight resume ticket directly from a session.json snapshot."""
-        status = session_data.get("status") or session_data.get("final_status") or "unknown"
+        status = (
+            session_data.get("status") or session_data.get("final_status") or "unknown"
+        )
         stages = session_data.get("stages", [])
         current_stage = None
         if stages:
@@ -757,7 +827,9 @@ class StatelessOrchestrator:
             resume["arguments"]["correction_artifact"] = last_artifact
         return resume
 
-    def _next_step_from_results(self, results: dict[str, Any]) -> str | dict[str, Any] | None:
+    def _next_step_from_results(
+        self, results: dict[str, Any]
+    ) -> str | dict[str, Any] | None:
         """Return a concise next action from engine results."""
         if results.get("final_status") == "completed":
             return None
@@ -785,7 +857,9 @@ class StatelessOrchestrator:
             "session_id": session_id,
             "exists": True,
             "workspace": str(session_dir),
-            "status": session_data.get("status") or session_data.get("final_status") or "unknown",
+            "status": session_data.get("status")
+            or session_data.get("final_status")
+            or "unknown",
             "manifest": session_data.get("manifest"),
             "current_stage": last_stage.get("stage"),
             "stage_status": last_stage.get("status"),
@@ -821,7 +895,9 @@ class StatelessOrchestrator:
                     "error": f"Session {session_id} not found",
                 }
             session_data = json.loads(session_path.read_text(encoding="utf-8"))
-            existing_status = session_data.get("final_status") or session_data.get("status")
+            existing_status = session_data.get("final_status") or session_data.get(
+                "status"
+            )
             if existing_status == "completed":
                 return {
                     "session_id": session_id,
@@ -831,7 +907,9 @@ class StatelessOrchestrator:
 
             session_data["status"] = "cancelled"
             session_data["final_status"] = "cancelled"
-            session_path.write_text(json.dumps(session_data, indent=2), encoding="utf-8")
+            session_path.write_text(
+                json.dumps(session_data, indent=2), encoding="utf-8"
+            )
 
             # Signal any active Popen dispatch to stop polling and terminate.
             cancel_token = session_dir / ".cancel"
@@ -845,7 +923,6 @@ class StatelessOrchestrator:
             # killing to avoid terminating an unrelated process that has reused
             # a recorded PID.
             any_failed = False
-            any_killed = False
             for pid_name in ("pid.txt", "workflow-pid.txt"):
                 pid_file = session_dir / pid_name
                 if not pid_file.exists():
@@ -855,12 +932,12 @@ class StatelessOrchestrator:
                     if pid is None:
                         continue
                     terminated = self._kill_process(pid)
-                    if terminated:
-                        any_killed = True
-                    else:
+                    if not terminated:
                         any_failed = True
                 except (OSError, ValueError) as e:
-                    logger.warning(f"Failed to read/terminate {pid_name} for {session_id}: {e}")
+                    logger.warning(
+                        f"Failed to read/terminate {pid_name} for {session_id}: {e}"
+                    )
 
             return {
                 "session_id": session_id,
@@ -906,9 +983,7 @@ class StatelessOrchestrator:
         except (ValueError, TypeError):
             return (None, None, text)
 
-    def _get_process_commandline(
-        self, pid: int
-    ) -> tuple[list[str] | None, str | None]:
+    def _get_process_commandline(self, pid: int) -> tuple[list[str] | None, str | None]:
         """Return argv list and command-line string for a process, or (None,None) if gone."""
         if pid <= 0:
             return (None, None)
@@ -917,7 +992,7 @@ class StatelessOrchestrator:
             # returns the full command line. WMIC is deprecated and often absent;
             # tasklist only returns the image name, which is not enough to verify
             # that the PID still belongs to our dispatcher.
-            for cmd, is_cmdline in (
+            for cmd, _is_cmdline in (
                 (
                     [
                         "powershell",
@@ -962,7 +1037,7 @@ class StatelessOrchestrator:
                     if cmd[0] == "wmic":
                         for line in output.splitlines():
                             if line.startswith("CommandLine="):
-                                val = line[len("CommandLine="):].strip()
+                                val = line[len("CommandLine=") :].strip()
                                 if val:
                                     return (val.split(), val)
                         continue
@@ -1076,7 +1151,9 @@ class StatelessOrchestrator:
 
             # Create session with default format
             session_format = "SKILL-NNN"
-            session_id, session_dir = create_session(self.config.session_work_dir, session_format)
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, session_format
+            )
 
             # Let the caller return as soon as the session is established.
             if ready_callback:
@@ -1084,7 +1161,9 @@ class StatelessOrchestrator:
 
             # Seed focused context files into the session directory so the worker
             # can access them without escaping the session sandbox.
-            seeded_context = self._seed_focused_context(session_dir, focused_context or [])
+            seeded_context = self._seed_focused_context(
+                session_dir, focused_context or []
+            )
 
             # Write request prompt file
             write_request_prompt(session_dir, request)
@@ -1107,7 +1186,9 @@ class StatelessOrchestrator:
                     encoding="utf-8",
                 )
             except OSError as e:
-                logger.warning(f"Failed to seed session.json for skill {skill_name}: {e}")
+                logger.warning(
+                    f"Failed to seed session.json for skill {skill_name}: {e}"
+                )
 
             # Invoke skill. Pass the request in context so SkillInvoker builds
             # the full skill prompt (name, iron law, checklist, narrative).
@@ -1132,7 +1213,9 @@ class StatelessOrchestrator:
             written_output_file: str | None = None
             if output_file:
                 try:
-                    out_path = validate_path_safe(session_dir, session_dir / output_file, allow_absolute=True)
+                    out_path = validate_path_safe(
+                        session_dir, session_dir / output_file, allow_absolute=True
+                    )
                     out_path.write_text(result.output or "", encoding="utf-8")
                     written_output_file = str(out_path)
                 except (InvalidInputError, PathTraversalError, OSError) as e:
@@ -1161,9 +1244,13 @@ class StatelessOrchestrator:
                         "next_step": None,
                     }
                 )
-                session_file.write_text(json.dumps(session_data, indent=2, default=str), encoding="utf-8")
+                session_file.write_text(
+                    json.dumps(session_data, indent=2, default=str), encoding="utf-8"
+                )
             except (OSError, json.JSONDecodeError) as e:
-                logger.warning(f"Failed to update session.json for skill {skill_name}: {e}")
+                logger.warning(
+                    f"Failed to update session.json for skill {skill_name}: {e}"
+                )
 
             return {
                 "session_id": session_id,

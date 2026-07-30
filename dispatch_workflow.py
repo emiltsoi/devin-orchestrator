@@ -92,8 +92,12 @@ def _make_ready_callback(ready_file: Path) -> Any:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Background workflow/skill dispatcher")
-    parser.add_argument("--args-file", required=True, help="JSON file containing dispatch arguments")
-    parser.add_argument("--ready-file", required=True, help="File to write once the session is ready")
+    parser.add_argument(
+        "--args-file", required=True, help="JSON file containing dispatch arguments"
+    )
+    parser.add_argument(
+        "--ready-file", required=True, help="File to write once the session is ready"
+    )
     parsed = parser.parse_args()
 
     args_file = Path(parsed.args_file)
@@ -199,7 +203,11 @@ def main() -> int:
                     else (
                         "completed"
                         if result.get("success")
-                        else (result.get("final_status") or session_data.get("final_status") or "failed")
+                        else (
+                            result.get("final_status")
+                            or session_data.get("final_status")
+                            or "failed"
+                        )
                     )
                 )
                 session_data.update(
@@ -217,7 +225,9 @@ def main() -> int:
                         "resume": result.get("resume"),
                     }
                 )
-                session_file.write_text(json.dumps(session_data, indent=2, default=str), encoding="utf-8")
+                session_file.write_text(
+                    json.dumps(session_data, indent=2, default=str), encoding="utf-8"
+                )
             except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"Failed to update session.json for {sid}: {e}")
 
@@ -233,11 +243,16 @@ def main() -> int:
                 if session_file.exists():
                     session_data = json.loads(session_file.read_text(encoding="utf-8"))
                 # Preserve an explicit cancellation status if the user cancelled.
-                if session_data.get("status") != "cancelled" and session_data.get("final_status") != "cancelled":
+                if (
+                    session_data.get("status") != "cancelled"
+                    and session_data.get("final_status") != "cancelled"
+                ):
                     session_data["final_status"] = "failed"
                 session_data["error"] = str(e)
                 session_data["done"] = True
-                session_file.write_text(json.dumps(session_data, indent=2, default=str), encoding="utf-8")
+                session_file.write_text(
+                    json.dumps(session_data, indent=2, default=str), encoding="utf-8"
+                )
             except (OSError, json.JSONDecodeError):
                 pass
         return 1
@@ -245,7 +260,9 @@ def main() -> int:
         # Best-effort cleanup of workflow-pid file.
         sid = result.get("session_id") or session_id
         if sid:
-            _cleanup_pid_file(orchestrator.config.session_work_dir / sid / "workflow-pid.txt")
+            _cleanup_pid_file(
+                orchestrator.config.session_work_dir / sid / "workflow-pid.txt"
+            )
 
     return 0
 

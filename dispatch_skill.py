@@ -38,7 +38,6 @@ else:
 from config_loader import ConfigLoader
 from security_utils import (
     InvalidInputError,
-    validate_path_safe,
     validate_session_id,
     validate_skill_name,
     validate_workspace_path,
@@ -53,11 +52,28 @@ def main():
     parser.add_argument("skill_name", help="Name of the skill to dispatch")
     parser.add_argument("session_id", help="Session identifier")
     parser.add_argument("workspace", help="Workspace/session directory path")
-    parser.add_argument("is_reviewer", nargs="?", default="false", help="true if reviewer stage")
-    parser.add_argument("demo_mode", nargs="?", default="false", help="true for simulated dispatch")
-    parser.add_argument("config_overrides_json", nargs="?", default=None, help="JSON config overrides")
-    parser.add_argument("--focused-context", dest="focused_context", action="append", default=[], help="File paths to inject as focused context")
-    parser.add_argument("--output-file", dest="output_file", default=None, help="Path to write structured output report")
+    parser.add_argument(
+        "is_reviewer", nargs="?", default="false", help="true if reviewer stage"
+    )
+    parser.add_argument(
+        "demo_mode", nargs="?", default="false", help="true for simulated dispatch"
+    )
+    parser.add_argument(
+        "config_overrides_json", nargs="?", default=None, help="JSON config overrides"
+    )
+    parser.add_argument(
+        "--focused-context",
+        dest="focused_context",
+        action="append",
+        default=[],
+        help="File paths to inject as focused context",
+    )
+    parser.add_argument(
+        "--output-file",
+        dest="output_file",
+        default=None,
+        help="Path to write structured output report",
+    )
     args = parser.parse_args()
 
     skill_name = args.skill_name
@@ -81,9 +97,7 @@ def main():
         # accepts any workspace the MCP server would accept (including those
         # under global_root but outside session_work_dir).
         workspace = str(
-            validate_workspace_path(
-                workspace, base_allowed_dir=config.global_root
-            )
+            validate_workspace_path(workspace, base_allowed_dir=config.global_root)
         )
     except InvalidInputError as e:
         print(f"Input validation error: {e}", file=sys.stderr)
@@ -95,17 +109,19 @@ def main():
         try:
             config_overrides = json.loads(config_overrides_json)
         except json.JSONDecodeError:
-            print(f"Warning: Invalid JSON for config_overrides: {config_overrides_json}")
+            print(
+                f"Warning: Invalid JSON for config_overrides: {config_overrides_json}"
+            )
 
     # Create skill invoker
     skill_invoker = SkillInvoker(demo_mode=demo_mode)
 
     # Prepare context
     context = {
-        'session_id': session_id,
-        'stage': skill_name,
-        'skill': skill_name,
-        'config_overrides': config_overrides
+        "session_id": session_id,
+        "stage": skill_name,
+        "skill": skill_name,
+        "config_overrides": config_overrides,
     }
 
     # Invoke skill
@@ -123,7 +139,10 @@ def main():
     if args.output_file:
         try:
             from security_utils import validate_path_safe
-            output_file = validate_path_safe(Path(workspace), Path(args.output_file), allow_absolute=True)
+
+            output_file = validate_path_safe(
+                Path(workspace), Path(args.output_file), allow_absolute=True
+            )
             output_file.write_text(result.output or "", encoding="utf-8")
             output_file_path = str(output_file)
         except Exception as e:
@@ -154,6 +173,7 @@ def main():
 
     # Exit with appropriate code
     sys.exit(0 if result.success else 1)
+
 
 if __name__ == "__main__":
     main()

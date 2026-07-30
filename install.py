@@ -18,7 +18,11 @@ def _on_rm_error(func, path, exc_info):
     func(path)
 
 
-def install(global_root: Path | None = None, source_dir: Path | None = None, dry_run: bool = False):
+def install(
+    global_root: Path | None = None,
+    source_dir: Path | None = None,
+    dry_run: bool = False,
+):
     """
     Install devin-orchestrator to global location
 
@@ -133,18 +137,38 @@ def install(global_root: Path | None = None, source_dir: Path | None = None, dry
         print("  - Config is available at: " + str(target_config))
         print()
         print("For agent integration, prefer the devin-orchestrator MCP tools")
-        print("  (e.g. mcp0_execute, mcp0_run_workflow, mcp0_run_skill, mcp0_dispatch_devin, mcp0_resume).")
-        print("Use the legacy scripts only as a fallback when MCP tools are not available:")
-        print("  python " + str(global_root / "dispatch_devin.py") + " <role> <prompt_file> <work_dir> [model] [--focused-context PATH ...] [--output-file PATH]")
+        print(
+            "  (e.g. mcp0_execute, mcp0_run_workflow, mcp0_run_skill, mcp0_dispatch_devin, mcp0_resume)."
+        )
+        print(
+            "Use the legacy scripts only as a fallback when MCP tools are not available:"
+        )
+        print(
+            "  python "
+            + str(global_root / "dispatch_devin.py")
+            + " <role> <prompt_file> <work_dir> [model] [--focused-context PATH ...] [--output-file PATH]"
+        )
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Install devin-orchestrator to global location')
-    parser.add_argument('global_root', nargs='?', help='Global root path (default: ~/.devin-orchestrator)')
-    parser.add_argument('source_dir', nargs='?', help='Source directory (default: current directory)')
-    parser.add_argument('--dry-run', action='store_true', help='Dry run - show what would be done without actually doing it')
+    parser = argparse.ArgumentParser(
+        description="Install devin-orchestrator to global location"
+    )
+    parser.add_argument(
+        "global_root",
+        nargs="?",
+        help="Global root path (default: ~/.devin-orchestrator)",
+    )
+    parser.add_argument(
+        "source_dir", nargs="?", help="Source directory (default: current directory)"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry run - show what would be done without actually doing it",
+    )
 
     args = parser.parse_args()
 

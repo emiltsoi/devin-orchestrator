@@ -27,8 +27,13 @@ class TestJsonFormatter:
     def test_format_plain_message(self):
         formatter = JsonFormatter()
         record = logging.LogRecord(
-            name="t", level=logging.INFO, pathname="", lineno=1,
-            msg="hello world", args=(), exc_info=None,
+            name="t",
+            level=logging.INFO,
+            pathname="",
+            lineno=1,
+            msg="hello world",
+            args=(),
+            exc_info=None,
         )
         out = json.loads(formatter.format(record))
         assert out["level"] == "INFO"
@@ -39,8 +44,13 @@ class TestJsonFormatter:
         formatter = JsonFormatter()
         payload = json.dumps({"event_type": "stage_start", "stage": "s1"})
         record = logging.LogRecord(
-            name="t", level=logging.INFO, pathname="", lineno=1,
-            msg=payload, args=(), exc_info=None,
+            name="t",
+            level=logging.INFO,
+            pathname="",
+            lineno=1,
+            msg=payload,
+            args=(),
+            exc_info=None,
         )
         out = json.loads(formatter.format(record))
         assert out["event_type"] == "stage_start"
@@ -50,8 +60,13 @@ class TestJsonFormatter:
     def test_format_invalid_json_falls_back_to_message(self):
         formatter = JsonFormatter()
         record = logging.LogRecord(
-            name="t", level=logging.INFO, pathname="", lineno=1,
-            msg="not json {", args=(), exc_info=None,
+            name="t",
+            level=logging.INFO,
+            pathname="",
+            lineno=1,
+            msg="not json {",
+            args=(),
+            exc_info=None,
         )
         out = json.loads(formatter.format(record))
         assert out["message"] == "not json {"
@@ -109,8 +124,12 @@ class TestOrchestrationLogger:
             logger.logger.removeHandler(handler)
         text = (tmp_path / "trunc_test-structured.log").read_text(encoding="utf-8")
         # Find the structured entry and verify request_content was truncated.
-        records = [json.loads(line) for line in text.strip().split("\n") if line.strip()]
-        start_record = next(r for r in records if r.get("event_type") == "workflow_start")
+        records = [
+            json.loads(line) for line in text.strip().split("\n") if line.strip()
+        ]
+        start_record = next(
+            r for r in records if r.get("event_type") == "workflow_start"
+        )
         assert len(start_record["request_content"]) == 200
 
     def test_gate_decision_block_uses_warning_level(self, tmp_path, caplog):
@@ -128,7 +147,9 @@ class TestOrchestrationLogger:
             handler.close()
             logger.logger.removeHandler(handler)
         assert any(r.levelno == logging.WARNING for r in caplog.records)
-        assert any(r.levelno != logging.WARNING for r in caplog.records) is False or True
+        assert (
+            any(r.levelno != logging.WARNING for r in caplog.records) is False or True
+        )
 
     def test_skill_invocation_complete_failure_uses_error_level(self, tmp_path, caplog):
         logger = OrchestrationLogger(

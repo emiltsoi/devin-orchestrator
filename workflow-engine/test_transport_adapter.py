@@ -31,9 +31,7 @@ class TestInvocationResult:
         assert result.exit_code == 0
 
     def test_failure_construction(self):
-        result = InvocationResult(
-            success=False, output="", error="boom", exit_code=1
-        )
+        result = InvocationResult(success=False, output="", error="boom", exit_code=1)
         assert result.success is False
         assert result.exit_code == 1
 
@@ -49,8 +47,14 @@ class TestTransportAdapterContract:
             def __init__(self, adapter_path, workspace=None, **kwargs):
                 pass
 
-            def invoke(self, prompt, timeout=120, focused_context=None,
-                       correction_artifact=None, enable_skills=True):
+            def invoke(
+                self,
+                prompt,
+                timeout=120,
+                focused_context=None,
+                correction_artifact=None,
+                enable_skills=True,
+            ):
                 return InvocationResult(True, "", "", 0)
 
         with pytest.raises(TypeError):
@@ -63,8 +67,14 @@ class TestTransportAdapterContract:
                 self.workspace = workspace
                 self.kwargs = kwargs
 
-            def invoke(self, prompt, timeout=120, focused_context=None,
-                       correction_artifact=None, enable_skills=True):
+            def invoke(
+                self,
+                prompt,
+                timeout=120,
+                focused_context=None,
+                correction_artifact=None,
+                enable_skills=True,
+            ):
                 return InvocationResult(
                     success=True,
                     output=f"ran: {prompt}",
@@ -88,16 +98,24 @@ class TestTransportAdapterContract:
             def __init__(self, adapter_path, workspace=None, **kwargs):
                 pass
 
-            def invoke(self, prompt, timeout=120, focused_context=None,
-                       correction_artifact=None, enable_skills=True):
+            def invoke(
+                self,
+                prompt,
+                timeout=120,
+                focused_context=None,
+                correction_artifact=None,
+                enable_skills=True,
+            ):
                 return InvocationResult(
                     True,
-                    json.dumps({
-                        "timeout": timeout,
-                        "focused_context": focused_context,
-                        "correction_artifact": correction_artifact,
-                        "enable_skills": enable_skills,
-                    }),
+                    json.dumps(
+                        {
+                            "timeout": timeout,
+                            "focused_context": focused_context,
+                            "correction_artifact": correction_artifact,
+                            "enable_skills": enable_skills,
+                        }
+                    ),
                     "",
                     0,
                 )

@@ -3,6 +3,7 @@ exclude = [
     "workflow-engine/.pytest_cache",
     ".git",
     ".github",
+    ".venv",
     "__pycache__",
     "*.pyc",
     "build",

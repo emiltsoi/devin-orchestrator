@@ -109,14 +109,14 @@ Default performance thresholds (configurable):
 
 ```python
 # Duration thresholds (in seconds)
-stage_duration_warning: 300.0      # 5 minutes
-stage_duration_critical: 600.0     # 10 minutes
-workflow_duration_warning: 1800.0 # 30 minutes
-workflow_duration_critical: 3600.0 # 1 hour
+stage_duration_warning: 300.0  # 5 minutes
+stage_duration_critical: 600.0  # 10 minutes
+workflow_duration_warning: 1800.0  # 30 minutes
+workflow_duration_critical: 3600.0  # 1 hour
 
 # Failure rate thresholds (as percentage)
-failure_rate_warning: 0.1         # 10%
-failure_rate_critical: 0.25       # 25%
+failure_rate_warning: 0.1  # 10%
+failure_rate_critical: 0.25  # 25%
 ```
 
 ### Monitoring Workflow Completion
@@ -173,6 +173,7 @@ unresolved_alerts = monitoring.get_alerts(resolved=False)
 
 # Get alerts from the last 24 hours
 from datetime import datetime, timedelta
+
 since = datetime.now() - timedelta(hours=24)
 recent_alerts = monitoring.get_alerts(since=since)
 
@@ -203,10 +204,12 @@ def slack_alert_handler(alert):
         # Send to Slack webhook
         send_slack_message(f"[{alert.severity.value}] {alert.title}: {alert.message}")
 
+
 def email_alert_handler(alert):
     """Send critical alerts via email"""
     if alert.severity == AlertSeverity.CRITICAL:
         send_email_alert(alert.title, alert.message)
+
 
 # Add custom handlers
 monitoring.alert_manager.add_alert_handler(slack_alert_handler)
@@ -267,13 +270,13 @@ config = MonitoringConfig(
     max_alerts=2000,  # Store up to 2000 alerts
     enable_continuous_monitoring=True,
     performance_thresholds={
-        'stage_duration_warning': 600.0,  # 10 minutes
-        'stage_duration_critical': 1200.0,  # 20 minutes
-        'workflow_duration_warning': 3600.0,  # 1 hour
-        'workflow_duration_critical': 7200.0,  # 2 hours
-        'failure_rate_warning': 0.15,  # 15%
-        'failure_rate_critical': 0.30,  # 30%
-    }
+        "stage_duration_warning": 600.0,  # 10 minutes
+        "stage_duration_critical": 1200.0,  # 20 minutes
+        "workflow_duration_warning": 3600.0,  # 1 hour
+        "workflow_duration_critical": 7200.0,  # 2 hours
+        "failure_rate_warning": 0.15,  # 15%
+        "failure_rate_critical": 0.30,  # 30%
+    },
 )
 
 monitoring = MonitoringSystem(config)
@@ -459,14 +462,11 @@ monitoring.start()
 
 # Check system health
 health = monitoring.get_system_health()
-if health.overall_status != 'healthy':
+if health.overall_status != "healthy":
     print(f"Warning: System health is {health.overall_status}")
 
 # Check for critical alerts
-critical_alerts = monitoring.get_alerts(
-    severity=AlertSeverity.CRITICAL,
-    resolved=False
-)
+critical_alerts = monitoring.get_alerts(severity=AlertSeverity.CRITICAL, resolved=False)
 if critical_alerts:
     print(f"Found {len(critical_alerts)} critical alerts")
     for alert in critical_alerts:
@@ -482,27 +482,27 @@ monitoring.stop()
 import requests
 from monitoring import get_monitoring_system, AlertSeverity
 
+
 def webhook_alert_handler(alert):
     """Send alerts to webhook endpoint"""
     if alert.severity in [AlertSeverity.ERROR, AlertSeverity.CRITICAL]:
         payload = {
-            'alert_id': alert.alert_id,
-            'severity': alert.severity.value,
-            'title': alert.title,
-            'message': alert.message,
-            'timestamp': alert.timestamp.isoformat(),
-            'metadata': alert.metadata
+            "alert_id": alert.alert_id,
+            "severity": alert.severity.value,
+            "title": alert.title,
+            "message": alert.message,
+            "timestamp": alert.timestamp.isoformat(),
+            "metadata": alert.metadata,
         }
-        
+
         try:
             response = requests.post(
-                'https://your-webhook-url.com/alerts',
-                json=payload,
-                timeout=10
+                "https://your-webhook-url.com/alerts", json=payload, timeout=10
             )
             response.raise_for_status()
         except Exception as e:
             print(f"Failed to send webhook alert: {e}")
+
 
 # Set up monitoring with custom handler
 monitoring = get_monitoring_system()
@@ -516,11 +516,12 @@ monitoring.start()
 import time
 from monitoring import get_monitoring_system
 
+
 def periodic_health_check(interval_minutes=5):
     """Run periodic health checks and report status"""
     monitoring = get_monitoring_system()
     monitoring.start()
-    
+
     try:
         while True:
             health = monitoring.get_system_health()
@@ -528,19 +529,20 @@ def periodic_health_check(interval_minutes=5):
             print(f"Status: {health.overall_status}")
             print(f"Active Workflows: {health.active_workflows}")
             print(f"Recent Failures: {health.recent_failures}")
-            
+
             # Check for new alerts
             recent_alerts = monitoring.get_alerts(limit=5, resolved=False)
             if recent_alerts:
                 print(f"\nRecent Alerts ({len(recent_alerts)}):")
                 for alert in recent_alerts:
                     print(f"  [{alert.severity.value}] {alert.title}")
-            
+
             time.sleep(interval_minutes * 60)
-    
+
     except KeyboardInterrupt:
         print("\nStopping periodic health checks")
         monitoring.stop()
+
 
 if __name__ == "__main__":
     periodic_health_check(interval_minutes=5)
@@ -554,49 +556,53 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from monitoring import get_monitoring_system
 
+
 def analyze_monitoring_data():
     """Export and analyze monitoring data"""
     monitoring = get_monitoring_system()
-    
+
     # Export current monitoring data
-    output_path = Path(f"monitoring_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+    output_path = Path(
+        f"monitoring_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    )
     monitoring.export_monitoring_data(output_path)
-    
+
     # Load and analyze
     with open(output_path) as f:
         data = json.load(f)
-    
+
     print("=== Monitoring Data Analysis ===")
-    
+
     # System health analysis
-    if data['system_health']:
-        health = data['system_health']
+    if data["system_health"]:
+        health = data["system_health"]
         print(f"\nSystem Health: {health['overall_status']}")
         print(f"Active Workflows: {health['active_workflows']}")
         print(f"Recent Failures: {health['recent_failures']}")
-    
+
     # Alert analysis
-    alert_stats = data['alerts']['statistics']
+    alert_stats = data["alerts"]["statistics"]
     print(f"\nAlert Statistics:")
     print(f"Total: {alert_stats['total_alerts']}")
     print(f"Unresolved: {alert_stats['unresolved_alerts']}")
     print(f"By Severity: {alert_stats['by_severity']}")
-    
+
     # Health history analysis
-    if data['health_history']:
+    if data["health_history"]:
         print(f"\nHealth History ({len(data['health_history'])} snapshots):")
-        
+
         # Count status occurrences
         status_counts = {}
-        for snapshot in data['health_history']:
-            status = snapshot['overall_status']
+        for snapshot in data["health_history"]:
+            status = snapshot["overall_status"]
             status_counts[status] = status_counts.get(status, 0) + 1
-        
+
         print("Status Distribution:")
         for status, count in status_counts.items():
             print(f"  {status}: {count}")
-    
+
     print(f"\nData exported to: {output_path}")
+
 
 if __name__ == "__main__":
     analyze_monitoring_data()

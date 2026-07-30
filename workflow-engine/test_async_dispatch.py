@@ -17,8 +17,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import mcp_server  # noqa: E402
 from stateless_orchestrator import StatelessOrchestrator  # noqa: E402
+
+import mcp_server  # noqa: E402
 
 
 @pytest.fixture
@@ -53,7 +54,9 @@ devin_cli_path: {devin_cli.as_posix()}
 def test_continue_workflow_passes_gate_arguments(server, tmp_path):
     """C1 regression: continue_workflow must forward gate/feedback/timeout args."""
     with patch.object(
-        server, "_start_background_dispatch", return_value=[{"type": "text", "text": ""}]
+        server,
+        "_start_background_dispatch",
+        return_value=[{"type": "text", "text": ""}],
     ) as mock_dispatch:
         server.handle(
             {
@@ -87,7 +90,9 @@ def test_continue_workflow_passes_gate_arguments(server, tmp_path):
     assert extra["timeout"] == 120
 
 
-def test_start_background_dispatch_records_dispatcher_pid_for_continue(server, tmp_path):
+def test_start_background_dispatch_records_dispatcher_pid_for_continue(
+    server, tmp_path
+):
     """M8: for continue_workflow the dispatcher PID must be written before the ready wait."""
     session_id = "S-002"
     session_dir = server.config.session_work_dir / session_id
@@ -144,7 +149,10 @@ def test_cancel_workflow_does_not_cancel_completed_session(server, tmp_path):
             "jsonrpc": "2.0",
             "id": 3,
             "method": "tools/call",
-            "params": {"name": "cancel_workflow", "arguments": {"session_id": session_id}},
+            "params": {
+                "name": "cancel_workflow",
+                "arguments": {"session_id": session_id},
+            },
         }
     )
 
@@ -162,11 +170,15 @@ def test_cancel_workflow_skips_unrelated_process(server, tmp_path):
     (session_dir / "session.json").write_text(json.dumps({}), encoding="utf-8")
 
     pid_file = session_dir / "pid.txt"
-    pid_file.write_text(json.dumps({"pid": 99999, "create_time": time.time()}), encoding="utf-8")
+    pid_file.write_text(
+        json.dumps({"pid": 99999, "create_time": time.time()}), encoding="utf-8"
+    )
 
     orchestrator = StatelessOrchestrator(workspace=str(tmp_path / "workspace"))
     with patch.object(
-        orchestrator, "_get_process_commandline", return_value=(["notepad.exe"], "notepad.exe")
+        orchestrator,
+        "_get_process_commandline",
+        return_value=(["notepad.exe"], "notepad.exe"),
     ):
         with patch("stateless_orchestrator.subprocess.run") as mock_taskkill:
             result = orchestrator.cancel_workflow(session_id)
@@ -200,7 +212,10 @@ def test_kill_process_kills_matching_process(tmp_path):
     with patch.object(
         orchestrator,
         "_get_process_commandline",
-        return_value=(["python", "dispatch_workflow.py"], "python dispatch_workflow.py"),
+        return_value=(
+            ["python", "dispatch_workflow.py"],
+            "python dispatch_workflow.py",
+        ),
     ):
         with patch("stateless_orchestrator.os.name", "posix"):
             with patch("stateless_orchestrator.os.kill") as mock_kill:
@@ -222,7 +237,9 @@ def test_run_skill_is_background_dispatch(server, tmp_path):
     )
 
     with patch.object(
-        server, "_start_background_dispatch", return_value=[{"type": "text", "text": ""}]
+        server,
+        "_start_background_dispatch",
+        return_value=[{"type": "text", "text": ""}],
     ) as mock_dispatch:
         server.handle(
             {

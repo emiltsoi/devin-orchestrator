@@ -260,9 +260,7 @@ class TestDispatchDevinRelativePaths:
             assert data["exit_code"] == 0
             # The prompt file path passed to the subprocess must resolve under
             # work_dir, not CWD.
-            prompt_arg = captured["cmd"][
-                captured["cmd"].index("--prompt-file") + 1
-            ]
+            prompt_arg = captured["cmd"][captured["cmd"].index("--prompt-file") + 1]
             assert str(work_dir / "prompt.md") == prompt_arg
 
     def test_dispatch_devin_accepts_relative_output_file(self, monkeypatch):
@@ -440,6 +438,7 @@ class TestListSkillsMalformedYaml:
             result = server._tool_list_skills({})
 
             import json as _json
+
             data = _json.loads(result[0]["text"])
             names = [s["name"] for s in data]
             assert "good-skill" in names
@@ -465,6 +464,7 @@ class TestListWorkflowsMalformedYaml:
             result = server._tool_list_workflows({})
 
             import json as _json
+
             data = _json.loads(result[0]["text"])
             names = [w["name"] for w in data]
             assert "good" in names
@@ -483,9 +483,7 @@ class TestDispatchDevinOutputFileFromWorkDir:
             work_dir.mkdir(parents=True, exist_ok=True)
             (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
             # Write the output file inside work_dir
-            (work_dir / "out.log").write_text(
-                "OUTPUT-CONTENT", encoding="utf-8"
-            )
+            (work_dir / "out.log").write_text("OUTPUT-CONTENT", encoding="utf-8")
             # Also write a same-named file at CWD to ensure it is NOT used.
             # (Don't actually pollute CWD; the absence at CWD plus presence
             # under work_dir proves the read resolves against work_dir.)

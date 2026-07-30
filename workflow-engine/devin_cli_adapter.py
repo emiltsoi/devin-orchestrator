@@ -9,10 +9,10 @@ when their description matches prompt content.
 """
 
 import contextlib
+import json
 import logging
 import os
 import re
-import signal
 import subprocess
 import tempfile
 import threading
@@ -148,9 +148,7 @@ class DevinCliAdapter(TransportAdapter):
             if legacy_file.exists():
                 try:
                     content = legacy_file.read_text(encoding="utf-8")
-                    description_match = re.search(
-                        r'description:\s*"([^"]+)"', content
-                    )
+                    description_match = re.search(r'description:\s*"([^"]+)"', content)
                     if description_match:
                         skills[skill_dir.name] = {
                             "description": description_match.group(1),
@@ -194,15 +192,9 @@ class DevinCliAdapter(TransportAdapter):
                         )
                         sidecar = {}
 
-                name = (
-                    frontmatter.get("name")
-                    or sidecar.get("name")
-                    or skill_dir.name
-                )
+                name = frontmatter.get("name") or sidecar.get("name") or skill_dir.name
                 description = (
-                    frontmatter.get("description")
-                    or sidecar.get("description")
-                    or ""
+                    frontmatter.get("description") or sidecar.get("description") or ""
                 )
 
                 if not isinstance(name, str) or not name:
@@ -229,9 +221,7 @@ class DevinCliAdapter(TransportAdapter):
                 }
             except Exception as e:
                 # Log warning and skip skills that fail to load
-                logger.warning(
-                    "Failed to load v1 skill from %s: %s", skill_dir, e
-                )
+                logger.warning("Failed to load v1 skill from %s: %s", skill_dir, e)
                 continue
 
         return skills
@@ -258,9 +248,7 @@ class DevinCliAdapter(TransportAdapter):
             return {}
         return loaded if isinstance(loaded, dict) else {}
 
-    def _inject_skills(
-        self, prompt: str, skill_filter: list[str] | None = None
-    ) -> str:
+    def _inject_skills(self, prompt: str, skill_filter: list[str] | None = None) -> str:
         """
         Inject skills into prompt based on description matching.
 
@@ -277,9 +265,7 @@ class DevinCliAdapter(TransportAdapter):
         injected_skills = []
 
         eligible_names = (
-            set(skill_filter)
-            if skill_filter is not None
-            else set(self.skills.keys())
+            set(skill_filter) if skill_filter is not None else set(self.skills.keys())
         )
 
         # When a skill_filter is provided, the caller explicitly selected skills
@@ -387,11 +373,11 @@ class DevinCliAdapter(TransportAdapter):
             try:
                 # Set restrictive permissions (0o600 on Unix, owner-only on Windows)
                 # On Windows, we use the most restrictive permissions available
-                if hasattr(os, 'chmod'):
+                if hasattr(os, "chmod"):
                     with contextlib.suppress(OSError, AttributeError):
                         os.chmod(fd, 0o600)
 
-                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(prompt)
                 prompt_file = Path(temp_path)
             except OSError:
@@ -419,7 +405,7 @@ class DevinCliAdapter(TransportAdapter):
         self,
         cmd: list[str],
         timeout: int,
-        prompt_file: Path,
+        _prompt_file: Path,
     ) -> InvocationResult:
         """Run devin-cli with subprocess.run and return the result."""
         try:
@@ -451,10 +437,7 @@ class DevinCliAdapter(TransportAdapter):
             return InvocationResult(
                 success=False,
                 output="",
-                error=(
-                    f"Failed to execute devin-cli "
-                    f"({type(e).__name__}): {e}"
-                ),
+                error=(f"Failed to execute devin-cli ({type(e).__name__}): {e}"),
                 exit_code=-1,
             )
         except Exception as e:
@@ -489,7 +472,7 @@ class DevinCliAdapter(TransportAdapter):
         self,
         cmd: list[str],
         timeout: int,
-        prompt_file: Path,
+        _prompt_file: Path,
         cancel_token: Path,
     ) -> InvocationResult:
         """Run devin-cli with Popen and support cancellation via cancel_token."""
@@ -579,10 +562,7 @@ class DevinCliAdapter(TransportAdapter):
             return InvocationResult(
                 success=False,
                 output="",
-                error=(
-                    f"Failed to execute devin-cli "
-                    f"({type(e).__name__}): {e}"
-                ),
+                error=(f"Failed to execute devin-cli ({type(e).__name__}): {e}"),
                 exit_code=-1,
             )
         except Exception as e:

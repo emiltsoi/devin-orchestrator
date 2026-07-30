@@ -110,16 +110,12 @@ def test_skill_schema(skill_dir: Path, skill_name: str) -> None:
         assert "description" in item, (
             f"{yaml_path} checklist item missing 'description'"
         )
-        assert isinstance(item["id"], str), (
-            f"{yaml_path} checklist id must be a string"
-        )
+        assert isinstance(item["id"], str), f"{yaml_path} checklist id must be a string"
         assert isinstance(item["description"], str), (
             f"{yaml_path} checklist description must be a string"
         )
         ids.append(item["id"])
-    assert len(ids) == len(set(ids)), (
-        f"{yaml_path} checklist ids are not unique: {ids}"
-    )
+    assert len(ids) == len(set(ids)), f"{yaml_path} checklist ids are not unique: {ids}"
 
     # terminal_state is a string and either "complete" or an existing skill name
     terminal_state = definition["terminal_state"]
@@ -130,7 +126,9 @@ def test_skill_schema(skill_dir: Path, skill_name: str) -> None:
         target_skill_dir = SKILLS_DIR / terminal_state
         target_yaml = target_skill_dir / f"{terminal_state}.yaml"
         target_md = target_skill_dir / f"{terminal_state}.md"
-        assert target_skill_dir.is_dir() and target_yaml.is_file() and target_md.is_file(), (
+        assert (
+            target_skill_dir.is_dir() and target_yaml.is_file() and target_md.is_file()
+        ), (
             f"{yaml_path} terminal_state {terminal_state!r} must be 'complete' "
             f"or a valid subdirectory skill name"
         )
@@ -151,13 +149,17 @@ def test_skill_schema(skill_dir: Path, skill_name: str) -> None:
 
 def test_new_skills_have_attribution() -> None:
     """Skills absorbed from obra/superpowers must retain their attribution note."""
-    for skill_name in ("using-devin-orchestrator", "writing-skills", "receiving-code-review"):
+    for skill_name in (
+        "using-devin-orchestrator",
+        "writing-skills",
+        "receiving-code-review",
+    ):
         md_path = SKILLS_DIR / skill_name / f"{skill_name}.md"
         assert md_path.is_file(), f"{md_path} not found"
         content = md_path.read_text(encoding="utf-8")
-        assert (
-            "obra/superpowers" in content and "MIT license" in content
-        ), f"{md_path} is missing the obra/superpowers attribution note"
+        assert "obra/superpowers" in content and "MIT license" in content, (
+            f"{md_path} is missing the obra/superpowers attribution note"
+        )
 
 
 def test_at_least_one_subdir_skill() -> None:

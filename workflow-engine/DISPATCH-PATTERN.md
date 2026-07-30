@@ -27,17 +27,11 @@ from devin_cli_adapter import DevinCliAdapter
 # Initialize skill invoker with SWE-1.6 model
 devin_cli_path = r"C:\Users\<username>\AppData\Local\devin\cli\bin\devin.exe"
 skill_invoker = SkillInvoker(
-    harness_root=harness_root,
-    devin_cli_path=devin_cli_path,
-    model="swe-1.6"
+    harness_root=harness_root, devin_cli_path=devin_cli_path, model="swe-1.6"
 )
 
 # Prepare context
-context = {
-    "session_id": session_id,
-    "stage": "step_1",
-    "skill": skill_name
-}
+context = {"session_id": session_id, "stage": "step_1", "skill": skill_name}
 
 # Dispatch coder with ponytail skill (is_reviewer=False)
 result = skill_invoker.invoke_skill(
@@ -45,7 +39,7 @@ result = skill_invoker.invoke_skill(
     context=context,
     workspace=str(session_dir),
     focused_context=injected_context,
-    is_reviewer=False  # Triggers ponytail skill
+    is_reviewer=False,  # Triggers ponytail skill
 )
 ```
 
@@ -64,17 +58,11 @@ from devin_cli_adapter import DevinCliAdapter
 # Initialize skill invoker with SWE-1.6 model
 devin_cli_path = r"C:\Users\<username>\AppData\Local\devin\cli\bin\devin.exe"
 skill_invoker = SkillInvoker(
-    harness_root=harness_root,
-    devin_cli_path=devin_cli_path,
-    model="swe-1.6"
+    harness_root=harness_root, devin_cli_path=devin_cli_path, model="swe-1.6"
 )
 
 # Prepare context
-context = {
-    "session_id": session_id,
-    "stage": "step_1",
-    "skill": skill_name
-}
+context = {"session_id": session_id, "stage": "step_1", "skill": skill_name}
 
 # Dispatch reviewer with swe-compliance skill (is_reviewer=True)
 result = skill_invoker.invoke_skill(
@@ -82,7 +70,7 @@ result = skill_invoker.invoke_skill(
     context=context,
     workspace=str(session_dir),
     focused_context=injected_context,
-    is_reviewer=True  # Triggers swe-compliance skill
+    is_reviewer=True,  # Triggers swe-compliance skill
 )
 ```
 
@@ -113,7 +101,9 @@ from guardrails import Guardrails
 verification = Guardrails.verify_compliance_block(block_verdict, file_path)
 if not verification["verified"]:
     # Compliance reviewer hallucinated - escalate to human
-    escalate_to_human(f"Compliance BLOCK could not be verified: {verification['notes']}")
+    escalate_to_human(
+        f"Compliance BLOCK could not be verified: {verification['notes']}"
+    )
 ```
 
 ## Complete Dispatch Flow
@@ -130,7 +120,7 @@ coder_result = skill_invoker.invoke_skill(
     context=context,
     workspace=str(session_dir),
     focused_context=injected_context,
-    is_reviewer=False
+    is_reviewer=False,
 )
 
 # 3. Validate structural floor
@@ -145,12 +135,14 @@ reviewer_result = skill_invoker.invoke_skill(
     context=context,
     workspace=str(session_dir),
     focused_context=injected_context,
-    is_reviewer=True
+    is_reviewer=True,
 )
 
 # 5. If reviewer BLOCK, independently verify
 if reviewer_result.verdict == "BLOCK":
-    verification = Guardrails.verify_compliance_block(reviewer_result.output, artifact_path)
+    verification = Guardrails.verify_compliance_block(
+        reviewer_result.output, artifact_path
+    )
     if not verification["verified"]:
         escalate_to_human("Compliance BLOCK could not be verified")
 

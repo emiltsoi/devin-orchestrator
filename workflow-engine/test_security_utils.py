@@ -429,9 +429,7 @@ class TestValidateWorkspacePath:
             base = Path(tmpdir) / "base"
             base.mkdir()
             with pytest.raises(InvalidInputError):
-                validate_workspace_path(
-                    f"{base}\x00evil", base_allowed_dir=base
-                )
+                validate_workspace_path(f"{base}\x00evil", base_allowed_dir=base)
 
 
 class TestGetSecretFromEnv:

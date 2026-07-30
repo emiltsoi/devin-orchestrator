@@ -137,7 +137,7 @@ config = ConfigLoader.load()
 skill_invoker = SkillInvoker(
     Path("skills"),
     devin_cli_path=config.devin_cli_path,  # from ${DEVIN_CLI_PATH} or config.yaml
-    model=config.default_model,            # from ${DEVIN_DEFAULT_MODEL} or config.yaml
+    model=config.default_model,  # from ${DEVIN_DEFAULT_MODEL} or config.yaml
     permission_mode=config.default_permission_mode,
 )
 
@@ -185,7 +185,9 @@ Arbiter synthesizes the 4 persona outputs into a structured verdict.
 The following is an **illustrative pseudocode sketch** — not a runnable implementation — showing how persona outputs map onto the verdict schema (`top_risks`, `required_checks`, `missing_evidence`, `verified_sources`, `next_actions`). A real implementation parses each persona's structured output and projects the relevant fields into the verdict.
 
 ```python
-def synthesize_verdict(advocate_result, skeptic_result, oracle_result, contrarian_result):
+def synthesize_verdict(
+    advocate_result, skeptic_result, oracle_result, contrarian_result
+):
     """Pseudocode sketch — maps persona outputs onto the verdict schema.
 
     The verdict schema (see Step 3) is:

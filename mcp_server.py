@@ -21,7 +21,6 @@ import argparse
 import contextlib
 import json
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -59,7 +58,6 @@ from security_utils import (  # noqa: E402
     InvalidInputError,
     PathTraversalError,
     validate_path_safe,
-    validate_session_id,
     validate_skill_name,
     validate_workflow_name,
     validate_workspace_path,
@@ -81,7 +79,9 @@ class McpServer:
     MIN_TIMEOUT_SECONDS = 1
     MAX_TIMEOUT_SECONDS = 3600
 
-    DEFAULT_MESSAGE_LOG = Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+    DEFAULT_MESSAGE_LOG = (
+        Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+    )
 
     def __init__(
         self, workspace: str | None = None, message_log_path: str | None = None
@@ -121,17 +121,13 @@ class McpServer:
             self._message_log_path = None
             self._message_log = None
 
-    def _log_message(
-        self, direction: str, payload: dict[str, Any] | bytes
-    ) -> None:
+    def _log_message(self, direction: str, payload: dict[str, Any] | bytes) -> None:
         """Append a JSON-RPC message (or raw bytes) to the message log."""
         if self._message_log is None:
             return
         try:
             if isinstance(payload, bytes):
-                message: Any = {
-                    "_raw": payload.decode("utf-8", errors="replace")
-                }
+                message: Any = {"_raw": payload.decode("utf-8", errors="replace")}
             else:
                 message = payload
             entry = {
@@ -206,10 +202,22 @@ class McpServer:
                             "type": "string",
                             "description": "Workspace directory where Devin runs and writes outputs",
                         },
-                        "model": {"type": "string", "description": "Model to use for the worker (e.g. swe-1.6). Overrides default routing."},
-                        "agent": {"type": "string", "description": "Optional agent identifier or override."},
-                        "phase": {"type": "string", "description": "Optional workflow phase context."},
-                        "output_file": {"type": "string", "description": "Path where the worker writes a structured execution report."},
+                        "model": {
+                            "type": "string",
+                            "description": "Model to use for the worker (e.g. swe-1.6). Overrides default routing.",
+                        },
+                        "agent": {
+                            "type": "string",
+                            "description": "Optional agent identifier or override.",
+                        },
+                        "phase": {
+                            "type": "string",
+                            "description": "Optional workflow phase context.",
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Path where the worker writes a structured execution report.",
+                        },
                         "focused_context": {
                             "type": "array",
                             "items": {"type": "string"},
@@ -630,13 +638,22 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         # Check rate limit for this tool
         with self._tool_call_history_lock:
             if not self._check_rate_limit(name):
-                content = [self._text_content(f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds.")]
+                content = [
+                    self._text_content(
+                        f"Rate limit exceeded for tool '{name}'. Maximum {self.RATE_LIMIT_MAX_CALLS} calls per {self.RATE_LIMIT_WINDOW_SECONDS} seconds."
+                    )
+                ]
                 is_error = True
             else:
                 try:
                     content = self._run_tool(name, arguments)
                     is_error = False
-                except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
+                except (
+                    FileNotFoundError,
+                    ValueError,
+                    InvalidInputError,
+                    PathTraversalError,
+                ) as e:
                     content = [self._text_content(f"Error: {e}")]
                     is_error = True
                 except (KeyError, TypeError) as e:
@@ -664,7 +681,8 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         current_time = time.time()
         # Clean up old calls outside the time window
         self._tool_call_history[tool_name] = [
-            timestamp for timestamp in self._tool_call_history[tool_name]
+            timestamp
+            for timestamp in self._tool_call_history[tool_name]
             if current_time - timestamp < self.RATE_LIMIT_WINDOW_SECONDS
         ]
 
@@ -693,13 +711,19 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
             return self.DEFAULT_TIMEOUT_SECONDS
 
         if not isinstance(timeout, int):
-            raise InvalidInputError(f"Timeout must be an integer, got {type(timeout).__name__}")
+            raise InvalidInputError(
+                f"Timeout must be an integer, got {type(timeout).__name__}"
+            )
 
         if timeout < self.MIN_TIMEOUT_SECONDS:
-            raise InvalidInputError(f"Timeout must be at least {self.MIN_TIMEOUT_SECONDS} seconds")
+            raise InvalidInputError(
+                f"Timeout must be at least {self.MIN_TIMEOUT_SECONDS} seconds"
+            )
 
         if timeout > self.MAX_TIMEOUT_SECONDS:
-            raise InvalidInputError(f"Timeout cannot exceed {self.MAX_TIMEOUT_SECONDS} seconds")
+            raise InvalidInputError(
+                f"Timeout cannot exceed {self.MAX_TIMEOUT_SECONDS} seconds"
+            )
 
         return timeout
 
@@ -838,7 +862,10 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
             return [
                 self._text_content(
                     json.dumps(
-                        {"success": False, "error": f"Failed to write dispatch args: {e}"},
+                        {
+                            "success": False,
+                            "error": f"Failed to write dispatch args: {e}",
+                        },
                         indent=2,
                     )
                 )
@@ -967,9 +994,9 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
                 yaml_file = entry / f"{entry.name}.yaml"
                 if entry.is_dir() and yaml_file.exists():
                     try:
-                        data = yaml.safe_load(
-                            yaml_file.read_text(encoding="utf-8")
-                        ) or {}
+                        data = (
+                            yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+                        )
                     except yaml.YAMLError as e:
                         # Skip malformed skill YAML files so a single corrupt
                         # file does not crash the listing operation.
@@ -1050,7 +1077,9 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         use_cases_file = workflows_dir / "use-cases.yaml"
         if use_cases_file.exists():
             try:
-                use_cases_data = yaml.safe_load(use_cases_file.read_text(encoding="utf-8")) or {}
+                use_cases_data = (
+                    yaml.safe_load(use_cases_file.read_text(encoding="utf-8")) or {}
+                )
                 for uc in use_cases_data.get("use_cases", []):
                     wf_name = uc.get("workflow")
                     if not wf_name:
@@ -1072,9 +1101,7 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         if workflows_dir.exists():
             for manifest in sorted(workflows_dir.glob("*.manifest.yaml")):
                 try:
-                    data = yaml.safe_load(
-                        manifest.read_text(encoding="utf-8")
-                    ) or {}
+                    data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
                 except yaml.YAMLError as e:
                     # Skip malformed workflow manifests so a single corrupt
                     # file does not crash the listing operation.
@@ -1262,9 +1289,9 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
                 cwd=str(work_dir),
             )
         except subprocess.TimeoutExpired:
-            return [self._text_content(
-                f"Devin dispatch timed out after {timeout} seconds."
-            )]
+            return [
+                self._text_content(f"Devin dispatch timed out after {timeout} seconds.")
+            ]
         output_text = result.stdout
         if validated_output_file is not None and validated_output_file.exists():
             output_text = validated_output_file.read_text(encoding="utf-8")
@@ -1282,7 +1309,9 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
             "exit_code": result.returncode,
             "output": output_text or result.stdout,
             "error": result.stderr or None,
-            "output_file": str(validated_output_file) if validated_output_file is not None else None,
+            "output_file": str(validated_output_file)
+            if validated_output_file is not None
+            else None,
             "artifact_paths": artifact_paths,
             "workspace": str(work_dir),
         }
@@ -1315,7 +1344,9 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
             try:
                 workspace = resolve_session(self.config.session_work_dir, session_id)
             except (FileNotFoundError, ValueError) as e:
-                return [self._text_content(f"Failed to resolve session {session_id}: {e}")]
+                return [
+                    self._text_content(f"Failed to resolve session {session_id}: {e}")
+                ]
             base = Path(workspace)
         else:
             # Without a session_id, use the caller-supplied workspace (or the
@@ -1500,9 +1531,11 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         """
         resume = arguments.get("resume")
         if not isinstance(resume, dict):
-            return [self._text_content(
-                "resume argument must be the resume object returned by a previous workflow tool"
-            )]
+            return [
+                self._text_content(
+                    "resume argument must be the resume object returned by a previous workflow tool"
+                )
+            ]
 
         tool_name = resume.get("tool")
         tool_args = dict(resume.get("arguments", {}))
@@ -1516,7 +1549,9 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
 
         # The resume object uses MCP tool names like mcp0_gate_decision; strip
         # the prefix to find the internal handler.
-        internal_name = tool_name[len("mcp0_"):] if tool_name.startswith("mcp0_") else tool_name
+        internal_name = (
+            tool_name[len("mcp0_") :] if tool_name.startswith("mcp0_") else tool_name
+        )
         method = getattr(self, f"_tool_{internal_name}", None)
         if not callable(method):
             return [self._text_content(f"Unknown resume tool: {tool_name}")]
@@ -1528,7 +1563,11 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
         then = resume.get("then")
         if internal_name == "gate_decision" and isinstance(then, dict):
             then_tool = then.get("tool", "")
-            then_name = then_tool[len("mcp0_"):] if then_tool.startswith("mcp0_") else then_tool
+            then_name = (
+                then_tool[len("mcp0_") :]
+                if then_tool.startswith("mcp0_")
+                else then_tool
+            )
             then_method = getattr(self, f"_tool_{then_name}", None)
             if callable(then_method):
                 then_args = dict(then.get("arguments", {}))
@@ -1628,29 +1667,33 @@ Use focused_context to pass exact file paths. Use output_file to request a struc
             "systematic-debugging",
         }
         if skill_name not in process_skills:
-            return [self._text_content(json.dumps(
-                {
-                    "success": False,
-                    "error": (
-                        f"run_skill is not the right tool for '{skill_name}'. "
-                        "It is intended for process skills only. "
-                        "For implementation use `execute` (intent=implement) or "
-                        "`run_workflow` with workflow=superpower. For review use "
-                        "`execute` (intent=review) or `run_workflow` with "
-                        "workflow=code_review. For investigation use `execute` "
-                        "(intent=investigate) or `run_workflow` with workflow=rca. "
-                        "For one-off focused tasks use `dispatch_devin`."
-                    ),
-                    "skill": skill_name,
-                    "allowed_skills": list(process_skills),
-                    "suggested_tools": [
-                        "execute",
-                        "run_workflow",
-                        "dispatch_devin",
-                    ],
-                },
-                indent=2,
-            ))]
+            return [
+                self._text_content(
+                    json.dumps(
+                        {
+                            "success": False,
+                            "error": (
+                                f"run_skill is not the right tool for '{skill_name}'. "
+                                "It is intended for process skills only. "
+                                "For implementation use `execute` (intent=implement) or "
+                                "`run_workflow` with workflow=superpower. For review use "
+                                "`execute` (intent=review) or `run_workflow` with "
+                                "workflow=code_review. For investigation use `execute` "
+                                "(intent=investigate) or `run_workflow` with workflow=rca. "
+                                "For one-off focused tasks use `dispatch_devin`."
+                            ),
+                            "skill": skill_name,
+                            "allowed_skills": list(process_skills),
+                            "suggested_tools": [
+                                "execute",
+                                "run_workflow",
+                                "dispatch_devin",
+                            ],
+                        },
+                        indent=2,
+                    )
+                )
+            ]
 
         request = arguments["request"]
         return self._start_background_dispatch(
