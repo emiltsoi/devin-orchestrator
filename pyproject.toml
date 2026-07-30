@@ -93,7 +93,7 @@ exclude = [
 packages = ["devin_orchestrator"]
 
 [tool.mypy]
-files = ["."]
+files = ["devin_orchestrator", "tests", "install.py", "install_automated.py"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
