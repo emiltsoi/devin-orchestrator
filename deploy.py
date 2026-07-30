@@ -6,6 +6,7 @@ Works on Linux, macOS, and Windows (with python3 / py).
 """
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -18,8 +19,14 @@ from devin_orchestrator import __version__
 from install import install as do_install
 from register_mcp import (
     _launcher_path,
+)
+from register_mcp import (
     list_status as do_list_status,
+)
+from register_mcp import (
     register as do_register,
+)
+from register_mcp import (
     remove as do_remove,
 )
 
@@ -30,7 +37,7 @@ def _mcp_request(method: str, params: dict, request_id: int = 1) -> bytes:
         {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params},
         separators=(",", ":"),
     ).encode("utf-8")
-    return f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8") + body
+    return f"Content-Length: {len(body)}\r\n\r\n".encode() + body
 
 
 def _parse_mcp_response(data: bytes) -> dict | None:
@@ -77,10 +84,8 @@ def smoke_test(launcher: str, timeout: int = 10) -> dict | None:
 
 def _on_rmtree_error(func, path, exc_info):
     """Retry removal after making a path writable (Windows-friendly)."""
-    try:
+    with contextlib.suppress(OSError, NotImplementedError):
         os.chmod(path, stat.S_IWRITE)
-    except (OSError, NotImplementedError):
-        pass
     func(path)
 
 

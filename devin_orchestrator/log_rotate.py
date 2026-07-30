@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -29,26 +30,20 @@ def rotate_if_needed(
     # Remove the oldest backup if it exists.
     oldest = path.parent / f"{path.name}.{backup_count}"
     if oldest.exists():
-        try:
+        with contextlib.suppress(OSError):
             oldest.unlink()
-        except OSError:
-            pass
 
     # Shift existing backups up by one.
     for i in range(backup_count - 1, 0, -1):
         src = path.parent / f"{path.name}.{i}"
         dst = path.parent / f"{path.name}.{i + 1}"
         if src.exists():
-            try:
+            with contextlib.suppress(OSError):
                 src.rename(dst)
-            except OSError:
-                pass
 
     # Rotate the active log to .1
-    try:
+    with contextlib.suppress(OSError):
         path.rename(path.parent / f"{path.name}.1")
-    except OSError:
-        pass
 
 
 def cleanup_old_logs(

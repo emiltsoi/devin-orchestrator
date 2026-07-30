@@ -137,12 +137,18 @@ class SubprocessArtifactRunner:
             exit_code = result.returncode
             run_error = None
         except subprocess.TimeoutExpired as e:
-            stdout = e.stdout or ""
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode("utf-8", errors="replace")
-            stderr = e.stderr or ""
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode("utf-8", errors="replace")
+            stdout = ""
+            if e.stdout is not None:
+                if isinstance(e.stdout, bytes):
+                    stdout = e.stdout.decode("utf-8", errors="replace")
+                else:
+                    stdout = e.stdout
+            stderr = ""
+            if e.stderr is not None:
+                if isinstance(e.stderr, bytes):
+                    stderr = e.stderr.decode("utf-8", errors="replace")
+                else:
+                    stderr = e.stderr
             stderr += f"\n\nTimed out after {timeout} seconds"
             exit_code = -1
             run_error = f"Timeout after {timeout} seconds"

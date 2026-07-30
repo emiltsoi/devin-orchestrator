@@ -7,6 +7,7 @@ before mutating it.
 """
 
 import argparse
+import contextlib
 import glob
 import json
 import os
@@ -156,10 +157,8 @@ def _prune_backups(backups_dir: Path, keep: int) -> None:
     pattern = str(backups_dir / "*.bak")
     backups = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     for old in backups[keep:]:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(old)
-        except OSError:
-            pass
 
 
 def _backup(path: Path, keep_backups: int = 10) -> Path:
@@ -246,7 +245,7 @@ def register(
             servers["devin-orchestrator"] = new
             _save(path, target["format"], data)
 
-        results.append((target, True if not dry_run and (not exists or changed) else False))
+        results.append((target, bool(not dry_run and (not exists or changed))))
     return results
 
 
