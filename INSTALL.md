@@ -1,3 +1,9 @@
+# Installation Guide (deprecated)
+
+> This guide has been replaced by the cross-platform one-click deploy instructions in [DEPLOY.md](DEPLOY.md).
+>
+> For troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 # Installation Guide
 
 **See Also:**

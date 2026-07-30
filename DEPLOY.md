@@ -110,6 +110,16 @@ that already exists (or creates the default fallback).
 - **claude:** `~/.claude.json` or `claude_desktop_config.json` under appdata
 - **hermes:** `~/.hermes/config.yaml` or `%APPDATA%\hermes\config.yaml`
 
+## Other useful commands
+
+```bash
+python3 deploy.py --version
+python3 deploy.py --smoke-only
+python3 deploy.py --uninstall --dry-run
+python3 deploy.py --keep-backups 5
+python3 register_mcp.py --snippet
+```
+
 ## Notes
 
 - **Python:** `install.py` and `register_mcp.py` require Python 3.10 or newer.
@@ -118,6 +128,10 @@ that already exists (or creates the default fallback).
 - **Python version on Windows:** `deploy.py` / `install.py` use the interpreter
   that runs them (`py` / `python` / `python3`).  Use `--python` if you want to
   pin a different interpreter in the launcher.
+
+## Troubleshooting
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common install, PATH, PyYAML, stale process, and smoke-test issues.
 
 ## After deploying
 

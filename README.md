@@ -4,12 +4,12 @@ A generic, harness-agnostic framework for AI-assisted software development, buil
 
 **See Also:**
 - [DEPLOY.md](DEPLOY.md) - One-click cross-platform deployment (recommended)
-- [INSTALL.md](INSTALL.md) - Installation and configuration details
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment model and workflow updates
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
-- [skills/README.md](skills/README.md) - Skills library documentation
-- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Agent-facing orchestration protocol
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common install and runtime issues
 - [MCP-CLIENTS.md](MCP-CLIENTS.md) - MCP client configuration
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Tests, lint, build, and release process
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
+- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Agent-facing orchestration protocol
+- [skills/README.md](skills/README.md) - Skills library documentation
 
 ## Quick Start
 
@@ -34,6 +34,15 @@ py deploy.py
 ```
 
 This installs the package to `~/.devin-orchestrator/` and updates all known agent MCP configs to use the launcher. Then restart your agent/IDE.
+
+You can also install from PyPI and register manually:
+
+```bash
+pip install devin-orchestrator
+python3 -m devin_orchestrator.mcp_server --version
+# from the repo
+python3 register_mcp.py
+```
 
 - [DEPLOY.md](DEPLOY.md) — dry-run mode, manual steps, Windows/macOS notes.
 - [MCP-CLIENTS.md](MCP-CLIENTS.md) — per-agent configuration examples.
