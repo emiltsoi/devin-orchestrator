@@ -10,7 +10,7 @@ from pathlib import Path
 from devin_orchestrator.health_check import health
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Print devin-orchestrator health status as JSON."
     )
@@ -20,7 +20,7 @@ def main() -> int:
         default=None,
         help="Optional workflow engine work directory to check sessions",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     report = health(work_dir=args.work_dir)
     print(json.dumps(report, indent=2, default=str))
