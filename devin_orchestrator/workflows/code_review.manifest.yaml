@@ -1,0 +1,44 @@
+name: code_review
+description: "Code Review workflow - review-only workflow for evaluating code changes"
+version: 1.0.0
+schema_version: 1
+session_shape: code_review
+
+stages:
+  - step: 0
+    name: load_code
+    skill: requesting-code-review
+    description: "Load code diff and files to review"
+    required_artifacts: [code_diff, files_to_review]
+    output_artifacts: [code_context.md]
+    gate: none
+
+  - step: 1
+    name: review_spec_compliance
+    skill: requesting-code-review
+    description: "Review code against spec and requirements"
+    required_artifacts: [code_context.md, review_criteria]
+    output_artifacts: [spec_review.md]
+    gate: none
+
+  - step: 2
+    name: review_code_quality
+    skill: swe-compliance
+    description: "Review code quality, style, and best practices"
+    required_artifacts: [code_context.md, spec_review.md]
+    output_artifacts: [quality_review.md]
+    gate: none
+
+  - step: 3
+    name: compile_findings
+    skill: requesting-code-review
+    description: "Compile review findings by severity"
+    required_artifacts: [spec_review.md, quality_review.md]
+    output_artifacts: [review_findings.md]
+    gate: g1_approval_decision
+
+gates:
+  - id: g1_approval_decision
+    name: Approval Decision
+    description: "Human approval decision (approve, request changes, or block)"
+    type: human

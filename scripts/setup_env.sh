@@ -73,7 +73,7 @@ test_installation() {
         exit 1
     fi
 
-    local required_dirs=("skills" "workflows" "workflow-engine")
+    local required_dirs=("skills" "workflows" "devin_orchestrator")
     for dir in "${required_dirs[@]}"; do
         if [ ! -d "$install_path/$dir" ]; then
             print_color "$RED" "✗ Required directory not found: $dir"
@@ -107,7 +107,7 @@ update_config_file() {
     sed -i.bak "s|global_root:.*|global_root: $install_path|g" "$config_path"
     sed -i.bak "s|skills_dir:.*|skills_dir: $install_path/skills|g" "$config_path"
     sed -i.bak "s|workflows_dir:.*|workflows_dir: $install_path/workflows|g" "$config_path"
-    sed -i.bak "s|workflow_engine_dir:.*|workflow_engine_dir: $install_path/workflow-engine|g" "$config_path"
+    sed -i.bak "s|workflow_engine_dir:.*|workflow_engine_dir: $install_path/devin_orchestrator|g" "$config_path"
     sed -i.bak "s|session_work_dir:.*|session_work_dir: $install_path/work|g" "$config_path"
 
     # Update Devin CLI path if provided
@@ -234,7 +234,7 @@ main() {
     set_env_var "DEVIN_ORCHESTRATOR_ROOT" "$GLOBAL_INSTALL_PATH" "$PERSIST"
     set_env_var "DEVIN_ORCHESTRATOR_SKILLS_DIR" "$GLOBAL_INSTALL_PATH/skills" "$PERSIST"
     set_env_var "DEVIN_ORCHESTRATOR_WORKFLOWS_DIR" "$GLOBAL_INSTALL_PATH/workflows" "$PERSIST"
-    set_env_var "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR" "$GLOBAL_INSTALL_PATH/workflow-engine" "$PERSIST"
+    set_env_var "DEVIN_ORCHESTRATOR_WORKFLOW_ENGINE_DIR" "$GLOBAL_INSTALL_PATH/devin_orchestrator" "$PERSIST"
     set_env_var "DEVIN_ORCHESTRATOR_WORK_DIR" "$GLOBAL_INSTALL_PATH/work" "$PERSIST"
 
     if [ -n "$DEVIN_CLI_PATH" ]; then

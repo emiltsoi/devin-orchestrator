@@ -13,9 +13,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
-
-from stateless_orchestrator import StatelessOrchestrator
+from devin_orchestrator.stateless_orchestrator import StatelessOrchestrator
 
 
 def _make_orchestrator_with_workspace(tmpdir: str) -> StatelessOrchestrator:
@@ -61,9 +59,7 @@ class TestRunWorkflowManifestInjection:
                 "description: evil\n", encoding="utf-8"
             )
 
-            result = orchestrator.run_workflow(
-                "../work/SESSION-001/evil", "do bad"
-            )
+            result = orchestrator.run_workflow("../work/SESSION-001/evil", "do bad")
 
             assert result["success"] is False
             # The error must come from validation, not from a successful
@@ -132,7 +128,10 @@ class TestRunWorkflowMalformedManifest:
 
     def test_load_manifest_raises_workflow_manifest_error(self):
         """load_manifest must raise WorkflowManifestError on malformed YAML."""
-        from deterministic_tools import WorkflowManifestError, load_manifest
+        from devin_orchestrator.deterministic_tools import (
+            WorkflowManifestError,
+            load_manifest,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             bad = Path(tmpdir) / "bad.manifest.yaml"
@@ -200,17 +199,15 @@ class TestRunWorkflowMalformedManifestStructure:
     def test_validate_manifest_structure_raises_workflow_manifest_error(self):
         """_validate_manifest_structure must raise WorkflowManifestError on
         missing required keys."""
-        from deterministic_tools import WorkflowManifestError
-        from orchestration_engine import OrchestrationEngine
+        from devin_orchestrator.deterministic_tools import WorkflowManifestError
+        from devin_orchestrator.orchestration_engine import OrchestrationEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             engine = OrchestrationEngine(work_dir=Path(tmpdir) / "work")
             manifest_path = Path(tmpdir) / "bad.manifest.yaml"
 
             with pytest.raises(WorkflowManifestError):
-                engine._validate_manifest_structure(
-                    {"name": "x"}, manifest_path
-                )
+                engine._validate_manifest_structure({"name": "x"}, manifest_path)
             with pytest.raises(WorkflowManifestError):
                 engine._validate_manifest_structure(
                     {"name": "x", "stages": [{"name": "s1"}]},

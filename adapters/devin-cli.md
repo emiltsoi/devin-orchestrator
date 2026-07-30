@@ -173,17 +173,19 @@ import subprocess
 import json
 
 # Start devin acp server
-process = subprocess.Popen(['devin', 'acp'], 
-                           stdin=subprocess.PIPE, 
-                           stdout=subprocess.PIPE, 
-                           stderr=subprocess.PIPE)
+process = subprocess.Popen(
+    ["devin", "acp"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+)
 
 # Send session/new request
 request = {
     "jsonrpc": "2.0",
     "method": "session/new",
     "params": {"workspace": workspace_path},
-    "id": 1
+    "id": 1,
 }
 process.stdin.write(json.dumps(request) + "\n")
 
@@ -192,16 +194,17 @@ request = {
     "jsonrpc": "2.0",
     "method": "session/prompt",
     "params": {"prompt": prompt_content},
-    "id": 2
+    "id": 2,
 }
 process.stdin.write(json.dumps(request) + "\n")
 
 # Read session/update responses
 while True:
     line = process.stdout.readline()
-    if not line: break
+    if not line:
+        break
     response = json.loads(line)
-    if response.get('method') == 'session/update':
+    if response.get("method") == "session/update":
         # Process streaming updates
         pass
 ```

@@ -3,12 +3,49 @@
 A generic, harness-agnostic framework for AI-assisted software development, built on top of Windsurf Cascade and inspired by [obra/superpowers](https://github.com/obra/superpowers).
 
 **See Also:**
-- [INSTALL.md](INSTALL.md) - Installation instructions
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment model and workflow updates
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
-- [skills/README.md](skills/README.md) - Skills library documentation
-- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Agent-facing orchestration protocol
+- [DEPLOY.md](DEPLOY.md) - One-click cross-platform deployment (recommended)
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common install and runtime issues
 - [MCP-CLIENTS.md](MCP-CLIENTS.md) - MCP client configuration
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Tests, lint, build, and release process
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
+- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Agent-facing orchestration protocol
+- [skills/README.md](skills/README.md) - Skills library documentation
+
+## Quick Start
+
+The fastest way to install `devin-orchestrator` and register it with every local MCP agent:
+
+### Linux / macOS
+
+```bash
+./deploy.sh
+```
+
+or directly with Python:
+
+```bash
+python3 deploy.py
+```
+
+### Windows
+
+```powershell
+py deploy.py
+```
+
+This installs the package to `~/.devin-orchestrator/` and updates all known agent MCP configs to use the launcher. Then restart your agent/IDE.
+
+You can also install from PyPI and register manually:
+
+```bash
+pip install devin-orchestrator
+python3 -m devin_orchestrator.mcp_server --version
+# from the repo
+python3 register_mcp.py
+```
+
+- [DEPLOY.md](DEPLOY.md) — dry-run mode, manual steps, Windows/macOS notes.
+- [MCP-CLIENTS.md](MCP-CLIENTS.md) — per-agent configuration examples.
 
 ## Vision
 
@@ -63,7 +100,7 @@ Primary MCP tools include:
 - `list_skills`, `get_skill`, `list_workflows`, `get_workflow`, `read_artifact` - discovery and read-only helpers
 - `gate_decision`, `continue_workflow` - gate control and resume
 
-See [MCP-CLIENTS.md](MCP-CLIENTS.md) for client configuration examples.
+See [MCP-CLIENTS.md](MCP-CLIENTS.md) for client configuration examples. For the fastest setup, run the deployment script first — it writes the correct configuration for every supported client.
 
 ## Directory Structure
 
@@ -73,7 +110,7 @@ devin-orchestrator/
 ├── MCP-CLIENTS.md   # MCP client configuration
 ├── skills/          # Skill definitions (YAML + markdown)
 ├── workflows/       # Workflow definitions (YAML manifests + markdown)
-├── workflow-engine/ # Orchestration engine and tools
+├── devin_orchestrator/ # Orchestration engine and tools
 ├── adapters/        # Transport adapter implementations
 ├── contracts/       # Dispatch contract definitions
 └── .windsurf/

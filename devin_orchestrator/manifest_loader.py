@@ -1,0 +1,160 @@
+"""
+Manifest Loader - Loads and validates workflow manifests
+"""
+
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from devin_orchestrator.models import Manifest
+
+
+class ManifestLoader:
+    """Loads and validates workflow manifests from YAML files
+
+    See MANIFEST-SCHEMA.md for the complete schema definition.
+    """
+
+    REQUIRED_FIELDS = [
+        "name",
+        "description",
+        "version",
+        "schema_version",
+        "session_shape",
+        "stages",
+    ]
+
+    def __init__(self, harness_root: Path):
+        """
+        Initialize manifest loader
+
+        Args:
+            harness_root: Root directory of the harness
+        """
+        self.harness_root = harness_root
+        self.workflows_dir = harness_root / "workflows"
+        self.skills_dir = harness_root / "skills"
+
+    def load(self, manifest_name: str) -> Manifest:
+        """
+        Load and validate a workflow manifest
+
+        Args:
+            manifest_name: Name of the manifest file (e.g., 'feature.manifest.yaml')
+
+        Returns:
+            Parsed Manifest object
+
+        Raises:
+            FileNotFoundError: If manifest file doesn't exist
+            ValueError: If manifest is invalid
+        """
+        manifest_path = self.workflows_dir / manifest_name
+
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+
+        with open(manifest_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        # Validate required fields
+        self._validate_required_fields(data)
+
+        # Validate schema version
+        if data["schema_version"] != 1:
+            raise ValueError(f"Unsupported schema version: {data['schema_version']}")
+
+        # Validate stage references
+        self._validate_stage_references(data["stages"])
+
+        # Validate gate references
+        self._validate_gate_references(data.get("gates", []))
+
+        # Validate stage -> gate references
+        self._validate_stage_gate_references(data["stages"], data.get("gates", []))
+
+        return Manifest.model_validate(data)
+
+    def _validate_required_fields(self, data: dict[str, Any]) -> None:
+        """Validate that all required fields are present"""
+        missing_fields = [field for field in self.REQUIRED_FIELDS if field not in data]
+        if missing_fields:
+            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+
+    def _validate_stage_references(self, stages: list[dict[str, Any]]) -> None:
+        """Validate that stage references point to existing skill files"""
+        for stage in stages:
+            skill_name = stage.get("skill")
+            if not skill_name:
+                raise ValueError("Stage missing 'skill' field")
+
+            # Check both direct and subdirectory locations
+            skill_yaml = self.skills_dir / f"{skill_name}.yaml"
+            skill_yaml_subdir = self.skills_dir / skill_name / f"{skill_name}.yaml"
+            skill_md = self.skills_dir / f"{skill_name}.md"
+            skill_md_subdir = self.skills_dir / skill_name / f"{skill_name}.md"
+
+            if not skill_yaml.exists() and not skill_yaml_subdir.exists():
+                raise ValueError(
+                    f"Skill YAML not found: {skill_yaml} or {skill_yaml_subdir}"
+                )
+
+            if not skill_md.exists() and not skill_md_subdir.exists():
+                raise ValueError(
+                    f"Skill markdown not found: {skill_md} or {skill_md_subdir}"
+                )
+
+    def _validate_gate_references(self, gates: list[dict[str, Any]]) -> None:
+        """Validate that gate references are well-formed"""
+        for gate in gates:
+            if "id" not in gate:
+                raise ValueError("Gate missing 'id' field")
+
+            if "type" not in gate:
+                raise ValueError(f"Gate {gate['id']} missing 'type' field")
+
+            if gate["type"] not in ["human", "auto"]:
+                raise ValueError(f"Gate {gate['id']} has invalid type: {gate['type']}")
+
+    def _validate_stage_gate_references(
+        self, stages: list[dict[str, Any]], gates: list[dict[str, Any]]
+    ) -> None:
+        """Validate that each stage ``gate`` field points to a defined gate."""
+        gate_ids = {gate["id"] for gate in gates}
+        for stage in stages:
+            gate = stage.get("gate")
+            if gate is None or gate == "none":
+                continue
+            if gate not in gate_ids:
+                raise ValueError(
+                    f"Stage '{stage.get('name', '<unknown>')}' references "
+                    f"undefined gate '{gate}'"
+                )
+
+    def list_manifests(self) -> list[str]:
+        """Return names of all workflow manifest files."""
+        if not self.workflows_dir.exists():
+            return []
+        return sorted(
+            p.name
+            for p in self.workflows_dir.iterdir()
+            if p.is_file() and p.name.endswith(".manifest.yaml")
+        )
+
+    def validate_all(self) -> tuple[list[str], list[tuple[str, str]]]:
+        """Load and validate every manifest.
+
+        Returns:
+            (valid_names, errors) where ``errors`` is a list of
+            (manifest_name, error_message) tuples.
+        """
+        valid: list[str] = []
+        errors: list[tuple[str, str]] = []
+        for name in self.list_manifests():
+            try:
+                self.load(name)
+                valid.append(name)
+            except Exception as e:  # noqa: BLE001
+                errors.append((name, str(e)))
+        return valid, errors

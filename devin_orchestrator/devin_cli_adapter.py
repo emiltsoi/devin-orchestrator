@@ -1,0 +1,488 @@
+"""
+Devin CLI Simple Adapter
+Uses devin-cli's native --print flag for non-interactive execution
+Much simpler and more reliable than ACP for basic usage
+
+Supports skill loading via description matching (Devin CLI feature).
+Skills are loaded from devin_orchestrator/skills/ and injected into prompts
+when their description matches prompt content.
+"""
+
+import contextlib
+import logging
+import os
+import re
+import subprocess  # nosec B404
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from devin_orchestrator.security_utils import (
+    InvalidInputError,
+    PathTraversalError,
+    validate_path_safe,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class InvocationResult:
+    """Result from a transport adapter invocation"""
+
+    success: bool
+    output: str
+    error: str
+    exit_code: int
+
+
+# Allowlist of valid devin-cli permission modes. The CLI only accepts these
+# values; any other string must be rejected before being passed to a subprocess
+# to avoid argument-injection or unexpected interactive prompts during
+# automated dispatch.
+ALLOWED_PERMISSION_MODES = frozenset({"dangerous", "smart", "auto"})
+
+# Maximum bytes of stdout/stderr to keep in an InvocationResult. Larger outputs
+# are truncated and a marker is appended so the harness cannot OOM or pass
+# multi-megabyte payloads back through MCP.
+DEFAULT_MAX_OUTPUT_BYTES = 5 * 1024 * 1024
+
+
+class DevinCliAdapter:
+    """
+    Devin CLI simple adapter using --print mode
+
+    Uses devin-cli's native non-interactive mode for automated execution.
+    Simpler and more reliable than ACP for basic skill invocation.
+
+    Supports skill loading via description matching. Skills are loaded from
+    devin_orchestrator/skills/ and injected into prompts when their description
+    matches prompt content.
+    """
+
+    def __init__(
+        self,
+        devin_cli_path: str,
+        workspace: str | None = None,
+        model: str | None = None,
+        permission_mode: str = "dangerous",
+        skills_dir: str | None = None,
+        **_kwargs: Any,
+    ):
+        """
+        Initialize devin-cli adapter
+
+        Args:
+            devin_cli_path: Path to devin.exe binary
+            workspace: Optional workspace path (defaults to current directory)
+            model: Optional model to use (e.g., "swe-1.6", "claude-sonnet-4")
+            permission_mode: Permission mode (auto, smart, dangerous) - defaults
+                to dangerous for automated dispatch. Only values in
+                ALLOWED_PERMISSION_MODES are accepted; an invalid value raises
+                ValueError. An unset/empty value falls back to "dangerous".
+            skills_dir: Optional path to skills directory (defaults to config_loader skills_dir)
+
+        Raises:
+            ValueError: If ``permission_mode`` is a non-empty value that is not
+                in ``ALLOWED_PERMISSION_MODES``.
+        """
+        from devin_orchestrator.config_loader import ConfigLoader
+
+        config = ConfigLoader.load()
+        self.devin_cli_path = devin_cli_path
+        self.workspace = workspace or str(Path.cwd())
+        self.model = (
+            model  # None means no --model flag; caller can pass 'swe-1.6' if desired
+        )
+        self.permission_mode = self._validate_permission_mode(permission_mode)
+        self.skills_dir = Path(skills_dir) if skills_dir else config.skills_dir
+        self.skills = self._load_skills()
+
+    @staticmethod
+    def _truncate_output(text: str, max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES) -> str:
+        """Truncate ``text`` to ``max_bytes`` UTF-8 bytes and append a marker.
+
+        This prevents multi-megabyte devin-cli outputs from propagating back
+        through the orchestration layer or MCP responses while still giving the
+        caller the leading portion of the output.
+        """
+        if not text:
+            return text
+        encoded = text.encode("utf-8")
+        if len(encoded) <= max_bytes:
+            return text
+        marker = "\n... [output truncated]\n"
+        marker_bytes = marker.encode("utf-8")
+        keep = max(0, max_bytes - len(marker_bytes))
+        truncated = encoded[:keep].decode("utf-8", errors="ignore")
+        return truncated + marker
+
+    @staticmethod
+    def _validate_permission_mode(permission_mode: str | None) -> str:
+        """
+        Validate the permission mode against the allowlist.
+
+        Unset/empty values fall back to ``"dangerous"`` for automated dispatch.
+        Any other value must be present in ``ALLOWED_PERMISSION_MODES``;
+        otherwise a ``ValueError`` is raised so an unvalidated string is never
+        forwarded to the devin-cli subprocess.
+
+        Args:
+            permission_mode: Raw permission mode value to validate.
+
+        Returns:
+            A validated permission mode string.
+
+        Raises:
+            ValueError: If the value is non-empty and not in the allowlist.
+        """
+        if permission_mode is None or permission_mode == "":
+            return "dangerous"
+        if permission_mode not in ALLOWED_PERMISSION_MODES:
+            raise ValueError(
+                f"Invalid permission_mode {permission_mode!r}; "
+                f"must be one of {sorted(ALLOWED_PERMISSION_MODES)}"
+            )
+        return permission_mode
+
+    def _load_skills(self) -> dict[str, dict[str, Any]]:
+        """
+        Load skills from skills directory.
+
+        Supports two layouts:
+
+        - **Legacy** (used by ``devin_orchestrator/skills/`` and the existing
+          ``test_skill_loading.py`` fixtures): ``<skill_dir>/SKILL.md`` with a
+          YAML frontmatter block. The description is extracted with a regex
+          for backward compatibility.
+        - **v1** (canonical ``skills/`` layout): ``<skill_dir>/<name>.md``
+          with YAML frontmatter, optionally accompanied by
+          ``<skill_dir>/<name>.yaml``. The ``name`` and ``description`` are
+          read from the YAML frontmatter, falling back to the ``.yaml`` sidecar
+          if the frontmatter is missing those fields. The stored ``content`` is
+          the full ``.md`` file text.
+
+        Returns:
+            Dict mapping skill name to {description, content}
+        """
+        skills: dict[str, dict[str, Any]] = {}
+        if not self.skills_dir.exists():
+            return skills
+
+        for skill_dir in self.skills_dir.iterdir():
+            if not skill_dir.is_dir():
+                continue
+
+            # Legacy layout: <skill_dir>/SKILL.md
+            legacy_file = skill_dir / "SKILL.md"
+            if legacy_file.exists():
+                try:
+                    content = legacy_file.read_text(encoding="utf-8")
+                    description_match = re.search(r'description:\s*"([^"]+)"', content)
+                    if description_match:
+                        skills[skill_dir.name] = {
+                            "description": description_match.group(1),
+                            "content": content,
+                            "triggers": [],
+                        }
+                except Exception as e:
+                    # Log warning and skip skills that fail to load
+                    logger.warning(
+                        "Failed to load legacy skill from %s: %s", skill_dir, e
+                    )
+                    continue
+                # Legacy layout is mutually exclusive with v1 for the same dir;
+                # continue to the next directory.
+                continue
+
+            # v1 layout: <skill_dir>/<name>.md (+ optional <name>.yaml)
+            md_candidate = skill_dir / f"{skill_dir.name}.md"
+            yaml_candidate = skill_dir / f"{skill_dir.name}.yaml"
+            if not md_candidate.exists():
+                continue
+
+            try:
+                md_content = md_candidate.read_text(encoding="utf-8")
+                frontmatter = self._parse_frontmatter(md_content)
+
+                # Prefer frontmatter; fall back to the .yaml sidecar for any
+                # missing name/description fields.
+                sidecar: dict[str, Any] = {}
+                if yaml_candidate.exists():
+                    try:
+                        loaded = yaml.safe_load(
+                            yaml_candidate.read_text(encoding="utf-8")
+                        )
+                        if isinstance(loaded, dict):
+                            sidecar = loaded
+                    except Exception as e:
+                        # A malformed sidecar should not break skill loading.
+                        logger.warning(
+                            "Failed to load sidecar YAML from %s: %s", yaml_candidate, e
+                        )
+                        sidecar = {}
+
+                name = frontmatter.get("name") or sidecar.get("name") or skill_dir.name
+                description = (
+                    frontmatter.get("description") or sidecar.get("description") or ""
+                )
+
+                if not isinstance(name, str) or not name:
+                    name = skill_dir.name
+                if not isinstance(description, str):
+                    description = ""
+
+                # Optional ``triggers`` list (a list of strings) drives
+                # auto-injection in unfiltered mode. Read from the frontmatter
+                # first, then the .yaml sidecar. Skills without a triggers
+                # field are not auto-triggered (they must be selected via
+                # skill_filter to be injected).
+                raw_triggers = frontmatter.get("triggers")
+                if raw_triggers is None:
+                    raw_triggers = sidecar.get("triggers")
+                triggers: list[str] = []
+                if isinstance(raw_triggers, list):
+                    triggers = [t for t in raw_triggers if isinstance(t, str)]
+
+                skills[name] = {
+                    "description": description,
+                    "content": md_content,
+                    "triggers": triggers,
+                }
+            except Exception as e:
+                # Log warning and skip skills that fail to load
+                logger.warning("Failed to load v1 skill from %s: %s", skill_dir, e)
+                continue
+
+        return skills
+
+    @staticmethod
+    def _parse_frontmatter(md_content: str) -> dict[str, Any]:
+        """Parse a leading YAML frontmatter block from a markdown string.
+
+        Returns an empty dict if no frontmatter is present or it fails to
+        parse. Only the first ``---``-delimited block at the start of the
+        file is considered.
+        """
+        if not md_content.startswith("---"):
+            return {}
+        # Find the closing delimiter on its own line. Tolerate both \n and
+        # \r\n line endings so CRLF-formatted files parse correctly.
+        match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", md_content, re.DOTALL)
+        if not match:
+            return {}
+        try:
+            loaded = yaml.safe_load(match.group(1))
+        except Exception as e:
+            logger.debug("Failed to parse frontmatter: %s", e)
+            return {}
+        return loaded if isinstance(loaded, dict) else {}
+
+    def _inject_skills(self, prompt: str, skill_filter: list[str] | None = None) -> str:
+        """
+        Inject skills into prompt based on description matching.
+
+        Args:
+            prompt: Original prompt.
+            skill_filter: Optional list of skill names; when provided, only
+                those skills are eligible for injection. When ``None`` (the
+                default), all loaded skills are eligible.
+
+        Returns:
+            Prompt with skill content injected if description matches.
+        """
+        prompt_lower = prompt.lower()
+        injected_skills = []
+
+        eligible_names = (
+            set(skill_filter) if skill_filter is not None else set(self.skills.keys())
+        )
+
+        # When a skill_filter is provided, the caller explicitly selected skills
+        # for this agent/phase; inject them unconditionally. Without a filter,
+        # auto-trigger skills whose YAML sidecar ``triggers:`` list contains a
+        # phrase found in the prompt. Skills without a ``triggers`` field are
+        # not auto-triggered (they must be selected via skill_filter).
+        for skill_name, skill_data in self.skills.items():
+            if skill_name not in eligible_names:
+                continue
+
+            if skill_filter is not None:
+                injected_skills.append(skill_data["content"])
+                continue
+
+            triggers: list[Any] = skill_data.get("triggers") or []
+            if any(t and t.lower() in prompt_lower for t in triggers):
+                injected_skills.append(skill_data["content"])
+
+        if injected_skills:
+            # Inject skills at the beginning of the prompt
+            skill_block = "\n\n".join(injected_skills)
+            return f"{skill_block}\n\n---\n\n{prompt}"
+
+        return prompt
+
+    def invoke(
+        self,
+        prompt: str,
+        timeout: int = 120,
+        focused_context: list | None = None,
+        correction_artifact: str | None = None,
+        enable_skills: bool = True,
+        skill_filter: list[str] | None = None,
+    ) -> InvocationResult:
+        """
+        Invoke devin-cli with a prompt in non-interactive mode
+
+        Args:
+            prompt: The prompt to send to devin
+            timeout: Timeout in seconds (default: 120)
+            focused_context: Optional list of artifact paths to inject into worker dispatch
+            correction_artifact: Optional path to correction artifact for retry loops
+            enable_skills: Whether to inject skills via description matching (default: True)
+            skill_filter: Optional list of skill names eligible for injection.
+                When provided, only those skills are eligible (subject to the
+                existing trigger-phrase matching). When ``None`` and
+                ``enable_skills`` is True, all loaded skills are eligible.
+
+        Returns:
+            InvocationResult with success status, output, and error
+        """
+        # Inject skills if enabled
+        if enable_skills:
+            prompt = self._inject_skills(prompt, skill_filter=skill_filter)
+
+        # Add focused context artifacts if provided
+        # Note: Devin CLI doesn't support --context, so we inject into prompt instead
+        if focused_context:
+            prompt += "\n\n## Focused Context Artifacts\n"
+            for artifact_path in focused_context:
+                try:
+                    validated_path = validate_path_safe(
+                        Path(self.workspace),
+                        Path(artifact_path),
+                        allow_absolute=True,
+                    )
+                except (InvalidInputError, PathTraversalError) as e:
+                    return InvocationResult(
+                        success=False,
+                        output="",
+                        error=f"Invalid focused_context path: {e}",
+                        exit_code=-1,
+                    )
+                prompt += f"- {validated_path}\n"
+
+        # Add correction artifact if provided
+        # Note: Devin CLI doesn't support --correction, so we inject into prompt instead
+        if correction_artifact:
+            # Validate correction_artifact path is safe
+            try:
+                validated_artifact = validate_path_safe(
+                    Path(self.workspace), Path(correction_artifact), allow_absolute=True
+                )
+                prompt += f"\n\n## Correction Artifact\n- {validated_artifact}\n"
+            except (InvalidInputError, PathTraversalError) as e:
+                return InvocationResult(
+                    success=False,
+                    output="",
+                    error=f"Invalid correction_artifact path: {e}",
+                    exit_code=-1,
+                )
+
+        # Build command. The prompt is written to a temporary .md file inside
+        # the workspace and passed via --prompt-file to avoid platform command
+        # line length limits and to keep the prompt contents out of the process
+        # table / shell history.
+        cmd = [self.devin_cli_path, "--permission-mode", self.permission_mode]
+
+        # Add model if specified
+        if self.model:
+            cmd.extend(["--model", self.model])
+
+        prompt_file: Path | None = None
+        try:
+            # Use mkstemp for atomic temporary file creation to avoid race conditions
+            fd, temp_path = tempfile.mkstemp(
+                suffix=".md",
+                prefix="devin_prompt_",
+                dir=self.workspace,
+                text=True,
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(prompt)
+
+                # Set restrictive permissions (0o600 on Unix, owner-only on Windows)
+                # Use the path after closing the descriptor so Windows can apply it;
+                # on Unix, mkstemp already creates with 0o600, but re-apply for safety.
+                with contextlib.suppress(OSError, AttributeError):
+                    os.chmod(temp_path, 0o600)
+
+                prompt_file = Path(temp_path)
+            except OSError:
+                # If writing fails, clean up the file descriptor
+                with contextlib.suppress(OSError):
+                    os.close(fd)
+                raise
+
+            cmd.extend(["--prompt-file", str(prompt_file), "--print"])
+
+            try:
+                result = subprocess.run(  # nosec B603
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",  # Handle encoding errors gracefully
+                    timeout=timeout,
+                    cwd=self.workspace,
+                )
+
+                return InvocationResult(
+                    success=result.returncode == 0,
+                    output=self._truncate_output(result.stdout),
+                    error=self._truncate_output(result.stderr),
+                    exit_code=result.returncode,
+                )
+
+            except subprocess.TimeoutExpired:
+                return InvocationResult(
+                    success=False,
+                    output="",
+                    error=f"Command timed out after {timeout} seconds",
+                    exit_code=-1,
+                )
+            except (OSError, FileNotFoundError) as e:
+                return InvocationResult(
+                    success=False,
+                    output="",
+                    error=(f"Failed to execute devin-cli ({type(e).__name__}): {e}"),
+                    exit_code=-1,
+                )
+            except Exception as e:
+                return InvocationResult(
+                    success=False,
+                    output="",
+                    error=f"Unexpected error invoking devin-cli: {e}",
+                    exit_code=-1,
+                )
+        finally:
+            # Clean up the temporary prompt file; best-effort with proper error handling
+            if prompt_file is not None:
+                try:
+                    if prompt_file.exists():
+                        prompt_file.unlink()
+                except OSError:
+                    # Log warning but don't fail the operation if cleanup fails
+                    logger.warning(f"Failed to clean up temporary file {prompt_file}")
+
+    def __enter__(self):
+        """Context manager entry (no-op for simple adapter)"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit (no-op for simple adapter)"""
+        pass

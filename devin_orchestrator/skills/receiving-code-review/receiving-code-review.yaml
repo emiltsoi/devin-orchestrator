@@ -1,0 +1,30 @@
+schema_version: 1
+name: receiving-code-review
+description: "Use when receiving code review feedback that must be evaluated and addressed."
+iron_law: "VERIFY BEFORE IMPLEMENTING"
+triggers:
+  - code_review_received
+  - pr_feedback
+  - human_review_comments
+checklist:
+  - id: read_completely
+    description: Read all feedback without reacting
+  - id: restate
+    description: Restate each item in your own words or ask for clarification
+  - id: verify
+    description: Verify the issue against codebase reality
+  - id: evaluate
+    description: Evaluate technical soundness for this codebase
+  - id: pushback_or_ack
+    description: Respond with reasoned pushback or technical acknowledgment
+  - id: implement_one
+    description: Implement one item at a time, testing each
+  - id: finish
+    description: Use finishing-a-development-branch or subagent-driven-development to finalize
+terminal_state: subagent-driven-development
+announcement: "Using receiving-code-review to evaluate and address feedback."
+red_flags:
+  - Sycophantic or performative responses
+  - Implementing before verifying
+  - Implementing unclear items without asking
+  - Adding "professional" features that violate YAGNI

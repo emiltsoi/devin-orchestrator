@@ -3,7 +3,6 @@
 Unit tests for session_manager module
 """
 
-# Add workflow-engine to path
 import sys
 import tempfile
 import threading
@@ -11,10 +10,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "workflow-engine"))
-
-from security_utils import InvalidInputError
-from session_manager import create_session, resolve_session
+from devin_orchestrator.security_utils import InvalidInputError
+from devin_orchestrator.session_manager import create_session, resolve_session
 
 
 def test_create_session_basic():

@@ -47,7 +47,7 @@ This forces the caller to understand harness internals. The new tools hide that 
 ## Implementation phases
 
 ### Phase 1: Session manager
-- New helper module `workflow-engine/session_manager.py`:
+- New helper module `devin_orchestrator/session_manager.py`:
   - `create_session(workflow_or_skill_name) -> (session_id, workspace_path)`
   - Generates IDs from `session_id_format` in `use-cases.yaml` (e.g. `SUPERPOWER-NNN`).
   - Creates `~/.devin-orchestrator/work/<session_id>/`.

@@ -1,0 +1,26 @@
+schema_version: 1
+name: using-devin-orchestrator
+description: "Use when starting any orchestrated conversation or task to decide whether a devin-orchestrator skill should be invoked before acting."
+iron_law: "INVOKE RELEVANT SKILLS BEFORE ANY RESPONSE OR ACTION"
+triggers:
+  - start_of_session
+  - new_task
+  - ambiguous_request
+checklist:
+  - id: identify_role
+    description: Determine whether you are the orchestrator or a dispatched subagent
+  - id: subagent_stop
+    description: If you are a subagent executing a specific stage skill, follow that skill only
+  - id: check_skills
+    description: Check skills/ and workflows/use-cases.yaml for applicable skills
+  - id: announce_skill
+    description: Announce the selected skill before following it
+  - id: follow_checklist
+    description: Create todos for the skill checklist and follow them literally
+terminal_state: complete
+announcement: "Using devin-orchestrator skills to guide the next action."
+red_flags:
+  - Acting before checking for a skill
+  - Asking clarifying questions before skill selection
+  - Treating skills as optional suggestions
+  - Skipping the announcement before using a skill

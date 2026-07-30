@@ -1,0 +1,1080 @@
+#!/usr/bin/env python3
+"""
+Stateless Orchestrator - High-level stateless interface for orchestrator operations
+
+Provides a simple, stateless interface for running workflows and skills without
+requiring callers to manage session IDs, prompt files, or internal paths.
+"""
+
+import atexit
+import contextlib
+import json
+import logging
+import re
+import shutil
+import threading
+import traceback
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from devin_orchestrator.config_loader import ConfigLoader
+from devin_orchestrator.deterministic_tools import WorkflowManifestError, session_init
+from devin_orchestrator.orchestration_engine import OrchestrationEngine
+from devin_orchestrator.prompt_builder import write_request_prompt
+from devin_orchestrator.security_utils import (
+    InvalidInputError,
+    PathTraversalError,
+    validate_path_safe,
+    validate_session_id,
+    validate_skill_name,
+    validate_workflow_name,
+)
+from devin_orchestrator.session_manager import create_session
+from devin_orchestrator.skill_invoker import SkillInvoker
+
+logger = logging.getLogger(__name__)
+
+# Registry of active background threads so the interpreter can attempt a
+# graceful join before exit instead of killing daemon threads abruptly.
+_active_threads: list[threading.Thread] = []
+_threads_lock = threading.Lock()
+
+# Per-session cancellation events. Callers signal cancellation by setting the
+# event; background threads check it at safe points and exit early.
+_session_events: dict[str, threading.Event] = {}
+_session_events_lock = threading.Lock()
+
+
+def _get_session_event(session_id: str) -> threading.Event | None:
+    with _session_events_lock:
+        return _session_events.get(session_id)
+
+
+def _set_session_event(session_id: str) -> threading.Event:
+    with _session_events_lock:
+        event = _session_events.get(session_id)
+        if event is None:
+            event = threading.Event()
+            _session_events[session_id] = event
+        return event
+
+
+def _clear_session_event(session_id: str) -> None:
+    with _session_events_lock:
+        _session_events.pop(session_id, None)
+
+
+def _register_thread(thread: threading.Thread) -> None:
+    with _threads_lock:
+        _active_threads.append(thread)
+
+
+def _unregister_thread(thread: threading.Thread) -> None:
+    with _threads_lock, contextlib.suppress(ValueError):
+        _active_threads.remove(thread)
+
+
+def _tracked_target(target: Any, args: tuple[Any, ...]) -> None:
+    try:
+        target(*args)
+    finally:
+        _unregister_thread(threading.current_thread())
+
+
+def _join_active_threads(timeout: float = 5.0) -> None:
+    """Join any background threads that are still running at process exit."""
+    with _threads_lock:
+        threads = _active_threads[:]
+    for thread in threads:
+        if thread.is_alive():
+            thread.join(timeout)
+            if thread.is_alive():
+                logger.warning(
+                    "Background thread did not stop within %s seconds: %s",
+                    timeout,
+                    thread.name,
+                )
+
+
+atexit.register(_join_active_threads)
+
+
+def _json_default(obj: Any) -> Any:
+    """Serialize non-standard JSON types (Enum, Path) for workflow results."""
+    if isinstance(obj, Enum):
+        return obj.value
+    if isinstance(obj, Path):
+        return str(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
+class StatelessOrchestrator:
+    """
+    Stateless orchestrator for high-level workflow and skill execution.
+
+    This class provides a simple interface that hides session management,
+    prompt building, and internal path details from callers.
+    """
+
+    def __init__(
+        self,
+        workspace: str | None = None,
+        demo_mode: bool = False,
+        timeout: int | None = None,
+        gate_mode: str | None = None,
+    ):
+        """
+        Initialize the stateless orchestrator.
+
+        Args:
+            workspace: Optional workspace path for config loading
+            demo_mode: If True, skip real Devin dispatches and simulate outputs
+            timeout: Optional per-dispatch timeout in seconds (defaults to config)
+            gate_mode: Optional gate interaction mode (interactive|signal|auto);
+                       defaults to the value in config.yaml
+        """
+        self.config = ConfigLoader.load(workspace=workspace)
+        self.workspace = workspace
+        self.demo_mode = demo_mode
+        self.timeout = timeout
+        self.gate_mode = gate_mode or getattr(self.config, "gate_mode", "auto")
+        self._load_use_cases()
+
+    def _load_use_cases(self) -> None:
+        """Load use-cases.yaml to map intents to workflows/skills."""
+        use_cases_file = self.config.workflows_dir / "use-cases.yaml"
+        self.use_cases = {}
+
+        if use_cases_file.exists():
+            try:
+                with open(use_cases_file, encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                for uc in data.get("use_cases", []):
+                    uc_id = uc.get("id")
+                    if uc_id:
+                        self.use_cases[uc_id] = {
+                            "workflow": uc.get("workflow"),
+                            "session_id_format": uc.get("session_id_format"),
+                        }
+                logger.info(
+                    f"Loaded {len(self.use_cases)} use cases from {use_cases_file}"
+                )
+            except (FileNotFoundError, yaml.YAMLError, ValueError, KeyError) as e:
+                logger.warning(f"Failed to load use-cases.yaml: {e}")
+
+    def _seed_review_files(self, session_dir: Path, request: str) -> None:
+        """
+        Copy files listed in a review request (FILES_MODIFIED line) from the
+        workspace into the session directory so subagents inspect HEAD content.
+        """
+        if not self.workspace:
+            return
+
+        match = re.search(r"FILES_MODIFIED:\s*(.+?)(?:\n|$)", request)
+        if not match:
+            return
+
+        workspace_path = Path(self.workspace).resolve()
+        for raw_file in match.group(1).split(","):
+            relative = raw_file.strip()
+            if not relative:
+                continue
+            try:
+                source = validate_path_safe(
+                    workspace_path, workspace_path / relative, allow_absolute=True
+                )
+                if not source.is_file():
+                    continue
+                dest = validate_path_safe(
+                    session_dir, session_dir / source.name, allow_absolute=True
+                )
+                shutil.copy2(source, dest)
+                logger.info(f"Seeded review file: {dest}")
+            except (InvalidInputError, PathTraversalError, OSError) as e:
+                logger.warning(f"Failed to seed {raw_file}: {e}")
+
+    @staticmethod
+    def _detect_intent(request: str) -> str:
+        """
+        Detect intent from request using weighted keyword matching with word boundaries.
+
+        This is a simplified fallback for auto-routing. A full implementation
+        would use the using-devin-orchestrator skill for more sophisticated routing.
+
+        The algorithm uses weighted keyword scoring for the four main intents:
+        - implement: default fallback for implementation/coding tasks
+        - review: code review, audit, verification tasks
+        - investigate: debugging, RCA, incident investigation
+        - plan: planning, design, architecture tasks
+
+        Keywords are matched with word boundaries to avoid false positives.
+        In case of ties, priorities are: review > investigate > plan > implement.
+
+        Args:
+            request: The user request
+
+        Returns:
+            Detected intent ("implement", "review", "investigate", or "plan")
+
+        Examples:
+            >>> StatelessOrchestrator._detect_intent("Review the authentication code")
+            'review'
+            >>> StatelessOrchestrator._detect_intent("Debug the login failure")
+            'investigate'
+            >>> StatelessOrchestrator._detect_intent("Plan the migration strategy")
+            'plan'
+            >>> StatelessOrchestrator._detect_intent("Add a new API endpoint")
+            'implement'
+        """
+        request_lower = request.lower()
+
+        # Keywords for each intent with word boundary matching
+        # Higher-weight keywords are listed first for clarity
+        review_keywords = [
+            r"\breview\b",
+            r"\baudit\b",
+            r"\bcheck\b",
+            r"\bverify\b",
+            r"\bpr\b",
+            r"\bpull request\b",
+            r"\bcode review\b",
+        ]
+        investigate_keywords = [
+            r"\bdebug\b",
+            r"\binvestigate\b",
+            r"\brca\b",
+            r"\broot cause\b",
+            r"\bincident\b",
+            r"\berror\b",
+            r"\bfailure\b",
+            r"\bbug\b",
+            r"\bfix\b",
+        ]
+        plan_keywords = [
+            r"\bplan\b",
+            r"\bdesign\b",
+            r"\barchitecture\b",
+            r"\bspec\b",
+            r"\bproposal\b",
+            r"\bdraft\b",
+            r"\boutline\b",
+        ]
+
+        # Score each intent based on keyword matches
+        scores = {
+            "review": 0,
+            "investigate": 0,
+            "plan": 0,
+        }
+
+        # Score review intent
+        for pattern in review_keywords:
+            if re.search(pattern, request_lower):
+                scores["review"] += 1
+
+        # Score investigate intent
+        for pattern in investigate_keywords:
+            if re.search(pattern, request_lower):
+                scores["investigate"] += 1
+
+        # Score plan intent
+        for pattern in plan_keywords:
+            if re.search(pattern, request_lower):
+                scores["plan"] += 1
+
+        # Return intent with highest score, default to implement
+        max_score = max(scores.values())
+        if max_score == 0:
+            return "implement"
+
+        # Get intents with max score (handle ties)
+        max_intents = [intent for intent, score in scores.items() if score == max_score]
+
+        # If tie, prioritize review > investigate > plan
+        if "review" in max_intents:
+            return "review"
+        if "investigate" in max_intents:
+            return "investigate"
+        if "plan" in max_intents:
+            return "plan"
+
+        return "implement"
+
+    def run_workflow(self, workflow_name: str, request: str) -> dict[str, Any]:
+        """
+        Run a specific workflow with a request.
+
+        Args:
+            workflow_name: Name of the workflow to run
+            request: The user request
+
+        Returns:
+            Dictionary with session_id, workspace, success, output, error
+        """
+        try:
+            # Validate workflow name to prevent path traversal / manifest
+            # injection from session directories. Even though the MCP layer
+            # validates this too, run_workflow is a public method that can be
+            # called directly, so we enforce containment here as well.
+            workflow_name = validate_workflow_name(workflow_name)
+
+            # Determine session format from use-cases
+            session_format = "SESSION-NNN"  # Default format
+            for _uc_id, uc_data in self.use_cases.items():
+                if uc_data.get("workflow") == workflow_name:
+                    session_format = uc_data.get("session_id_format", "SESSION-NNN")
+                    break
+
+            # Create session
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, session_format
+            )
+
+            # Write prompt file
+            write_request_prompt(session_dir, request)
+
+            # Seed session with the modified files under review so subagents
+            # evaluate the HEAD version instead of stale base copies.
+            self._seed_review_files(session_dir, request)
+
+            # Load workflow manifest. Resolve the manifest path against
+            # workflows_dir and validate it stays safely under workflows_dir
+            # so traversal-style names like "../work/SESSION-001/evil" cannot
+            # escape to other directories. allow_absolute=True is required
+            # because workflows_dir is itself absolute; containment is still
+            # enforced via the relative_to check inside validate_path_safe.
+            # This mirrors the pattern in McpServer._tool_get_workflow.
+            manifest_path = validate_path_safe(
+                self.config.workflows_dir,
+                self.config.workflows_dir / f"{workflow_name}.manifest.yaml",
+                allow_absolute=True,
+            )
+            if not manifest_path.exists():
+                return {
+                    "session_id": session_id,
+                    "workspace": str(session_dir),
+                    "success": False,
+                    "output": None,
+                    "error": f"Workflow manifest not found: {manifest_path}",
+                }
+
+            # Execute workflow
+            dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
+            engine = OrchestrationEngine(
+                work_dir=self.config.session_work_dir,
+                config={
+                    "demo_mode": self.demo_mode,
+                    "dispatch_timeout_seconds": dispatch_timeout,
+                    "gate_mode": self.gate_mode,
+                    "workflows_dir": str(self.config.workflows_dir),
+                },
+            )
+            results = engine.execute_workflow(
+                manifest_path=manifest_path,
+                session_id=session_id,
+                request_content=request,
+            )
+
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "success": results.get("final_status") == "completed",
+                "output": json.dumps(results, indent=2, default=_json_default),
+                "error": results.get("error")
+                if results.get("final_status") != "completed"
+                else None,
+            }
+
+        except (InvalidInputError, ValueError) as e:
+            logger.error(f"Validation error running workflow {workflow_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"Validation error: {str(e)}",
+            }
+        except OSError as e:
+            logger.error(f"File system error running workflow {workflow_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"File system error: {str(e)}",
+            }
+        except PathTraversalError as e:
+            logger.error(f"Path traversal error running workflow {workflow_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"Path traversal error: {str(e)}",
+            }
+        except WorkflowManifestError as e:
+            logger.error(f"Invalid workflow manifest {workflow_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"Invalid workflow manifest: {str(e)}",
+            }
+
+    def continue_workflow(
+        self,
+        session_id: str,
+        gate_verdict: str | None = None,
+        gate_notes: str | None = None,
+        gate_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Resume a workflow that is paused at a gate.
+
+        Args:
+            session_id: Existing session identifier
+            gate_verdict: Optional verdict to write before resuming
+            gate_notes: Optional notes for the gate decision
+            gate_id: Optional explicit gate id
+
+        Returns:
+            Dictionary with session_id, workspace, success, output, error
+        """
+        try:
+            engine = OrchestrationEngine(
+                work_dir=self.config.session_work_dir,
+                config={
+                    "demo_mode": self.demo_mode,
+                    "dispatch_timeout_seconds": self.timeout
+                    or self.config.dispatch_timeout_seconds,
+                    "gate_mode": self.gate_mode,
+                    "workflows_dir": str(self.config.workflows_dir),
+                },
+            )
+            results = engine.continue_workflow(
+                session_id=session_id,
+                gate_verdict=gate_verdict,
+                gate_notes=gate_notes,
+                gate_id=gate_id,
+            )
+            session_dir = self.config.session_work_dir / session_id
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "success": results.get("final_status") == "completed",
+                "output": json.dumps(results, indent=2, default=_json_default),
+                "error": results.get("error")
+                if results.get("final_status") != "completed"
+                else None,
+            }
+        except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
+            logger.error(f"Failed to continue workflow {session_id}: {e}")
+            return {
+                "session_id": session_id,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"Failed to continue workflow: {str(e)}",
+            }
+
+    def run_skill(self, skill_name: str, request: str) -> dict[str, Any]:
+        """
+        Run a specific skill with a request.
+
+        Args:
+            skill_name: Name of the skill to run
+            request: The user request
+
+        Returns:
+            Dictionary with session_id, workspace, success, output, error
+        """
+        try:
+            # Validate skill name to prevent path traversal. Even though the MCP
+            # layer and SkillInvoker validate this too, run_skill is a public
+            # method that can be called directly, so we enforce containment here
+            # as well for defense in depth.
+            skill_name = validate_skill_name(skill_name)
+
+            # Create session with default format
+            session_format = "SKILL-NNN"
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, session_format
+            )
+
+            # Invoke skill. Pass the request in context so SkillInvoker builds
+            # the full skill prompt (name, iron law, checklist, narrative).
+            # Do NOT override with custom_prompt=request; that strips the skill
+            # definition and produced broad, shallow passes.
+            dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
+            invoker = SkillInvoker(demo_mode=self.demo_mode)
+            context = {
+                "session_id": session_id,
+                "request": request,
+            }
+
+            result = invoker.invoke_skill(
+                skill_name=skill_name,
+                context=context,
+                workspace=str(session_dir),
+                timeout=dispatch_timeout,
+            )
+
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "success": result.success,
+                "output": result.output,
+                "error": result.error,
+            }
+
+        except (InvalidInputError, ValueError) as e:
+            logger.error(f"Validation error running skill {skill_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"Validation error: {str(e)}",
+            }
+        except OSError as e:
+            logger.error(f"File system error running skill {skill_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"File system error: {str(e)}",
+            }
+        except PathTraversalError as e:
+            logger.error(f"Path traversal error running skill {skill_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "success": False,
+                "output": None,
+                "error": f"Path traversal error: {str(e)}",
+            }
+
+    # --------------------------------------------------------------------- #
+    # Async/background dispatch helpers (Phase 4)
+    # --------------------------------------------------------------------- #
+
+    def _make_engine(self) -> OrchestrationEngine:
+        """Build an OrchestrationEngine configured for this instance."""
+        dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
+        return OrchestrationEngine(
+            work_dir=self.config.session_work_dir,
+            config={
+                "demo_mode": self.demo_mode,
+                "dispatch_timeout_seconds": dispatch_timeout,
+                "gate_mode": self.gate_mode,
+                "workflows_dir": str(self.config.workflows_dir),
+            },
+        )
+
+    @staticmethod
+    def _write_result_file(session_dir: Path, result: dict[str, Any]) -> None:
+        """Persist a workflow/skill result dict to result.json."""
+        try:
+            result_file = session_dir / "result.json"
+            result_file.write_text(
+                json.dumps(result, indent=2, default=_json_default),
+                encoding="utf-8",
+            )
+        except (OSError, ValueError, TypeError) as e:
+            logger.error(f"Failed to write result.json for {session_dir}: {e}")
+
+    def _update_session_status(
+        self, session_dir: Path, status: str, **fields: Any
+    ) -> None:
+        """Update the status field in session.json without overwriting other data."""
+        session_file = session_dir / "session.json"
+        try:
+            if session_file.exists():
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+            else:
+                data = {}
+            data["status"] = status
+            for key, value in fields.items():
+                data[key] = value
+            session_file.write_text(
+                json.dumps(data, indent=2, default=_json_default), encoding="utf-8"
+            )
+        except (OSError, json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"Could not update session status for {session_dir}: {e}")
+
+    def _session_format_for_workflow(self, workflow_name: str) -> str:
+        """Find the configured session_id_format for a workflow."""
+        session_format = "SESSION-NNN"
+        for _uc_id, uc_data in self.use_cases.items():
+            if uc_data.get("workflow") == workflow_name:
+                session_format = uc_data.get("session_id_format", "SESSION-NNN")
+                break
+        return session_format
+
+    def _prepare_workflow(
+        self, workflow_name: str, request: str
+    ) -> tuple[str, Path, Path] | dict[str, Any]:
+        """
+        Prepare a workflow session and manifest.
+
+        Returns (session_id, session_dir, manifest_path) on success, or an error
+        dict on failure.
+        """
+        workflow_name = validate_workflow_name(workflow_name)
+        session_format = self._session_format_for_workflow(workflow_name)
+        session_id, session_dir = create_session(
+            self.config.session_work_dir, session_format
+        )
+
+        # Scaffold session.json with the request and required top-level keys.
+        session_init(session_id, self.config.session_work_dir, request)
+        write_request_prompt(session_dir, request)
+        self._seed_review_files(session_dir, request)
+
+        manifest_path = validate_path_safe(
+            self.config.workflows_dir,
+            self.config.workflows_dir / f"{workflow_name}.manifest.yaml",
+            allow_absolute=True,
+        )
+        if not manifest_path.exists():
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "success": False,
+                "output": None,
+                "error": f"Workflow manifest not found: {manifest_path}",
+            }
+        return session_id, session_dir, manifest_path
+
+    def _is_session_cancelled(self, session_dir: Path) -> bool:
+        """Check session.json for a cancelling/cancelled status."""
+        session_file = session_dir / "session.json"
+        try:
+            if session_file.exists():
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+                return data.get("status") in ("cancelling", "cancelled")
+        except (OSError, json.JSONDecodeError):
+            pass
+        return False
+
+    def _check_cancelled_before_start(self, session_id: str, session_dir: Path) -> bool:
+        """Return True if the session was cancelled before it began work."""
+        event = _get_session_event(session_id)
+        if event is not None and event.is_set():
+            return True
+        return self._is_session_cancelled(session_dir)
+
+    def _run_workflow_thread(
+        self,
+        session_id: str,
+        session_dir: Path,
+        request: str,
+        manifest_path: Path,
+    ) -> None:
+        """Background thread body for execute_workflow."""
+        try:
+            if self._check_cancelled_before_start(session_id, session_dir):
+                self._write_result_file(
+                    session_dir,
+                    {
+                        "session_id": session_id,
+                        "final_status": "cancelled",
+                        "stages": [],
+                    },
+                )
+                self._update_session_status(session_dir, "cancelled")
+                return
+            engine = self._make_engine()
+            results = engine.execute_workflow(
+                manifest_path=manifest_path,
+                session_id=session_id,
+                request_content=request,
+            )
+            self._write_result_file(session_dir, results)
+        except Exception as e:
+            logger.error(
+                f"Background workflow {session_id} failed: {e}\n{traceback.format_exc()}"
+            )
+            self._write_result_file(
+                session_dir,
+                {
+                    "session_id": session_id,
+                    "final_status": "failed",
+                    "error": f"Background dispatch failed: {str(e)}",
+                    "stages": [],
+                },
+            )
+        finally:
+            _clear_session_event(session_id)
+
+    def run_workflow_async(self, workflow_name: str, request: str) -> dict[str, Any]:
+        """
+        Start a workflow in a background thread and return the session_id.
+
+        The caller can poll ``get_workflow_status`` or use the MCP
+        ``query_workflow_status`` tool until ``result.json`` is written.
+        """
+        try:
+            prepared = self._prepare_workflow(workflow_name, request)
+            if isinstance(prepared, dict):
+                return prepared
+            session_id, session_dir, manifest_path = prepared
+            _set_session_event(session_id)
+
+            self._update_session_status(session_dir, "running")
+            thread = threading.Thread(
+                target=_tracked_target,
+                args=(
+                    self._run_workflow_thread,
+                    (session_id, session_dir, request, manifest_path),
+                ),
+                daemon=True,
+            )
+            _register_thread(thread)
+            thread.start()
+
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "status": "started",
+            }
+        except (InvalidInputError, ValueError) as e:
+            logger.error(f"Validation error starting workflow {workflow_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": f"Validation error: {str(e)}",
+            }
+        except OSError as e:
+            logger.error(f"File system error starting workflow {workflow_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": f"File system error: {str(e)}",
+            }
+        except PathTraversalError as e:
+            logger.error(f"Path traversal error starting workflow {workflow_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": f"Path traversal error: {str(e)}",
+            }
+
+    def implement_async(self, request: str) -> dict[str, Any]:
+        """Start the superpower workflow in the background."""
+        return self.run_workflow_async("superpower", request)
+
+    def review_async(self, request: str) -> dict[str, Any]:
+        """Start the code_review workflow in the background."""
+        return self.run_workflow_async("code_review", request)
+
+    def investigate_async(self, request: str) -> dict[str, Any]:
+        """Start the rca workflow in the background."""
+        return self.run_workflow_async("rca", request)
+
+    def _continue_workflow_thread(
+        self,
+        session_id: str,
+        session_dir: Path,
+        gate_verdict: str | None,
+        gate_notes: str | None,
+        gate_id: str | None,
+    ) -> None:
+        """Background thread body for continue_workflow."""
+        try:
+            if self._check_cancelled_before_start(session_id, session_dir):
+                self._write_result_file(
+                    session_dir,
+                    {
+                        "session_id": session_id,
+                        "final_status": "cancelled",
+                        "stages": [],
+                    },
+                )
+                self._update_session_status(session_dir, "cancelled")
+                return
+            engine = self._make_engine()
+            results = engine.continue_workflow(
+                session_id=session_id,
+                gate_verdict=gate_verdict,
+                gate_notes=gate_notes,
+                gate_id=gate_id,
+            )
+            self._write_result_file(session_dir, results)
+        except Exception as e:
+            logger.error(
+                f"Background continue {session_id} failed: {e}\n{traceback.format_exc()}"
+            )
+            self._write_result_file(
+                session_dir,
+                {
+                    "session_id": session_id,
+                    "final_status": "failed",
+                    "error": f"Background continue failed: {str(e)}",
+                    "stages": [],
+                },
+            )
+        finally:
+            _clear_session_event(session_id)
+
+    def continue_workflow_async(
+        self,
+        session_id: str,
+        gate_verdict: str | None = None,
+        gate_notes: str | None = None,
+        gate_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Resume a workflow in a background thread and return immediately."""
+        from devin_orchestrator.session_manager import resolve_session
+
+        try:
+            session_id = validate_session_id(session_id)
+            session_dir = resolve_session(self.config.session_work_dir, session_id)
+            _set_session_event(session_id)
+            self._update_session_status(session_dir, "running")
+            thread = threading.Thread(
+                target=_tracked_target,
+                args=(
+                    self._continue_workflow_thread,
+                    (session_id, session_dir, gate_verdict, gate_notes, gate_id),
+                ),
+                daemon=True,
+            )
+            _register_thread(thread)
+            thread.start()
+
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "status": "started",
+            }
+        except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
+            logger.error(f"Failed to continue workflow {session_id}: {e}")
+            return {
+                "session_id": session_id,
+                "workspace": None,
+                "status": "failed",
+                "error": f"Failed to continue workflow: {str(e)}",
+            }
+
+    def get_workflow_status(self, session_id: str) -> dict[str, Any]:
+        """Read the current status and any result for a session."""
+        from devin_orchestrator.session_manager import resolve_session
+
+        try:
+            session_id = validate_session_id(session_id)
+            session_dir = resolve_session(self.config.session_work_dir, session_id)
+        except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
+            return {
+                "session_id": session_id,
+                "workspace": None,
+                "status": "not_found",
+                "error": f"Failed to resolve session: {str(e)}",
+            }
+
+        session_file = session_dir / "session.json"
+        result_file = session_dir / "result.json"
+        session_data: dict[str, Any] = {}
+        result_data: dict[str, Any] | None = None
+        session_type = "workflow"
+        if session_id.startswith("DISPATCH-"):
+            session_type = "dispatch"
+        elif session_id.startswith("SKILL-"):
+            session_type = "skill"
+
+        try:
+            if session_file.exists():
+                session_data = json.loads(session_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"Could not read session.json for {session_id}: {e}")
+
+        try:
+            if result_file.exists():
+                result_data = json.loads(result_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"Could not read result.json for {session_id}: {e}")
+
+        artifacts = []
+        try:
+            for p in sorted(session_dir.rglob("*")):
+                if p.is_file():
+                    artifacts.append(str(p.relative_to(session_dir)))
+        except OSError:
+            pass
+
+        return {
+            "session_id": session_id,
+            "workspace": str(session_dir),
+            "type": session_type,
+            "status": session_data.get("status", "unknown"),
+            "final_status": result_data.get("final_status")
+            if result_data
+            else session_data.get("final_status"),
+            "stages": session_data.get("stages", []),
+            "result": result_data,
+            "artifacts": artifacts,
+        }
+
+    def _run_skill_thread(
+        self,
+        session_id: str,
+        session_dir: Path,
+        skill_name: str,
+        request: str,
+    ) -> None:
+        """Background thread body for run_skill."""
+        try:
+            if self._check_cancelled_before_start(session_id, session_dir):
+                self._write_result_file(
+                    session_dir,
+                    {
+                        "session_id": session_id,
+                        "success": False,
+                        "error": "Session cancelled",
+                    },
+                )
+                self._update_session_status(session_dir, "cancelled")
+                return
+            dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
+            invoker = SkillInvoker(demo_mode=self.demo_mode)
+            context = {"session_id": session_id, "request": request}
+            result = invoker.invoke_skill(
+                skill_name=skill_name,
+                context=context,
+                workspace=str(session_dir),
+                timeout=dispatch_timeout,
+            )
+            self._write_result_file(
+                session_dir,
+                {
+                    "session_id": session_id,
+                    "success": result.success,
+                    "output": result.output,
+                    "error": result.error,
+                },
+            )
+        except Exception as e:
+            logger.error(
+                f"Background skill {session_id} failed: {e}\n{traceback.format_exc()}"
+            )
+            self._write_result_file(
+                session_dir,
+                {
+                    "session_id": session_id,
+                    "success": False,
+                    "output": None,
+                    "error": f"Background dispatch failed: {str(e)}",
+                },
+            )
+        finally:
+            _clear_session_event(session_id)
+
+    def cancel_session(self, session_id: str) -> dict[str, Any]:
+        """Mark a session as cancelling and signal the background thread."""
+        from devin_orchestrator.session_manager import resolve_session
+
+        try:
+            session_id = validate_session_id(session_id)
+            session_dir = resolve_session(self.config.session_work_dir, session_id)
+        except (InvalidInputError, PathTraversalError, FileNotFoundError) as e:
+            return {
+                "session_id": session_id,
+                "status": "not_found",
+                "error": f"Failed to resolve session: {str(e)}",
+            }
+
+        event = _set_session_event(session_id)
+        event.set()
+        self._update_session_status(session_dir, "cancelling")
+        return {
+            "session_id": session_id,
+            "workspace": str(session_dir),
+            "status": "cancelling",
+        }
+
+    def run_skill_async(self, skill_name: str, request: str) -> dict[str, Any]:
+        """Start a skill invocation in a background thread and return session_id."""
+        try:
+            skill_name = validate_skill_name(skill_name)
+            session_format = "SKILL-NNN"
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, session_format
+            )
+            _set_session_event(session_id)
+
+            # Scaffold session.json with the request and required top-level keys.
+            session_init(session_id, self.config.session_work_dir, request)
+            self._update_session_status(session_dir, "running")
+            thread = threading.Thread(
+                target=_tracked_target,
+                args=(
+                    self._run_skill_thread,
+                    (session_id, session_dir, skill_name, request),
+                ),
+                daemon=True,
+            )
+            _register_thread(thread)
+            thread.start()
+
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "status": "started",
+            }
+        except (InvalidInputError, ValueError) as e:
+            logger.error(f"Validation error starting skill {skill_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": f"Validation error: {str(e)}",
+            }
+        except OSError as e:
+            logger.error(f"File system error starting skill {skill_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": f"File system error: {str(e)}",
+            }
+        except PathTraversalError as e:
+            logger.error(f"Path traversal error starting skill {skill_name}: {e}")
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": f"Path traversal error: {str(e)}",
+            }
+
+    def plan_async(self, request: str) -> dict[str, Any]:
+        """Start the writing-plans skill in the background."""
+        return self.run_skill_async("writing-plans", request)
+
+    def execute_async(self, request: str, intent: str = "auto") -> dict[str, Any]:
+        """Route the request and start the matching workflow/skill in background."""
+        if intent == "auto":
+            intent = StatelessOrchestrator._detect_intent(request)
+
+        if intent == "implement":
+            return self.implement_async(request)
+        elif intent == "review":
+            return self.review_async(request)
+        elif intent == "investigate":
+            return self.investigate_async(request)
+        elif intent == "plan":
+            return self.plan_async(request)
+        else:
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": f"Unknown intent: {intent}",
+            }

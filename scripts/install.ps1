@@ -110,7 +110,7 @@ function Install-Global {
     $directoriesToCopy = @(
         "skills",
         "workflows",
-        "workflow-engine",
+        "devin_orchestrator",
         "adapters",
         "contracts"
     )
@@ -204,7 +204,7 @@ function Update-Config {
         $configContent = $configContent -replace 'global_root:.*', "global_root: $InstallPath"
         $configContent = $configContent -replace 'skills_dir:.*', "skills_dir: $InstallPath\skills"
         $configContent = $configContent -replace 'workflows_dir:.*', "workflows_dir: $InstallPath\workflows"
-        $configContent = $configContent -replace 'workflow_engine_dir:.*', "workflow_engine_dir: $InstallPath\workflow-engine"
+        $configContent = $configContent -replace 'workflow_engine_dir:.*', "workflow_engine_dir: $InstallPath\devin_orchestrator"
         $configContent = $configContent -replace 'session_work_dir:.*', "session_work_dir: $InstallPath\work"
 
         Set-Content -Path $configPath -Value $configContent
