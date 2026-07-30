@@ -108,6 +108,33 @@ class DevinCliAdapter(TransportAdapter):
             )
         return permission_mode
 
+    def _check_auth(self) -> tuple[bool, str]:
+        """
+        Check whether the configured devin-cli is authenticated.
+
+        Returns:
+            (authenticated, message) tuple. ``authenticated`` is ``True`` when
+            the CLI reports a logged-in session, ``False`` otherwise.
+            ``message`` contains the CLI output or an error string.
+        """
+        try:
+            result = subprocess.run(
+                [self.devin_cli_path, "auth", "status"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+            )
+            output = (result.stdout or "") + (result.stderr or "")
+            if "Not logged in" in output:
+                return False, output
+            if result.returncode != 0:
+                return False, output
+            return True, output
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            return False, f"Failed to run devin auth status ({type(e).__name__}): {e}"
+
     def capabilities(self) -> list[str]:
         """Return the capabilities supported by this adapter"""
         return ["native_subagent_dispatch", "file_operations", "terminal_commands"]
@@ -356,6 +383,22 @@ class DevinCliAdapter(TransportAdapter):
                     error=f"Invalid correction_artifact path: {e}",
                     exit_code=-1,
                 )
+
+        # Fail fast if the CLI is not authenticated, avoiding a multi-minute
+        # timeout while the unauthenticated process waits for login.
+        authenticated, auth_output = self._check_auth()
+        if not authenticated:
+            return InvocationResult(
+                success=False,
+                output="",
+                error=(
+                    "Devin CLI is not authenticated. "
+                    "Run 'devin auth login' (or 'devin auth login --force-manual-token-flow' "
+                    "for headless/SSH sessions). "
+                    f"Auth status output: {auth_output.strip()}"
+                ),
+                exit_code=-1,
+            )
 
         # Build command. The prompt is written to a temporary .md file inside
         # the workspace and passed via --prompt-file to avoid platform command
