@@ -32,6 +32,7 @@ from devin_orchestrator.gate_controller import GateController
 from devin_orchestrator.metrics import MetricsCollector
 from devin_orchestrator.models import Manifest, Stage
 from devin_orchestrator.monitoring import MonitoringSystem
+from devin_orchestrator.otel_tracing import trace_span
 from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
@@ -188,29 +189,33 @@ class OrchestrationEngine:
             manifest.skip_brainstorming = skip_brainstorming
 
         # Start metrics tracking for this workflow
-        self.metrics.start_workflow(session_id, manifest.name)
+        with trace_span(
+            "execute_workflow",
+            {"session_id": session_id, "manifest_name": manifest.name},
+        ):
+            self.metrics.start_workflow(session_id, manifest.name)
 
-        # Execute stages
-        self._state_store.set_status("in_progress", "Starting workflow execution")
-        results = {
-            "session_id": session_id,
-            "manifest": manifest.name,
-            "stages": [],
-            "final_status": "unknown",
-        }
-        self._run_workflow_stages(
-            manifest, session_dir, session_id, config_overrides, results, resume=False
-        )
+            # Execute stages
+            self._state_store.set_status("in_progress", "Starting workflow execution")
+            results = {
+                "session_id": session_id,
+                "manifest": manifest.name,
+                "stages": [],
+                "final_status": "unknown",
+            }
+            self._run_workflow_stages(
+                manifest, session_dir, session_id, config_overrides, results, resume=False
+            )
 
-        if results["final_status"] == "unknown":
-            results["final_status"] = "completed"
-        assert isinstance(results["final_status"], str)
-        self._state_store.set_status(results["final_status"])
+            if results["final_status"] == "unknown":
+                results["final_status"] = "completed"
+            assert isinstance(results["final_status"], str)
+            self._state_store.set_status(results["final_status"])
 
-        # Finalize metrics, export, and monitoring
-        self._finalize_workflow(session_id, session_dir, results)
+            # Finalize metrics, export, and monitoring
+            self._finalize_workflow(session_id, session_dir, results)
 
-        return results
+            return results
 
     def continue_workflow(
         self,
@@ -341,26 +346,34 @@ class OrchestrationEngine:
                     }
 
         # Start/resume metrics tracking
-        self.metrics.start_workflow(session_id, manifest.name)
+        with trace_span(
+            "continue_workflow",
+            {
+                "session_id": session_id,
+                "manifest_name": manifest.name,
+                "gate_id": gate_id or "",
+            },
+        ):
+            self.metrics.start_workflow(session_id, manifest.name)
 
-        self._state_store.set_status("in_progress", "Resuming workflow")
-        results = {
-            "session_id": session_id,
-            "manifest": manifest.name,
-            "stages": [],
-            "final_status": "unknown",
-        }
-        self._run_workflow_stages(
-            manifest, session_dir, session_id, config_overrides, results, resume=True
-        )
+            self._state_store.set_status("in_progress", "Resuming workflow")
+            results = {
+                "session_id": session_id,
+                "manifest": manifest.name,
+                "stages": [],
+                "final_status": "unknown",
+            }
+            self._run_workflow_stages(
+                manifest, session_dir, session_id, config_overrides, results, resume=True
+            )
 
-        if results["final_status"] == "unknown":
-            results["final_status"] = "completed"
-        assert isinstance(results["final_status"], str)
-        self._state_store.set_status(results["final_status"])
+            if results["final_status"] == "unknown":
+                results["final_status"] = "completed"
+            assert isinstance(results["final_status"], str)
+            self._state_store.set_status(results["final_status"])
 
-        self._finalize_workflow(session_id, session_dir, results)
-        return results
+            self._finalize_workflow(session_id, session_dir, results)
+            return results
 
     def _update_session_manifest(self, session_dir: Path, manifest_name: str) -> None:
         """Write the manifest name into session.json for later continuation."""

@@ -14,6 +14,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from devin_orchestrator.models import Stage
+from devin_orchestrator.otel_tracing import trace_span
 from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
 from devin_orchestrator.triage_evaluator import TriageDecision
 
@@ -123,19 +124,27 @@ class StageSkillDispatcher:
         """
         stage = Stage.ensure(stage)
         try:
-            result = self._engine.skill_invoker.invoke_skill(
-                skill_name=skill_name,
-                context={
+            with trace_span(
+                "dispatch_stage_skill",
+                {
                     "session_id": session_id,
-                    "stage": stage_name,
-                    "skill": skill_name,
+                    "stage_name": stage_name,
+                    "skill_name": skill_name,
                 },
-                workspace=str(session_dir),
-                is_reviewer=stage.skill == "requesting-code-review",
-                config_overrides=config_overrides,
-                correction_artifact=correction_artifact,
-                timeout=self._engine.config.get("dispatch_timeout_seconds"),
-            )
+            ):
+                result = self._engine.skill_invoker.invoke_skill(
+                    skill_name=skill_name,
+                    context={
+                        "session_id": session_id,
+                        "stage": stage_name,
+                        "skill": skill_name,
+                    },
+                    workspace=str(session_dir),
+                    is_reviewer=stage.skill == "requesting-code-review",
+                    config_overrides=config_overrides,
+                    correction_artifact=correction_artifact,
+                    timeout=self._engine.config.get("dispatch_timeout_seconds"),
+                )
             logger.info(
                 f"Skill {skill_name} invocation completed with "
                 f"success={result.success}"

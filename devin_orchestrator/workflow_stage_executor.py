@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from devin_orchestrator.artifact_validator import ArtifactValidator
 from devin_orchestrator.models import Manifest, Stage
+from devin_orchestrator.otel_tracing import trace_span
 from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
@@ -158,97 +159,105 @@ class WorkflowStageExecutor:
         stage_name = stage.name
         self._state_store.init(session_id, session_dir)
 
-        if self._is_session_cancelled(session_dir):
-            self._state_store.set_status("cancelled", "Session cancelled")
-            self._engine.update_status(
-                session_dir,
-                stage_name,
-                "cancelled",
-                "Session cancelled",
-            )
-            self._refresh_results(results)
-            return True
-
-        try:
-            stage_result = self._engine._execute_stage(
-                stage=stage,
-                manifest=manifest,
-                session_dir=session_dir,
-                session_id=session_id,
-                config_overrides=config_overrides,
-                resume=resume,
-            )
-        except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-            logger.error(f"Error executing stage {stage_name}: {e}")
-            stage_result = {
-                "stage": stage_name,
-                "skill": stage.skill,
-                "success": False,
-                "output": None,
-                "error": f"Error during stage execution: {str(e)}",
-                "validation": {
-                    "valid": False,
-                    "errors": [f"Error: {str(e)}"],
-                    "artifact_results": {},
-                },
-                "triage_decision": TriageDecision.ESCALATE,
-            }
-            self._persist_stage(stage_name, stage_result, "escalated")
-            self._state_store.set_status("escalated", f"Unexpected error: {e}")
-            self._engine.update_status(
-                session_dir,
-                stage_name,
-                "error",
-                f"Unexpected error: {str(e)}",
-            )
-            self._refresh_results(results)
-            return True
-
-        triage = stage_result["triage_decision"]
-        if triage == TriageDecision.ESCALATE:
-            self._persist_stage(stage_name, stage_result, "escalated")
-            self._state_store.set_status("escalated", "Workflow escalated to human")
-            self._engine.update_status(
-                session_dir,
-                stage_name,
-                "escalated",
-                "Workflow escalated to human",
-            )
-            self._refresh_results(results)
-            return True
-
-        if triage == TriageDecision.RETRY:
-            should_break, stage_result = self._retry_stage_execution(
-                stage,
-                manifest,
-                session_dir,
-                session_id,
-                config_overrides,
-                stage_result,
-            )
-            self._persist_stage(
-                stage_name, stage_result, "escalated" if should_break else "completed"
-            )
-            if should_break:
-                self._state_store.set_status("escalated", "Retry exhausted")
-            self._refresh_results(results)
-            if should_break:
+        with trace_span(
+            "_process_stage",
+            {
+                "session_id": session_id,
+                "stage_name": stage_name,
+                "skill_name": stage.skill,
+            },
+        ):
+            if self._is_session_cancelled(session_dir):
+                self._state_store.set_status("cancelled", "Session cancelled")
+                self._engine.update_status(
+                    session_dir,
+                    stage_name,
+                    "cancelled",
+                    "Session cancelled",
+                )
+                self._refresh_results(results)
                 return True
 
-        if stage.gate and stage.gate != "none":
-            return self._process_stage_gate(
-                stage,
-                stage_result,
-                manifest,
-                session_dir,
-                session_id,
-                config_overrides,
-                results,
-            )
+            try:
+                stage_result = self._engine._execute_stage(
+                    stage=stage,
+                    manifest=manifest,
+                    session_dir=session_dir,
+                    session_id=session_id,
+                    config_overrides=config_overrides,
+                    resume=resume,
+                )
+            except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
+                logger.error(f"Error executing stage {stage_name}: {e}")
+                stage_result = {
+                    "stage": stage_name,
+                    "skill": stage.skill,
+                    "success": False,
+                    "output": None,
+                    "error": f"Error during stage execution: {str(e)}",
+                    "validation": {
+                        "valid": False,
+                        "errors": [f"Error: {str(e)}"],
+                        "artifact_results": {},
+                    },
+                    "triage_decision": TriageDecision.ESCALATE,
+                }
+                self._persist_stage(stage_name, stage_result, "escalated")
+                self._state_store.set_status("escalated", f"Unexpected error: {e}")
+                self._engine.update_status(
+                    session_dir,
+                    stage_name,
+                    "error",
+                    f"Unexpected error: {str(e)}",
+                )
+                self._refresh_results(results)
+                return True
 
-        self._persist_stage(stage_name, stage_result, "completed")
-        self._refresh_results(results)
-        return False
+            triage = stage_result["triage_decision"]
+            if triage == TriageDecision.ESCALATE:
+                self._persist_stage(stage_name, stage_result, "escalated")
+                self._state_store.set_status("escalated", "Workflow escalated to human")
+                self._engine.update_status(
+                    session_dir,
+                    stage_name,
+                    "escalated",
+                    "Workflow escalated to human",
+                )
+                self._refresh_results(results)
+                return True
+
+            if triage == TriageDecision.RETRY:
+                should_break, stage_result = self._retry_stage_execution(
+                    stage,
+                    manifest,
+                    session_dir,
+                    session_id,
+                    config_overrides,
+                    stage_result,
+                )
+                self._persist_stage(
+                    stage_name, stage_result, "escalated" if should_break else "completed"
+                )
+                if should_break:
+                    self._state_store.set_status("escalated", "Retry exhausted")
+                self._refresh_results(results)
+                if should_break:
+                    return True
+
+            if stage.gate and stage.gate != "none":
+                return self._process_stage_gate(
+                    stage,
+                    stage_result,
+                    manifest,
+                    session_dir,
+                    session_id,
+                    config_overrides,
+                    results,
+                )
+
+            self._persist_stage(stage_name, stage_result, "completed")
+            self._refresh_results(results)
+            return False
 
     def _process_stage_gate(
         self,
@@ -269,103 +278,111 @@ class WorkflowStageExecutor:
         max_gate_request_changes = self._resolve_max_gate_request_changes(stage)
         gate_request_changes_count = 0
 
-        while True:
-            gate_result = self._handle_gate(
-                gate_id=gate_id,
-                stage_name=stage_name,
-                session_dir=session_dir,
-                manifest=manifest,
-                stage_result=stage_result,
-            )
-            if gate_result.get("requires_input"):
-                self._persist_stage(stage_name, stage_result, "completed")
-                self._state_store.set_status(
-                    "waiting_for_input",
-                    gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
+        with trace_span(
+            "_process_stage_gate",
+            {
+                "session_id": session_id,
+                "stage_name": stage_name,
+                "gate_id": gate_id or "",
+            },
+        ):
+            while True:
+                gate_result = self._handle_gate(
+                    gate_id=gate_id,
+                    stage_name=stage_name,
+                    session_dir=session_dir,
+                    manifest=manifest,
+                    stage_result=stage_result,
                 )
-                self._engine.update_status(
-                    session_dir,
-                    f"gate_{gate_id}",
-                    "waiting",
-                    gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
-                )
-                self._refresh_results(results)
-                return True
-
-            if gate_result.get("blocked"):
-                self._persist_stage(stage_name, stage_result, "completed")
-                self._state_store.set_status(
-                    "blocked",
-                    gate_result.get("notes", f"Gate {gate_id} blocked"),
-                )
-                self._engine.update_status(
-                    session_dir,
-                    f"gate_{gate_id}",
-                    "block",
-                    gate_result.get("notes", f"Gate {gate_id} blocked"),
-                )
-                self._refresh_results(results)
-                return True
-
-            if gate_result.get("verdict") == "request_changes":
-                gate_request_changes_count += 1
-                if gate_request_changes_count > max_gate_request_changes:
-                    error_msg = (
-                        f"Gate {gate_id} requested changes "
-                        f"{gate_request_changes_count - 1} times for stage "
-                        f"{stage_name}; escalating to avoid infinite loop"
+                if gate_result.get("requires_input"):
+                    self._persist_stage(stage_name, stage_result, "completed")
+                    self._state_store.set_status(
+                        "waiting_for_input",
+                        gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
                     )
-                    logger.warning(error_msg)
-                    self._persist_stage(stage_name, stage_result, "escalated")
-                    self._state_store.set_status("escalated", error_msg)
+                    self._engine.update_status(
+                        session_dir,
+                        f"gate_{gate_id}",
+                        "waiting",
+                        gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
+                    )
+                    self._refresh_results(results)
+                    return True
+
+                if gate_result.get("blocked"):
+                    self._persist_stage(stage_name, stage_result, "completed")
+                    self._state_store.set_status(
+                        "blocked",
+                        gate_result.get("notes", f"Gate {gate_id} blocked"),
+                    )
+                    self._engine.update_status(
+                        session_dir,
+                        f"gate_{gate_id}",
+                        "block",
+                        gate_result.get("notes", f"Gate {gate_id} blocked"),
+                    )
+                    self._refresh_results(results)
+                    return True
+
+                if gate_result.get("verdict") == "request_changes":
+                    gate_request_changes_count += 1
+                    if gate_request_changes_count > max_gate_request_changes:
+                        error_msg = (
+                            f"Gate {gate_id} requested changes "
+                            f"{gate_request_changes_count - 1} times for stage "
+                            f"{stage_name}; escalating to avoid infinite loop"
+                        )
+                        logger.warning(error_msg)
+                        self._persist_stage(stage_name, stage_result, "escalated")
+                        self._state_store.set_status("escalated", error_msg)
+                        self._engine.update_status(
+                            session_dir,
+                            stage_name,
+                            "escalated",
+                            error_msg,
+                        )
+                        self._refresh_results(results)
+                        return True
+
                     self._engine.update_status(
                         session_dir,
                         stage_name,
-                        "escalated",
-                        error_msg,
+                        "request_changes",
+                        f"Gate {gate_id} requested changes",
                     )
-                    self._refresh_results(results)
-                    return True
 
-                self._engine.update_status(
-                    session_dir,
-                    stage_name,
-                    "request_changes",
-                    f"Gate {gate_id} requested changes",
-                )
+                    should_break, stage_result = self._retry_stage_execution(
+                        stage,
+                        manifest,
+                        session_dir,
+                        session_id,
+                        config_overrides,
+                        {
+                            "stage": stage_name,
+                            "skill": stage.skill,
+                            "success": False,
+                            "output": None,
+                            "error": gate_result.get(
+                                "notes", f"Gate {gate_id} requested changes"
+                            ),
+                            "validation": {"valid": False, "errors": [], "artifact_results": {}},
+                            "triage_decision": TriageDecision.RETRY,
+                        },
+                    )
+                    if should_break:
+                        self._persist_stage(stage_name, stage_result, "escalated")
+                        self._state_store.set_status("escalated", "Retry exhausted")
+                        self._refresh_results(results)
+                        return True
 
-                should_break, stage_result = self._retry_stage_execution(
-                    stage,
-                    manifest,
-                    session_dir,
-                    session_id,
-                    config_overrides,
-                    {
-                        "stage": stage_name,
-                        "skill": stage.skill,
-                        "success": False,
-                        "output": None,
-                        "error": gate_result.get(
-                            "notes", f"Gate {gate_id} requested changes"
-                        ),
-                        "validation": {"valid": False, "errors": [], "artifact_results": {}},
-                        "triage_decision": TriageDecision.RETRY,
-                    },
-                )
-                if should_break:
-                    self._persist_stage(stage_name, stage_result, "escalated")
-                    self._state_store.set_status("escalated", "Retry exhausted")
-                    self._refresh_results(results)
-                    return True
+                    self._persist_stage(stage_name, stage_result, "completed")
+                    continue
 
-                self._persist_stage(stage_name, stage_result, "completed")
-                continue
+                break
 
-            break
-
-        self._persist_stage(stage_name, stage_result, "completed")
-        self._refresh_results(results)
-        return False
+            self._persist_stage(stage_name, stage_result, "completed")
+            self._refresh_results(results)
+            return False
 
     def _retry_stage_execution(
         self,
