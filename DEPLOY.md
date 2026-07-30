@@ -67,10 +67,11 @@ When installed from pip/pipx, use `devin-orchestrator install` instead.
 `devin-orchestrator install` registers the MCP server in the usual cross-platform
 locations (devin, aider, windsurf, pi, claude, hermes). Run `devin-orchestrator install --dry-run` to see which files would be touched.
 
-The launcher used in the configs:
+The command registered in each config is chosen automatically:
 
-- **Linux / macOS:** `~/.local/bin/devin-orchestrator`
-- **Windows:** `~/.devin-orchestrator\bin\devin-orchestrator.bat`
+- If `devin-orchestrator` is on PATH (pip/pipx install), it uses `devin-orchestrator mcp`.
+- If the legacy `install.py` wrapper exists, it uses that wrapper.
+- Otherwise it falls back to `python -m devin_orchestrator.mcp_server`.
 
 ## Troubleshooting
 

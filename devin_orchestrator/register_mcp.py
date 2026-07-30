@@ -17,6 +17,15 @@ import time
 from pathlib import Path
 from typing import Any
 
+
+def _is_legacy_launcher(path: Path) -> bool:
+    """Return True if *path* is the old install.py wrapper around mcp_server.py."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return False
+    return "mcp_server.py" in text
+
 try:
     import yaml
 except ImportError:
@@ -41,6 +50,9 @@ def _global_root(global_root: Path | None = None) -> Path:
 
 def _launcher_path(global_root: Path | None = None) -> str:
     """Return the platform-appropriate launcher path."""
+    exe = shutil.which("devin-orchestrator")
+    if exe:
+        return exe
     root = _global_root(global_root)
     if sys.platform == "win32":
         return str(root / "bin" / "devin-orchestrator.bat")
@@ -48,8 +60,22 @@ def _launcher_path(global_root: Path | None = None) -> str:
 
 
 def devin_mcp_config(global_root: Path | None = None) -> dict[str, Any]:
+    """Return an MCP server config for the current installation."""
+    launcher = Path(_launcher_path(global_root))
+    if launcher.exists() and _is_legacy_launcher(launcher):
+        # Old install.py wrapper: it already runs mcp_server.py.
+        return {"command": str(launcher), "instructions": DEFAULT_INSTRUCTIONS}
+    if shutil.which("devin-orchestrator"):
+        # Modern pip/pipx console script: add the `mcp` subcommand.
+        return {
+            "command": str(launcher),
+            "args": ["mcp"],
+            "instructions": DEFAULT_INSTRUCTIONS,
+        }
+    # Fallback for running from source or an unpacked package.
     return {
-        "command": _launcher_path(global_root),
+        "command": sys.executable,
+        "args": ["-m", "devin_orchestrator.mcp_server"],
         "instructions": DEFAULT_INSTRUCTIONS,
     }
 
