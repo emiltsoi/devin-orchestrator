@@ -7,11 +7,15 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+      id-token: write
+
     steps:
     - uses: actions/checkout@v4
       with:
@@ -26,8 +30,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
+        pip install -r requirements.txt -r requirements-dev.txt
+        pip install build
     
     - name: Run tests
       run: |
@@ -41,15 +45,34 @@ jobs:
     
     - name: Run security checks
       run: |
-        pip install bandit safety
-        bandit -r devin_orchestrator/
-        safety check
-    
+        bandit -c .bandit.yml -r devin_orchestrator/ install.py deploy.py -q -x '**/test_*.py'
+        pip-audit --desc
+
+    - name: Build and install wheel
+      run: |
+        python -m build --wheel --sdist
+        pip install dist/*.whl
+
+    - name: Smoke test installed package
+      run: |
+        devin-orchestrator --version
+        dispatch-devin --version
+        dispatch-skill --version
+        printf 'Content-Length: 48\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+          | devin-orchestrator 2>/dev/null \
+          | grep -q '"serverInfo"'
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: dist/
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         draft: false
         prerelease: false
         generate_release_notes: true
+        files: dist/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
