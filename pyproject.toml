@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "devin-orchestrator"
-version = "0.1.7"
+version = "0.1.8"
 description = "Stateless orchestration layer for Devin workflows and skills"
 readme = "README.md"
 license = {text = "MIT"}
@@ -56,7 +56,6 @@ dispatch-skill = "devin_orchestrator.dispatch_skill:shim"
 
 [project.urls]
 Homepage = "https://github.com/emiltsoi/devin-orchestrator"
-Documentation = "README.md"
 
 [tool.hatch.build]
 ignore-vcs = true
