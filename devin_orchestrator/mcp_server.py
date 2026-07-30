@@ -54,6 +54,7 @@ from devin_orchestrator.mcp_artifacts import (  # noqa: E402
     SubprocessArtifactRunner,
 )
 from devin_orchestrator.session_manager import create_session  # noqa: E402
+from devin_orchestrator import __version__  # noqa: E402
 from devin_orchestrator.security_utils import (  # noqa: E402
     InvalidInputError,
     PathTraversalError,
@@ -66,22 +67,12 @@ from devin_orchestrator.security_utils import (  # noqa: E402
 )
 
 
-def _package_version() -> str:
-    """Return the installed package version, or a fallback in source trees."""
-    try:
-        from importlib.metadata import version
-
-        return version("devin-orchestrator")
-    except Exception:  # pragma: no cover - source tree fallback
-        return "0.1.2"
-
-
 class McpServer:
     """Minimal stdio MCP server backed by the devin-orchestrator harness."""
 
     PROTOCOL_VERSION = "2024-11-05"
     SERVER_NAME = "devin-orchestrator"
-    SERVER_VERSION = _package_version()
+    SERVER_VERSION = __version__
     MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
     # Maximum bytes of subprocess output to keep per stdout/stderr stream.
     # Larger outputs are truncated before being returned to MCP clients.
@@ -2591,6 +2582,11 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="devin-orchestrator MCP server")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     parser.add_argument(
         "--workspace",
         default=None,

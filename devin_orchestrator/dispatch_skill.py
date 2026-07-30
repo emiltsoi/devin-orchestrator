@@ -14,6 +14,7 @@ import json
 import sys
 
 # This works regardless of installation location
+from devin_orchestrator import __version__
 from devin_orchestrator.config_loader import ConfigLoader
 from devin_orchestrator.security_utils import (
     InvalidInputError,
@@ -26,6 +27,11 @@ from devin_orchestrator.skill_invoker import SkillInvoker
 
 
 def main():
+    # Handle --version before positional parsing
+    if "--version" in sys.argv or "-V" in sys.argv:
+        print(__version__)
+        sys.exit(0)
+
     # Parse command line arguments
     if len(sys.argv) < 4:
         print(
