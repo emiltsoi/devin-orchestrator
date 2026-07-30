@@ -14,8 +14,10 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from devin_orchestrator.config_loader import ConfigLoader
+from devin_orchestrator.state_store import JsonlStateStore
 
 
 @dataclass
@@ -31,9 +33,10 @@ class HealthCheckResult:
 class HealthChecker:
     """Health checker for devin-orchestrator components"""
 
-    def __init__(self):
+    def __init__(self, work_dir: Path | str | None = None):
         self.results: list[HealthCheckResult] = []
-        self.config = None
+        self.config: Any | None = None
+        self.work_dir = Path(work_dir) if work_dir else None
 
     def check_config_file(self) -> HealthCheckResult:
         """Check config file validity"""
@@ -222,6 +225,84 @@ class HealthChecker:
             },
         )
 
+    def check_sessions(self) -> HealthCheckResult:
+        """Check for active and completed workflow sessions."""
+        if not self.work_dir:
+            return HealthCheckResult(
+                component="sessions",
+                status="error",
+                message="No work_dir configured, cannot check sessions",
+                details={},
+            )
+
+        if not self.work_dir.exists():
+            return HealthCheckResult(
+                component="sessions",
+                status="warning",
+                message=f"Work directory does not exist: {self.work_dir}",
+                details={"work_dir": str(self.work_dir)},
+            )
+
+        active = 0
+        final = 0
+        sessions: list[dict] = []
+        for session_dir in sorted(self.work_dir.iterdir()):
+            if not session_dir.is_dir():
+                continue
+            state = JsonlStateStore()
+            state.init(session_dir.name, session_dir)
+            status = state.get_status()
+            is_final = state.is_final()
+            if is_final:
+                final += 1
+            else:
+                active += 1
+            sessions.append(
+                {"session_id": session_dir.name, "status": status, "final": is_final}
+            )
+
+        return HealthCheckResult(
+            component="sessions",
+            status="healthy" if active == 0 else "warning",
+            message=f"{active} active, {final} final session(s)",
+            details={
+                "work_dir": str(self.work_dir),
+                "active": active,
+                "final": final,
+                "sessions": sessions,
+            },
+        )
+
+    def check_stuck_gates(self) -> HealthCheckResult:
+        """Check for sessions paused at a gate."""
+        if not self.work_dir or not self.work_dir.exists():
+            return HealthCheckResult(
+                component="stuck_gates",
+                status="error",
+                message="No work_dir configured, cannot check stuck gates",
+                details={},
+            )
+
+        stuck: list[dict] = []
+        for session_dir in sorted(self.work_dir.iterdir()):
+            if not session_dir.is_dir():
+                continue
+            state = JsonlStateStore()
+            state.init(session_dir.name, session_dir)
+            if state.get_status() in ("waiting_for_input", "blocked"):
+                stuck.append(
+                    {"session_id": session_dir.name, "status": state.get_status()}
+                )
+
+        return HealthCheckResult(
+            component="stuck_gates",
+            status="healthy" if not stuck else "warning",
+            message=f"{len(stuck)} session(s) waiting at a gate"
+            if stuck
+            else "No sessions are waiting at a gate",
+            details={"stuck_sessions": stuck},
+        )
+
     def check_devin_cli(self) -> HealthCheckResult:
         """Check devin-cli availability"""
         if not self.config:
@@ -299,9 +380,13 @@ class HealthChecker:
 
         # Run all checks
         self.results.append(self.check_config_file())
+        if self.config and not self.work_dir:
+            self.work_dir = Path(self.config.workflow_engine_dir)
         self.results.append(self.check_skills_directory())
         self.results.append(self.check_workflows_directory())
         self.results.append(self.check_devin_cli())
+        self.results.append(self.check_sessions())
+        self.results.append(self.check_stuck_gates())
 
         # Calculate overall status
         error_count = sum(1 for r in self.results if r.status == "error")
@@ -371,6 +456,12 @@ class HealthChecker:
             print()
 
         print("=" * 60)
+
+
+def health(work_dir: Path | str | None = None) -> dict:
+    """Run all health checks and return a JSON-serializable report."""
+    checker = HealthChecker(work_dir=work_dir)
+    return checker.run_all_checks()
 
 
 def main():
