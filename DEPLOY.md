@@ -8,6 +8,19 @@ It works on Linux, macOS, and Windows.
 
 ## One-click deploy
 
+### Modern: pipx + `devin-orchestrator install` (recommended)
+
+Install with [pipx](https://pypa.github.io/pipx/) and create a user systemd service:
+
+```bash
+pipx install devin-orchestrator
+devin-orchestrator install
+```
+
+Then register the MCP server with your agent. Use `devin-orchestrator install --uninstall` to remove the service and `devin-orchestrator install --upgrade` to update the package.
+
+### Legacy Python scripts
+
 The same Python script works everywhere.
 
 ### Linux / macOS

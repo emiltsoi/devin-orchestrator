@@ -26,15 +26,25 @@ This will:
 2. Install globally to `~/.devin-orchestrator/`
 3. Set up the current workspace with workflow manifests
 
-### Option 2: pip install
+### Option 2: pip / pipx install
 
 You can also install `devin-orchestrator` as a regular Python package:
 
 ```bash
 pip install .
+# or, for an isolated global install
+pipx install .
 ```
 
-This installs the `devin_orchestrator` package, the console scripts (`devin-orchestrator`, `dispatch-devin`, `dispatch-skill`), and ships the bundled `skills/`, `workflows/`, `roles/`, and `config.yaml` data. After installation you can run `install.py` to copy those data files to `~/.devin-orchestrator/`, or set `DEVIN_ORCHESTRATOR_SKILLS_DIR`/`DEVIN_ORCHESTRATOR_WORKFLOWS_DIR` to point at the installed data.
+This installs the `devin_orchestrator` package, the console scripts (`devin-orchestrator`, `dispatch-devin`, `dispatch-skill`), and ships the bundled `skills/`, `workflows/`, `roles/`, and `config.yaml` data.
+
+After installation, create a systemd user service and a smoke test:
+
+```bash
+devin-orchestrator install
+```
+
+Remove the service with `devin-orchestrator install --uninstall` or upgrade the package with `devin-orchestrator install --upgrade`. The legacy `install.py` and `deploy.py` scripts still work but print a deprecation warning.
 
 ### Option 3: Deployment Scripts (New)
 

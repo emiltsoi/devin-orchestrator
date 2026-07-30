@@ -1,0 +1,16 @@
+[Unit]
+Description=devin-orchestrator MCP server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={{ exec_start }}
+WorkingDirectory={{ work_dir }}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+User={{ user }}
+
+[Install]
+WantedBy=default.target

@@ -44,6 +44,12 @@ def _health_cmd(_namespace: argparse.Namespace, extra: list[str]) -> int:
     return health_main(extra)
 
 
+def _install_cmd(_namespace: argparse.Namespace, extra: list[str]) -> int:
+    from devin_orchestrator.cli_install import install
+
+    return install(extra)
+
+
 def _dispatch_cmd(_namespace: argparse.Namespace, extra: list[str]) -> int:
     """Forward to dispatch_devin or dispatch_skill based on args."""
     from devin_orchestrator.dispatch_devin import main as dispatch_devin_main
@@ -75,10 +81,11 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("mcp", help="Run the MCP server")
-    subparsers.add_parser("dispatch", help="Dispatch a Devin worker or skill")
-    subparsers.add_parser("doctor", help="Run diagnostic checks")
-    subparsers.add_parser("health", help="Print health report as JSON")
+    subparsers.add_parser("mcp", add_help=False, help="Run the MCP server")
+    subparsers.add_parser("dispatch", add_help=False, help="Dispatch a Devin worker or skill")
+    subparsers.add_parser("doctor", add_help=False, help="Run diagnostic checks")
+    subparsers.add_parser("health", add_help=False, help="Print health report as JSON")
+    subparsers.add_parser("install", add_help=False, help="Install, uninstall, or upgrade the service")
 
     return parser
 
@@ -105,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         return _doctor_cmd(args, extra)
     if command == "health":
         return _health_cmd(args, extra)
+    if command == "install":
+        return _install_cmd(args, extra)
     if command == "dispatch":
         return _dispatch_cmd(args, extra)
 
