@@ -3,7 +3,6 @@
 import sys
 from pathlib import Path
 
-
 # Ensure the repository root is on sys.path so `import devin_orchestrator`
 # works no matter where pytest is invoked from.
 REPO_ROOT = Path(__file__).resolve().parents[1]

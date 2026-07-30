@@ -34,10 +34,7 @@ def main() -> int:
     print()
 
     # Python version
-    if sys.version_info >= (3, 10):
-        _ok(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-    else:
-        _fail("Python 3.10+", f"running {sys.version}")
+    _ok(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
 
     # Package version
     try:
@@ -59,7 +56,7 @@ def main() -> int:
         if path.is_dir() and any(path.iterdir()):
             _ok(f"Data directory: {path}")
         else:
-            _fail(f"Data directory", f"missing or empty: {path}")
+            _fail("Data directory", f"missing or empty: {path}")
 
     config_file = global_root / "config.yaml"
     if config_file.exists():

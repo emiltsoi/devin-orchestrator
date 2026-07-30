@@ -27,14 +27,16 @@ import logging
 import mimetypes
 import os
 import re
-import subprocess  # nosec B404
 import sys
 import threading
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from devin_orchestrator.stateless_orchestrator import StatelessOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +49,17 @@ except ModuleNotFoundError as e:
         "The PyYAML package is required. Install it with: pip install PyYAML>=5.1"
     ) from e
 
+from devin_orchestrator import __version__  # noqa: E402
 from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
 from devin_orchestrator.deterministic_tools import session_init  # noqa: E402
-from devin_orchestrator.log_rotate import cleanup_old_logs, rotate_if_needed  # noqa: E402
+from devin_orchestrator.log_rotate import (  # noqa: E402
+    cleanup_old_logs,
+    rotate_if_needed,
+)
 from devin_orchestrator.mcp_artifacts import (  # noqa: E402
     McpCallLogger,
     SubprocessArtifactRunner,
 )
-from devin_orchestrator.session_manager import create_session  # noqa: E402
-from devin_orchestrator import __version__  # noqa: E402
 from devin_orchestrator.security_utils import (  # noqa: E402
     InvalidInputError,
     PathTraversalError,
@@ -66,6 +70,7 @@ from devin_orchestrator.security_utils import (  # noqa: E402
     validate_workflow_name,
     validate_workspace_path,
 )
+from devin_orchestrator.session_manager import create_session  # noqa: E402
 
 
 class McpServer:
@@ -793,9 +798,8 @@ class McpServer:
             "gate_decision": 18,
             "continue_workflow": 19,
             "query_workflow_status": 20,
-            "run_skill": 21,
-            "list_sessions": 22,
-            "cancel_session": 23,
+            "list_sessions": 21,
+            "cancel_session": 22,
         }
         tools.sort(key=lambda tool: tool_order.get(str(tool.get("name") or ""), 100))
         return {
@@ -1009,7 +1013,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
 
     def _orchestrator_for_call(
         self, arguments: dict, **overrides: Any
-    ) -> "StatelessOrchestrator":
+    ) -> StatelessOrchestrator:
         """
         Build a StatelessOrchestrator using the per-call workspace if provided,
         otherwise falling back to the server's pre-loaded workspace.
@@ -1020,8 +1024,8 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         return StatelessOrchestrator(
             workspace=workspace,
             demo_mode=overrides.get("demo_mode", False),
-            timeout=overrides.get("timeout", None),
-            gate_mode=overrides.get("gate_mode", None),
+            timeout=overrides.get("timeout"),
+            gate_mode=overrides.get("gate_mode"),
         )
 
     def _error(self, request: dict, code: int, message: str) -> dict:
@@ -2382,10 +2386,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
 
         for root, dirs, files in os.walk(target):
             rel_root = Path(os.path.relpath(root, target))
-            if rel_root == Path("."):
-                depth = 0
-            else:
-                depth = len(rel_root.parts)
+            depth = 0 if rel_root == Path(".") else len(rel_root.parts)
             if depth > max_depth:
                 continue
             if depth == max_depth:

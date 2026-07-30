@@ -6,21 +6,20 @@ Installs devin-orchestrator to a global location (~/.devin-orchestrator/)
 for use across all workspaces.
 """
 
+import contextlib
 import glob
 import os
 import shutil
 import stat
+import sys
 import time
 from pathlib import Path
-import sys
 
 
 def _on_rm_error(func, path, exc_info):
     """Make paths writable and retry removal (Windows-friendly)."""
-    try:
+    with contextlib.suppress(OSError, NotImplementedError):
         os.chmod(path, stat.S_IWRITE)
-    except (OSError, NotImplementedError):
-        pass
     func(path)
 
 
@@ -39,10 +38,8 @@ def _prune_backups(backups_dir: Path, keep: int) -> None:
     pattern = str(backups_dir / "*.bak")
     backups = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     for old in backups[keep:]:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(old)
-        except OSError:
-            pass
 
 
 def _backup_path(path: Path, keep_backups: int = 10) -> Path:

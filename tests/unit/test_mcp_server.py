@@ -196,7 +196,7 @@ def test_dispatch_devin_builds_command(server):
     prompt_file = work_dir / "prompt.md"
     prompt_file.write_text("# prompt", encoding="utf-8")
 
-    with patch("devin_orchestrator.mcp_server.subprocess.run") as mock_run:
+    with patch("devin_orchestrator.mcp_artifacts.subprocess.run") as mock_run:
         mock_run.return_value = Mock(returncode=0, stdout="ok", stderr="", args=[])
         response = server.handle(
             {
@@ -227,7 +227,7 @@ def test_dispatch_skill_builds_command(server):
     workspace = server.config.global_root / "skill_ws"
     workspace.mkdir()
 
-    with patch("devin_orchestrator.mcp_server.subprocess.run") as mock_run:
+    with patch("devin_orchestrator.mcp_artifacts.subprocess.run") as mock_run:
         mock_run.return_value = Mock(
             returncode=0, stdout='{"success": true}', stderr="", args=[]
         )
