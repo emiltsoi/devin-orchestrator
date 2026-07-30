@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 from devin_orchestrator import cli_install
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     import pytest
 
 
@@ -164,7 +163,7 @@ def test_install_cli_routes_install_bare_default(monkeypatch: pytest.MonkeyPatch
         {
             "system": False,
             "service_name": "x",
-            "work_dir": "/tmp",
+            "work_dir": str(Path("/tmp")),
             "user": "bob",
             "command": None,
         }
@@ -195,7 +194,7 @@ def test_install_cli_routes_install_explicit(monkeypatch: pytest.MonkeyPatch):
         {
             "system": False,
             "service_name": "x",
-            "work_dir": "/tmp",
+            "work_dir": str(Path("/tmp")),
             "user": "bob",
             "command": None,
         }
