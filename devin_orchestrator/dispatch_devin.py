@@ -24,6 +24,7 @@ markdown file is also accepted.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -103,9 +104,10 @@ def build_prompt(role_file: Path, prompt_file: Path) -> str:
     return f"{role_content}\n\n# Task\n\n{prompt_content}"
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generic Devin dispatcher with role and prompt files."
+        prog="dispatch-devin",
+        description="Generic Devin dispatcher with role and prompt files.",
     )
     parser.add_argument(
         "--version",
@@ -170,11 +172,11 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Optional artifact path to include in the prompt; repeatable",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
 
     role_file = resolve_role_file(args.role)
     prompt_file = Path(args.prompt_file)
@@ -279,5 +281,20 @@ def main() -> int:
     )
 
 
+def shim() -> int:
+    """Deprecated legacy entry point; routes through the unified CLI."""
+    import warnings
+
+    warnings.warn(
+        "dispatch-devin is deprecated; use 'devin-orchestrator dispatch' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    os.environ["DEVIN_ORCHESTRATOR_NO_DEPRECATION"] = "1"
+    from devin_orchestrator.cli import main as cli_main
+
+    return cli_main(sys.argv)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(shim())

@@ -47,11 +47,12 @@ otel = [
 ]
 
 [project.scripts]
-devin-orchestrator = "devin_orchestrator.mcp_server:main"
+devin-orchestrator = "devin_orchestrator.cli:main"
 devin-orchestrator-doctor = "devin_orchestrator.doctor:main"
 devin-orchestrator-health = "devin_orchestrator.health_cli:main"
-dispatch-devin = "devin_orchestrator.dispatch_devin:main"
-dispatch-skill = "devin_orchestrator.dispatch_skill:main"
+devin-orchestrator-dispatch = "devin_orchestrator.cli:main"
+dispatch-devin = "devin_orchestrator.dispatch_devin:shim"
+dispatch-skill = "devin_orchestrator.dispatch_skill:shim"
 
 [project.urls]
 Homepage = "https://github.com/emiltsoi/devin-orchestrator"

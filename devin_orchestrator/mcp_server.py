@@ -2604,7 +2604,7 @@ Do NOT use run_skill for implementation tasks. It has no focused_context and byp
         file_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="devin-orchestrator MCP server")
     parser.add_argument(
         "--version",
@@ -2630,7 +2630,7 @@ def main() -> None:
         default=None,
         help="Log structured MCP tool calls to an NDJSON file (default: %(const)s)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     server = McpServer(
         workspace=args.workspace,
         message_log_path=args.message_log,
