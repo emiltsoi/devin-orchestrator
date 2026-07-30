@@ -11,6 +11,8 @@ import sys
 import warnings
 from pathlib import Path
 
+import devin_orchestrator.register_mcp as _register_mcp
+
 
 def _smoke_test() -> bool:
     try:
@@ -40,6 +42,10 @@ def _install_service(
     work_dir: Path,
     user: str,
     command: list[str] | None = None,
+    dry_run: bool = False,
+    register: bool = True,
+    keep_backups: int = 10,
+    create_missing: bool = True,
 ) -> int:
     if command is None:
         command = [sys.executable, "-m", "devin_orchestrator.mcp_server"]
@@ -63,25 +69,55 @@ def _install_service(
     )
 
     unit_file = unit_dir / f"{service_name}.service"
-    unit_file.write_text(rendered, encoding="utf-8")
-    print(f"Wrote systemd unit: {unit_file}")
 
-    if not _smoke_test():
+    if dry_run:
+        print(f"Would write systemd unit: {unit_file}")
+    else:
+        unit_file.write_text(rendered, encoding="utf-8")
+        print(f"Wrote systemd unit: {unit_file}")
+
+    if not dry_run and not _smoke_test():
         print("Smoke test failed; run `devin-orchestrator doctor` for details.", file=sys.stderr)
 
-    if not system:
+    if not dry_run and not system:
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
         subprocess.run(["systemctl", "--user", "enable", service_name], check=False)
         print(f"Enabled {service_name} for the current user.")
-    else:
+    elif not dry_run:
         subprocess.run(["systemctl", "daemon-reload"], check=False)
         subprocess.run(["systemctl", "enable", service_name], check=False)
         print(f"Enabled {service_name} system-wide.")
 
+    if register:
+        results = _register_mcp.register(
+            dry_run=dry_run,
+            create_missing=create_missing,
+            keep_backups=keep_backups,
+        )
+        for target, changed in results:
+            action = (
+                "Would update" if dry_run and changed else ("Updated" if changed else "No change")
+            )
+            print(f"{action:<13} {target['name']:<12} {target['path']}")
+
     return 0
 
 
-def _uninstall_service(system: bool, service_name: str) -> int:
+def _uninstall_service(
+    system: bool,
+    service_name: str,
+    dry_run: bool = False,
+    deregister: bool = False,
+    keep_backups: int = 10,
+) -> int:
+    if deregister:
+        results = _register_mcp.remove(dry_run=dry_run, keep_backups=keep_backups)
+        for target, changed in results:
+            action = (
+                "Would remove" if dry_run and changed else ("Removed" if changed else "No change")
+            )
+            print(f"{action:<13} {target['name']:<12} {target['path']}")
+
     if system:
         unit_dir = Path("/etc/systemd/system")
         systemctl = ["systemctl"]
@@ -91,11 +127,14 @@ def _uninstall_service(system: bool, service_name: str) -> int:
 
     unit_file = unit_dir / f"{service_name}.service"
     if unit_file.exists():
-        subprocess.run([*systemctl, "stop", service_name], check=False)
-        subprocess.run([*systemctl, "disable", service_name], check=False)
-        unit_file.unlink()
-        subprocess.run([*systemctl, "daemon-reload"], check=False)
-        print(f"Removed {unit_file}")
+        if dry_run:
+            print(f"Would remove service unit: {unit_file}")
+        else:
+            subprocess.run([*systemctl, "stop", service_name], check=False)
+            subprocess.run([*systemctl, "disable", service_name], check=False)
+            unit_file.unlink()
+            subprocess.run([*systemctl, "daemon-reload"], check=False)
+            print(f"Removed {unit_file}")
     else:
         print(f"Service unit not found: {unit_file}")
         return 1
@@ -143,6 +182,29 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
         default=None,
         help="Command to run in the service (default: run MCP server)",
     )
+    install_cmd.add_argument(
+        "--register",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Register the MCP server in agent configs (default: True)",
+    )
+    install_cmd.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be changed without writing files or starting services",
+    )
+    install_cmd.add_argument(
+        "--keep-backups",
+        type=int,
+        default=10,
+        help="Number of agent config backups to retain (default: 10)",
+    )
+    install_cmd.add_argument(
+        "--create-missing",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Create agent config files if they do not exist (default: True)",
+    )
 
     uninstall_cmd = subparsers.add_parser(
         "uninstall", help="Uninstall the devin-orchestrator service"
@@ -151,6 +213,22 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
         "--system", action="store_true", help="Uninstall a system service (requires root)"
     )
     uninstall_cmd.add_argument("--service-name", default="devin-orchestrator")
+    uninstall_cmd.add_argument(
+        "--deregister",
+        action="store_true",
+        help="Remove the MCP server from agent configs",
+    )
+    uninstall_cmd.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be changed without writing files or stopping services",
+    )
+    uninstall_cmd.add_argument(
+        "--keep-backups",
+        type=int,
+        default=10,
+        help="Number of agent config backups to retain (default: 10)",
+    )
 
     upgrade_cmd = subparsers.add_parser(
         "upgrade", help="Upgrade the devin-orchestrator package with pip"
@@ -190,13 +268,19 @@ def install(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "uninstall":
-        return _uninstall_service(system=args.system, service_name=args.service_name)
+        return _uninstall_service(
+            system=args.system,
+            service_name=args.service_name,
+            dry_run=args.dry_run,
+            deregister=args.deregister,
+            keep_backups=args.keep_backups,
+        )
 
     if args.command == "upgrade":
         return _upgrade_package(user=args.user_install)
 
     if args.command == "install":
-        if args.system and not args.run_as:
+        if not args.dry_run and args.system and not args.run_as:
             print("--run-as is required for --system installs.", file=sys.stderr)
             return 2
         return _install_service(
@@ -205,6 +289,10 @@ def install(argv: list[str] | None = None) -> int:
             work_dir=Path(args.work_dir),
             user=args.run_as,
             command=args.exec_cmd,
+            dry_run=args.dry_run,
+            register=args.register,
+            keep_backups=args.keep_backups,
+            create_missing=args.create_missing,
         )
 
     parser.print_help()
