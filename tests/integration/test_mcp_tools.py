@@ -1,4 +1,5 @@
 """Integration tests for MCP server JSON-RPC interface."""
+
 from __future__ import annotations
 
 import json
@@ -62,7 +63,9 @@ def test_mcp_server_initializes_and_lists_tools(tmp_path: Path):
         assert proc.stdin is not None
         assert proc.stdout is not None
 
-        proc.stdin.write(_mcp_message(1, "initialize", {"protocolVersion": "2024-11-05"}))
+        proc.stdin.write(
+            _mcp_message(1, "initialize", {"protocolVersion": "2024-11-05"})
+        )
         proc.stdin.flush()
 
         init_response = _read_response(proc.stdout)
@@ -107,7 +110,9 @@ def test_mcp_server_health_tool(tmp_path: Path):
         assert proc.stdin is not None
         assert proc.stdout is not None
 
-        proc.stdin.write(_mcp_message(1, "initialize", {"protocolVersion": "2024-11-05"}))
+        proc.stdin.write(
+            _mcp_message(1, "initialize", {"protocolVersion": "2024-11-05"})
+        )
         proc.stdin.flush()
         _read_response(proc.stdout)
 

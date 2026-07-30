@@ -86,9 +86,7 @@ class McpServer(
     DEFAULT_MESSAGE_LOG = (
         Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
     )
-    DEFAULT_MCP_CALLS_LOG = (
-        McpCallLogger.DEFAULT_LOG_DIR / "mcp-calls.jsonl"
-    )
+    DEFAULT_MCP_CALLS_LOG = McpCallLogger.DEFAULT_LOG_DIR / "mcp-calls.jsonl"
 
 
 def main(argv: list[str] | None = None) -> None:

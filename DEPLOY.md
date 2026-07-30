@@ -73,6 +73,15 @@ The command registered in each config is chosen automatically:
 - If the legacy `install.py` wrapper exists, it uses that wrapper.
 - Otherwise it falls back to `python -m devin_orchestrator.mcp_server`.
 
+### Service and agent-spawned stdio MCP
+
+`devin-orchestrator install` does two things by default:
+
+1. It registers the stdio MCP server command in each agent config so agents can spawn it on demand.
+2. It installs a background service (systemd/launchd/Task Scheduler) that runs the same stdio MCP server at logon.
+
+This means both the service and an individual agent may have a `devin-orchestrator` MCP process running at the same time. That is intentional for now: the service keeps an instance ready for clients that cannot spawn their own process, while the registered command lets agents launch the server themselves. Future transports (HTTP/SSE) will replace the background stdio service with a single long-running server.
+
 ## Troubleshooting
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common install, PATH, PyYAML, stale process, and smoke-test issues.

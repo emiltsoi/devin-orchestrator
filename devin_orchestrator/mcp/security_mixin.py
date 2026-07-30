@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class McpSecurityMixin(McpServerBase):
-
     def _check_rate_limit(self, tool_name: str) -> bool:
         """
         Check if the tool call is within rate limits.

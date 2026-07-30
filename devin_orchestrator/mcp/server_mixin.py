@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 
 class McpServerMixin(McpServerBase):
-
     def __init__(
         self,
         workspace: str | None = None,
@@ -102,6 +101,7 @@ class McpServerMixin(McpServerBase):
         # Give background threads a brief window to finish writing artifacts
         try:
             from devin_orchestrator.stateless_orchestrator import _join_active_threads
+
             _join_active_threads(timeout=2.0)
         except Exception:
             pass

@@ -26,6 +26,7 @@ def _is_legacy_launcher(path: Path) -> bool:
         return False
     return "mcp_server.py" in text
 
+
 try:
     import yaml
 except ImportError:
@@ -59,23 +60,33 @@ def _launcher_path(global_root: Path | None = None) -> str:
     return str(Path.home() / ".local" / "bin" / "devin-orchestrator")
 
 
-def devin_mcp_config(global_root: Path | None = None) -> dict[str, Any]:
+def devin_mcp_config(
+    global_root: Path | None = None,
+    extra_args: list[str] | None = None,
+) -> dict[str, Any]:
     """Return an MCP server config for the current installation."""
+    extra = list(extra_args) if extra_args else []
     launcher = Path(_launcher_path(global_root))
     if launcher.exists() and _is_legacy_launcher(launcher):
         # Old install.py wrapper: it already runs mcp_server.py.
-        return {"command": str(launcher), "instructions": DEFAULT_INSTRUCTIONS}
+        config: dict[str, Any] = {
+            "command": str(launcher),
+            "instructions": DEFAULT_INSTRUCTIONS,
+        }
+        if extra:
+            config["args"] = extra
+        return config
     if shutil.which("devin-orchestrator"):
         # Modern pip/pipx console script: add the `mcp` subcommand.
         return {
             "command": str(launcher),
-            "args": ["mcp"],
+            "args": ["mcp", *extra],
             "instructions": DEFAULT_INSTRUCTIONS,
         }
     # Fallback for running from source or an unpacked package.
     return {
         "command": sys.executable,
-        "args": ["-m", "devin_orchestrator.mcp_server"],
+        "args": ["-m", "devin_orchestrator.mcp_server", *extra],
         "instructions": DEFAULT_INSTRUCTIONS,
     }
 
@@ -111,12 +122,16 @@ def _targets() -> list[ConfigTarget]:
     windsurf_candidates = [home / ".codeium" / "windsurf" / "mcp_config.json"]
     if appdata:
         windsurf_candidates.append(appdata / "Windsurf" / "mcp_config.json")
-    if (library / "Codeium" / "windsurf").is_dir() or not windsurf_candidates[0].parent.exists():
+    if (library / "Codeium" / "windsurf").is_dir() or not windsurf_candidates[
+        0
+    ].parent.exists():
         windsurf_candidates.append(library / "Codeium" / "windsurf" / "mcp_config.json")
 
     claude_candidates = [home / ".claude.json"]
     if appdata:
-        claude_candidates.append(appdata / "Claude" / "settings" / "claude_desktop_config.json")
+        claude_candidates.append(
+            appdata / "Claude" / "settings" / "claude_desktop_config.json"
+        )
         claude_candidates.append(appdata / "Claude" / "claude_desktop_config.json")
     claude_candidates.append(library / "Claude" / "claude_desktop_config.json")
 
@@ -220,7 +235,10 @@ def _save(path: Path, fmt: str, data: dict[str, Any]) -> None:
     elif fmt == "yaml":
         if yaml is None:
             raise RuntimeError("PyYAML is required to edit Hermes config")
-        path.write_text(yaml.safe_dump(data, default_flow_style=False, sort_keys=False), encoding="utf-8")
+        path.write_text(
+            yaml.safe_dump(data, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
     else:
         raise ValueError(f"Unknown format {fmt}")
 
@@ -236,11 +254,15 @@ def _status(target: ConfigTarget) -> str:
     return "exists"
 
 
+DEFAULT_MESSAGE_LOG = Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
+
+
 def register(
     dry_run: bool = False,
     create_missing: bool = True,
     global_root: Path | None = None,
     keep_backups: int = 10,
+    extra_args: list[str] | None = None,
 ) -> list[tuple[ConfigTarget, bool]]:
     """Add or update devin-orchestrator in every agent config."""
     results = []
@@ -262,7 +284,7 @@ def register(
         data = _load(path, target["format"], target["default"])
         servers = data.setdefault(target["root_key"], {})
         old = servers.get("devin-orchestrator")
-        new = devin_mcp_config(global_root)
+        new = devin_mcp_config(global_root, extra_args=extra_args)
         changed = old != new
 
         if not dry_run and (not exists or changed):
@@ -275,7 +297,9 @@ def register(
     return results
 
 
-def remove(dry_run: bool = False, keep_backups: int = 10) -> list[tuple[ConfigTarget, bool]]:
+def remove(
+    dry_run: bool = False, keep_backups: int = 10
+) -> list[tuple[ConfigTarget, bool]]:
     """Remove devin-orchestrator from every agent config."""
     results = []
     for target in _targets():
@@ -309,9 +333,16 @@ def list_status() -> None:
         print(f"{target['name']:<12} {_status(target):<12} {target['path']}")
 
 
-def print_snippet(global_root: Path | None = None) -> None:
+def print_snippet(
+    global_root: Path | None = None,
+    extra_args: list[str] | None = None,
+) -> None:
     """Print a generic mcpServers snippet for unsupported clients."""
-    snippet = {"mcpServers": {"devin-orchestrator": devin_mcp_config(global_root)}}
+    snippet = {
+        "mcpServers": {
+            "devin-orchestrator": devin_mcp_config(global_root, extra_args=extra_args)
+        }
+    }
     print(json.dumps(snippet, indent=2))
 
 
@@ -357,15 +388,26 @@ def main() -> int:
         action="store_true",
         help="Print a generic mcpServers snippet for any client",
     )
+    parser.add_argument(
+        "--message-log",
+        nargs="?",
+        const=str(DEFAULT_MESSAGE_LOG),
+        default=None,
+        help="Append --message-log to the registered MCP server args (default: %(const)s)",
+    )
 
     args = parser.parse_args()
+
+    extra_args: list[str] | None = None
+    if args.message_log is not None:
+        extra_args = ["--message-log", args.message_log]
 
     if args.list:
         list_status()
         return 0
 
     if args.snippet:
-        print_snippet(args.global_root)
+        print_snippet(args.global_root, extra_args=extra_args)
         return 0
 
     if args.remove:
@@ -376,11 +418,20 @@ def main() -> int:
             create_missing=args.create_missing,
             global_root=args.global_root,
             keep_backups=args.keep_backups,
+            extra_args=extra_args,
         )
 
     for target, changed in results:
-        status = "updated" if changed else ("no change" if target["path"].exists() else "missing")
-        action = "Would update" if args.dry_run and changed else ("Updated" if changed else "No change")
+        status = (
+            "updated"
+            if changed
+            else ("no change" if target["path"].exists() else "missing")
+        )
+        action = (
+            "Would update"
+            if args.dry_run and changed
+            else ("Updated" if changed else "No change")
+        )
         print(f"{action:<13} {target['name']:<12} {target['path']} [{status}]")
 
     return 0

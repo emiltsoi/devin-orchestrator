@@ -93,7 +93,9 @@ exec "{python}" "{mcp_server_str}" "$@"
         _backup_path(launcher, keep_backups)
     launcher.write_text(content)
     if sys.platform != "win32":
-        launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        launcher.chmod(
+            launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+        )
     print(f"Installed launcher: {launcher}")
 
 
@@ -214,7 +216,9 @@ def install(
     print(f"Would create logs directory: {logs_dir}")
 
     # Create a stable launcher
-    write_launcher(global_root, python=python, dry_run=dry_run, keep_backups=keep_backups)
+    write_launcher(
+        global_root, python=python, dry_run=dry_run, keep_backups=keep_backups
+    )
 
     if dry_run:
         print()
@@ -242,7 +246,11 @@ def install(
         )
         print()
         print("To register this MCP server with all known agents, run:")
-        exe = Path(python).name if python else ("python3" if sys.platform != "win32" else "py")
+        exe = (
+            Path(python).name
+            if python
+            else ("python3" if sys.platform != "win32" else "py")
+        )
         print(f"  {exe} register_mcp.py")
         print()
         print(

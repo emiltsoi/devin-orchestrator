@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class McpToolsMixin(McpServerBase):
-
     # --------------------------------------------------------------------- #
     # Tool implementations
     # --------------------------------------------------------------------- #
@@ -631,7 +630,11 @@ class McpToolsMixin(McpServerBase):
 
         session_type = arguments.get("session_type", "all")
         if session_type not in ("all", "workflow", "dispatch", "skill"):
-            return [self._text_content("session_type must be all, workflow, dispatch, or skill")]
+            return [
+                self._text_content(
+                    "session_type must be all, workflow, dispatch, or skill"
+                )
+            ]
 
         try:
             limit = int(arguments.get("limit", 0))

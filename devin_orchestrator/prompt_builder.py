@@ -71,6 +71,8 @@ def write_request_prompt(
         prompt_file.write_text(prompt_content, encoding="utf-8")
         logger.info(f"Wrote prompt file: {prompt_file}")
     except OSError as e:
-        raise InvalidInputError(f"Failed to write prompt file {prompt_file}: {e}") from e
+        raise InvalidInputError(
+            f"Failed to write prompt file {prompt_file}: {e}"
+        ) from e
 
     return prompt_file

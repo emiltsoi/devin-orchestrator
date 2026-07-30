@@ -1,4 +1,5 @@
 """Optional OpenTelemetry tracing support with a no-op fallback."""
+
 from __future__ import annotations
 
 import logging
@@ -31,9 +32,7 @@ class _NoopTracer:
     """Tracer stand-in when OpenTelemetry is not installed or disabled."""
 
     @contextmanager
-    def start_as_current_span(
-        self, *_args: Any, **_kwargs: Any
-    ) -> Iterator[_NoopSpan]:
+    def start_as_current_span(self, *_args: Any, **_kwargs: Any) -> Iterator[_NoopSpan]:
         yield _NoopSpan()
 
 

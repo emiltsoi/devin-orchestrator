@@ -29,7 +29,7 @@ See `workflows/use-cases.yaml` for the complete use case registry.
 
 **Deployment Model**: Hybrid deployment. Skills, workflows, and workflow engine are installed to a global location (`~/.devin-orchestrator/`) and referenced from any workspace. Per-workspace overrides are optional via `.devin/workflows/` for workflow customization. Canonical source is global; local overrides provide flexibility for workspace-specific needs.
 
-**Installation**: Run `python install.py` to install devin-orchestrator to global location. Configuration is managed via `~/.devin-orchestrator/config.yaml` and environment variables.
+**Installation**: Install `devin-orchestrator` with pipx/pip, then run `devin-orchestrator install` to create the global directory and register the MCP server. Configuration is managed via `~/.devin-orchestrator/config.yaml` and environment variables.
 
 ## Core Abstractions
 

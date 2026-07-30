@@ -146,8 +146,7 @@ class StageSkillDispatcher:
                     timeout=self._engine.config.get("dispatch_timeout_seconds"),
                 )
             logger.info(
-                f"Skill {skill_name} invocation completed with "
-                f"success={result.success}"
+                f"Skill {skill_name} invocation completed with success={result.success}"
             )
 
             # Record skill result in metrics
@@ -214,9 +213,7 @@ class StageSkillDispatcher:
                 "triage_decision": TriageDecision.ESCALATE,
             }
         except (RuntimeError, PathTraversalError) as e:
-            logger.error(
-                f"Error during skill invocation for {skill_name}: {e}"
-            )
+            logger.error(f"Error during skill invocation for {skill_name}: {e}")
             self._engine.metrics.record_skill_result(
                 skill_name, False, f"Error: {str(e)}"
             )

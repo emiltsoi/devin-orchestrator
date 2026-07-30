@@ -65,8 +65,10 @@ class TriageEvaluator:
 
         if result.success and validation_result["valid"]:
             try:
-                review_artifact_path = self._engine.artifact_validator.validate_artifact_path(
-                    f"review-{stage_name}.md", session_dir
+                review_artifact_path = (
+                    self._engine.artifact_validator.validate_artifact_path(
+                        f"review-{stage_name}.md", session_dir
+                    )
                 )
                 reviewer_verdict, confidence, review_output = self.dispatch_reviewer(
                     stage_name=stage_name,
@@ -79,9 +81,7 @@ class TriageEvaluator:
                 if review_artifact_path and review_output:
                     review_artifact_path.write_text(review_output, encoding="utf-8")
             except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-                logger.error(
-                    f"Reviewer dispatch failed for stage {stage_name}: {e}"
-                )
+                logger.error(f"Reviewer dispatch failed for stage {stage_name}: {e}")
                 reviewer_verdict = "FAIL"
                 confidence = "LOW"
 
@@ -344,7 +344,9 @@ class TriageEvaluator:
                 assessment = assessment_match.group(1).strip().rstrip(".")
                 if assessment in {"excellent", "good", "acceptable"}:
                     verdict = "PASS"
-                    confidence = "HIGH" if assessment in {"excellent", "good"} else "MEDIUM"
+                    confidence = (
+                        "HIGH" if assessment in {"excellent", "good"} else "MEDIUM"
+                    )
                 elif assessment in {"poor", "blocked", "fail"}:
                     verdict = "FAIL"
                     confidence = "LOW"
@@ -377,8 +379,7 @@ class TriageEvaluator:
                 review_output = (
                     review_output.rstrip()
                     + "\n\n[Guardrails override: reviewer FAIL overridden because "
-                    "artifacts verified]\n"
-                    + "\n".join(guardrails_notes)
+                    "artifacts verified]\n" + "\n".join(guardrails_notes)
                 )
             else:
                 review_output = (

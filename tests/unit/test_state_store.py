@@ -1,4 +1,5 @@
 """Unit tests for devin_orchestrator.state_store."""
+
 from __future__ import annotations
 
 import json
@@ -93,7 +94,9 @@ class TestJsonlStateStore(unittest.TestCase):
         self.store.init("s1", self.session_dir)
         self.store.set_status("in_progress")
         self.store.save_stage("stage-1", {"stage": "stage-1", "success": True})
-        lines = (self.session_dir / "state.jsonl").read_text(encoding="utf-8").splitlines()
+        lines = (
+            (self.session_dir / "state.jsonl").read_text(encoding="utf-8").splitlines()
+        )
         self.assertEqual(len(lines), 2)
         for line in lines:
             data = json.loads(line)

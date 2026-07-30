@@ -1,4 +1,5 @@
 """Typed Pydantic models for manifests and configuration."""
+
 from __future__ import annotations
 
 from devin_orchestrator.models.config import GlobalConfig

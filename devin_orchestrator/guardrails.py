@@ -181,7 +181,7 @@ class Guardrails:
                         modules.append(name)
             elif line.startswith("import "):
                 # import a, b as c, d.e
-                clause = line[len("import "):]
+                clause = line[len("import ") :]
                 for item in clause.split(","):
                     name = item.strip().split()[0].split(".")[0]
                     if name and name not in stdlib_modules:
@@ -211,6 +211,8 @@ class Guardrails:
                 external_imports = Guardrails._extract_modules(content)
                 coupling_count = len(external_imports)
             except Exception as exc:  # noqa: BLE001 - best-effort coupling check
-                logger.warning("Could not analyse coupling for %s: %s", target_module, exc)
+                logger.warning(
+                    "Could not analyse coupling for %s: %s", target_module, exc
+                )
 
         return {"is_leaf": coupling_count <= 2, "coupling_count": coupling_count}

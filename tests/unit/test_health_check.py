@@ -95,7 +95,10 @@ class TestCheckConfigFile:
                 "devin_orchestrator.health_check.ConfigLoader.DEFAULT_CONFIG_PATH",
                 missing,
             ),
-            patch("devin_orchestrator.health_check.ConfigLoader.FALLBACK_CONFIG_PATH", missing),
+            patch(
+                "devin_orchestrator.health_check.ConfigLoader.FALLBACK_CONFIG_PATH",
+                missing,
+            ),
         ):
             result = checker.check_config_file()
         assert result.status == "error"

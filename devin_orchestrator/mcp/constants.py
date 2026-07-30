@@ -1,4 +1,5 @@
 """Shared constants for the MCP server and mixins."""
+
 from __future__ import annotations
 
 MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB

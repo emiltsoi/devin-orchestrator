@@ -1,4 +1,5 @@
 """Unit tests for devin_orchestrator.cli."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -50,14 +51,20 @@ class TestCliHealth:
 
 class TestCliDispatch:
     def test_dispatch_devin(self):
-        with patch(
-            "devin_orchestrator.dispatch_devin.main"
-        ) as dispatch_main, patch(
-            "devin_orchestrator.dispatch_skill.main"
-        ) as skill_main:
+        with (
+            patch("devin_orchestrator.dispatch_devin.main") as dispatch_main,
+            patch("devin_orchestrator.dispatch_skill.main") as skill_main,
+        ):
             dispatch_main.return_value = 0
             code = cli.main(
-                ["devin-orchestrator", "dispatch", "--role", "coder", "--prompt-file", "/tmp/p.md"]
+                [
+                    "devin-orchestrator",
+                    "dispatch",
+                    "--role",
+                    "coder",
+                    "--prompt-file",
+                    "/tmp/p.md",
+                ]
             )
         assert code == 0
         dispatch_main.assert_called_once_with(
@@ -66,11 +73,10 @@ class TestCliDispatch:
         skill_main.assert_not_called()
 
     def test_dispatch_skill(self):
-        with patch(
-            "devin_orchestrator.dispatch_devin.main"
-        ) as dispatch_main, patch(
-            "devin_orchestrator.dispatch_skill.main"
-        ) as skill_main:
+        with (
+            patch("devin_orchestrator.dispatch_devin.main") as dispatch_main,
+            patch("devin_orchestrator.dispatch_skill.main") as skill_main,
+        ):
             skill_main.return_value = 0
             code = cli.main(
                 [
@@ -89,15 +95,12 @@ class TestCliDispatch:
         dispatch_main.assert_not_called()
 
     def test_dispatch_skill_positional(self):
-        with patch(
-            "devin_orchestrator.dispatch_devin.main"
-        ) as dispatch_main, patch(
-            "devin_orchestrator.dispatch_skill.main"
-        ) as skill_main:
+        with (
+            patch("devin_orchestrator.dispatch_devin.main") as dispatch_main,
+            patch("devin_orchestrator.dispatch_skill.main") as skill_main,
+        ):
             skill_main.return_value = 0
-            code = cli.main(
-                ["devin-orchestrator", "dispatch", "coder", "s1", "/tmp"]
-            )
+            code = cli.main(["devin-orchestrator", "dispatch", "coder", "s1", "/tmp"])
         assert code == 0
         skill_main.assert_called_once()
         dispatch_main.assert_not_called()
@@ -118,9 +121,10 @@ class TestCliMcp:
 
 class TestLegacyShims:
     def test_dispatch_devin_legacy_routes_and_warns(self):
-        with patch(
-            "devin_orchestrator.dispatch_devin.main"
-        ) as dispatch_main, patch("warnings.warn") as warn:
+        with (
+            patch("devin_orchestrator.dispatch_devin.main") as dispatch_main,
+            patch("warnings.warn") as warn,
+        ):
             dispatch_main.return_value = 0
             code = cli.main(
                 ["dispatch-devin", "--role", "coder", "--prompt-file", "/tmp/p.md"]
@@ -130,13 +134,12 @@ class TestLegacyShims:
         dispatch_main.assert_called_once()
 
     def test_dispatch_skill_legacy_routes_and_warns(self):
-        with patch(
-            "devin_orchestrator.dispatch_skill.main"
-        ) as skill_main, patch("warnings.warn") as warn:
+        with (
+            patch("devin_orchestrator.dispatch_skill.main") as skill_main,
+            patch("warnings.warn") as warn,
+        ):
             skill_main.return_value = 0
-            code = cli.main(
-                ["dispatch-skill", "coder", "s1", "/tmp"]
-            )
+            code = cli.main(["dispatch-skill", "coder", "s1", "/tmp"])
         assert code == 0
         warn.assert_called_once()
         skill_main.assert_called_once()

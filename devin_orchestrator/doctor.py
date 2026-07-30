@@ -10,7 +10,11 @@ from pathlib import Path
 from devin_orchestrator import __version__
 from devin_orchestrator.config_loader import ConfigLoader
 from devin_orchestrator.manifest_loader import ManifestLoader
-from devin_orchestrator.register_mcp import _launcher_path, _targets
+from devin_orchestrator.register_mcp import (
+    _is_legacy_launcher,
+    _launcher_path,
+    _targets,
+)
 
 
 def _ok(label: str) -> None:
@@ -34,7 +38,9 @@ def main() -> int:
     print()
 
     # Python version
-    _ok(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    _ok(
+        f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
 
     # Package version
     try:
@@ -67,7 +73,8 @@ def main() -> int:
     # Launcher
     launcher = Path(_launcher_path(global_root))
     if launcher.exists():
-        _ok(f"Launcher: {launcher}")
+        kind = "Legacy launcher" if _is_legacy_launcher(launcher) else "Console script"
+        _ok(f"{kind}: {launcher}")
     else:
         _fail("Launcher", f"missing: {launcher}")
 
@@ -75,7 +82,10 @@ def main() -> int:
     if exe:
         _ok(f"Launcher on PATH: {exe}")
     else:
-        _warn("PATH", "devin-orchestrator not found on PATH; agents may use absolute launcher path")
+        _warn(
+            "PATH",
+            "devin-orchestrator not found on PATH; agents may use absolute launcher path",
+        )
 
     # Agent configs
     print()

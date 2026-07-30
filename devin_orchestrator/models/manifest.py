@@ -1,4 +1,5 @@
 """Pydantic models for workflow manifests."""
+
 from __future__ import annotations
 
 from typing import Any, Literal

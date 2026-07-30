@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Unified top-level CLI for devin-orchestrator."""
+
 from __future__ import annotations
 
 import argparse
@@ -82,10 +83,14 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("mcp", add_help=False, help="Run the MCP server")
-    subparsers.add_parser("dispatch", add_help=False, help="Dispatch a Devin worker or skill")
+    subparsers.add_parser(
+        "dispatch", add_help=False, help="Dispatch a Devin worker or skill"
+    )
     subparsers.add_parser("doctor", add_help=False, help="Run diagnostic checks")
     subparsers.add_parser("health", add_help=False, help="Print health report as JSON")
-    subparsers.add_parser("install", add_help=False, help="Install, uninstall, or upgrade the service")
+    subparsers.add_parser(
+        "install", add_help=False, help="Install, uninstall, or upgrade the service"
+    )
 
     return parser
 

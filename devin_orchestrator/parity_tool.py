@@ -75,7 +75,12 @@ def check_manifest_runbook_parity(workflows_dir: Path) -> dict[str, Any]:
     Verify that each workflow manifest has a corresponding runbook with matching
     stage sequence.
     """
-    report: dict[str, Any] = {"valid": True, "errors": [], "checked": [], "missing_runbooks": []}
+    report: dict[str, Any] = {
+        "valid": True,
+        "errors": [],
+        "checked": [],
+        "missing_runbooks": [],
+    }
 
     if not workflows_dir.exists():
         report["valid"] = False
@@ -106,7 +111,9 @@ def check_manifest_runbook_parity(workflows_dir: Path) -> dict[str, Any]:
             name = name.lower()
             name = re.sub(r"\s*\([^)]*\)", "", name)  # remove parenthetical text
             name = name.replace("_", "-")  # normalize underscores to hyphens
-            name = re.sub(r"[^a-z0-9\-]+", "-", name)  # replace spaces/punctuation with hyphens
+            name = re.sub(
+                r"[^a-z0-9\-]+", "-", name
+            )  # replace spaces/punctuation with hyphens
             return name.strip("-")
 
         manifest_stages = [s["name"] for s in manifest.get("stages", [])]

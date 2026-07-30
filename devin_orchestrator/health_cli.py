@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """CLI entry point for JSON health reporting."""
+
 from __future__ import annotations
 
 import argparse

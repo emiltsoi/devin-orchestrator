@@ -369,9 +369,7 @@ class TestDispatchDevinTimeout:
             (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
 
             def fake_run(cmd, **kwargs):
-                raise subprocess.TimeoutExpired(
-                    cmd=cmd, timeout=kwargs.get("timeout")
-                )
+                raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
 
             monkeypatch.setattr(subprocess, "run", fake_run)
             monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
@@ -404,9 +402,7 @@ class TestDispatchDevinTimeout:
             (work_dir / "prompt.md").write_text("do work", encoding="utf-8")
 
             def fake_run(cmd, **kwargs):
-                raise subprocess.TimeoutExpired(
-                    cmd=cmd, timeout=kwargs.get("timeout")
-                )
+                raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
 
             monkeypatch.setattr(subprocess, "run", fake_run)
             monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
@@ -446,9 +442,7 @@ class TestDispatchSkillTimeout:
             workspace.mkdir(parents=True, exist_ok=True)
 
             def fake_run(cmd, **kwargs):
-                raise subprocess.TimeoutExpired(
-                    cmd=cmd, timeout=kwargs.get("timeout")
-                )
+                raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
 
             monkeypatch.setattr(subprocess, "run", fake_run)
             monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """CLI subcommand to install, uninstall, and upgrade devin-orchestrator."""
+
 from __future__ import annotations
 
 import argparse
+import getpass
 import importlib.resources
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -33,7 +36,43 @@ def _render_template(template_name: str, variables: dict[str, str]) -> str:
     text = template_path.read_text(encoding="utf-8")
     for key, value in variables.items():
         text = text.replace(f"{{{{ {key} }}}}", value)
+    _validate_rendered(template_name, text)
     return text
+
+
+def _validate_rendered(template_name: str, text: str) -> None:
+    """Raise ValueError if the rendered template has obvious problems."""
+    if re.search(r"\{\{\s*\w+\s*\}\}", text):
+        raise ValueError(f"Unsubstituted placeholders left in {template_name}")
+
+    if template_name.endswith(".service"):
+        if "[Unit]" not in text or "[Service]" not in text or "ExecStart=" not in text:
+            raise ValueError(
+                f"systemd unit {template_name} missing required sections or ExecStart"
+            )
+        return
+
+    if template_name.endswith(".plist"):
+        try:
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(text)
+        except Exception as e:
+            raise ValueError(
+                f"launchd plist {template_name} is not valid XML: {e}"
+            ) from e
+        if root.tag != "plist":
+            raise ValueError(
+                f"launchd plist {template_name} root is {root.tag!r}, expected 'plist'"
+            )
+        return
+
+    if template_name.endswith(".bat"):
+        if not text.startswith("@echo off"):
+            raise ValueError(
+                f"batch wrapper {template_name} should start with '@echo off'"
+            )
+        return
 
 
 def _platform() -> str:
@@ -85,7 +124,10 @@ def _install_systemd(
         print(f"Wrote systemd unit: {unit_file}")
 
     if not skip_smoke and not dry_run and not _smoke_test():
-        print("Smoke test failed; run `devin-orchestrator doctor` for details.", file=sys.stderr)
+        print(
+            "Smoke test failed; run `devin-orchestrator doctor` for details.",
+            file=sys.stderr,
+        )
 
     if not dry_run and not system:
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
@@ -161,7 +203,10 @@ def _install_launchd(
         print(f"Wrote launchd plist: {plist_path}")
 
     if not skip_smoke and not dry_run and not _smoke_test():
-        print("Smoke test failed; run `devin-orchestrator doctor` for details.", file=sys.stderr)
+        print(
+            "Smoke test failed; run `devin-orchestrator doctor` for details.",
+            file=sys.stderr,
+        )
 
     if not dry_run:
         subprocess.run(["launchctl", "load", "-w", str(plist_path)], check=False)
@@ -223,7 +268,10 @@ def _install_windows(
         print(f"Wrote {bat_path}")
 
         if not skip_smoke and not _smoke_test():
-            print("Smoke test failed; run `devin-orchestrator doctor` for details.", file=sys.stderr)
+            print(
+                "Smoke test failed; run `devin-orchestrator doctor` for details.",
+                file=sys.stderr,
+            )
 
         task_args = [
             "schtasks",
@@ -240,10 +288,14 @@ def _install_windows(
         ]
         if system:
             task_args.extend(["/rl", "HIGHEST"])
+        elif user == getpass.getuser():
+            task_args.append("/np")
         result = subprocess.run(task_args, check=False)
         if result.returncode != 0:
             print(
-                "Failed to create scheduled task; run as Administrator if this is a system install.",
+                "Failed to create scheduled task. "
+                "Run as Administrator for a system install, "
+                "or ensure the target user does not require a password if /np was rejected.",
                 file=sys.stderr,
             )
         else:
@@ -258,9 +310,17 @@ def _uninstall_windows(service_name: str, system: bool, dry_run: bool) -> int:
     else:
         subprocess.run(["schtasks", "/delete", "/tn", service_name, "/f"], check=False)
         if system:
-            bat_path = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "devin-orchestrator" / f"{service_name}.bat"
+            bat_path = (
+                Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData"))
+                / "devin-orchestrator"
+                / f"{service_name}.bat"
+            )
         else:
-            bat_path = Path.home() / "AppData/Roaming/devin-orchestrator" / f"{service_name}.bat"
+            bat_path = (
+                Path.home()
+                / "AppData/Roaming/devin-orchestrator"
+                / f"{service_name}.bat"
+            )
         bat_path.unlink(missing_ok=True)
         print(f"Removed scheduled task {service_name}")
     return 0
@@ -280,6 +340,7 @@ def _install_service(
     python_arg: str | None = None,
     source_dir: Path | None = None,
     skip_smoke: bool = False,
+    extra_args: list[str] | None = None,
 ) -> int:
     del source_dir  # Legacy no-op
 
@@ -291,11 +352,17 @@ def _install_service(
     platform = _platform()
 
     if platform == "launchd":
-        result = _install_launchd(service_name, work_dir, command, system, dry_run, skip_smoke)
+        result = _install_launchd(
+            service_name, work_dir, command, system, dry_run, skip_smoke
+        )
     elif platform == "windows":
-        result = _install_windows(service_name, work_dir, command, system, dry_run, user, skip_smoke)
+        result = _install_windows(
+            service_name, work_dir, command, system, dry_run, user, skip_smoke
+        )
     else:
-        result = _install_systemd(service_name, work_dir, user, exec_start, system, dry_run, skip_smoke)
+        result = _install_systemd(
+            service_name, work_dir, user, exec_start, system, dry_run, skip_smoke
+        )
     if result != 0:
         return result
 
@@ -305,10 +372,13 @@ def _install_service(
             create_missing=create_missing,
             keep_backups=keep_backups,
             global_root=global_root,
+            extra_args=extra_args,
         )
         for target, changed in results:
             action = (
-                "Would update" if dry_run and changed else ("Updated" if changed else "No change")
+                "Would update"
+                if dry_run and changed
+                else ("Updated" if changed else "No change")
             )
             print(f"{action:<13} {target['name']:<12} {target['path']}")
 
@@ -326,7 +396,9 @@ def _uninstall_service(
         results = _register_mcp.remove(dry_run=dry_run, keep_backups=keep_backups)
         for target, changed in results:
             action = (
-                "Would remove" if dry_run and changed else ("Removed" if changed else "No change")
+                "Would remove"
+                if dry_run and changed
+                else ("Removed" if changed else "No change")
             )
             print(f"{action:<13} {target['name']:<12} {target['path']}")
 
@@ -424,12 +496,21 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
         default=True,
         help="Create agent config files if they do not exist (default: True)",
     )
+    install_cmd.add_argument(
+        "--message-log",
+        nargs="?",
+        const=str(_register_mcp.DEFAULT_MESSAGE_LOG),
+        default=None,
+        help="Append --message-log to the registered MCP server args (default: %(const)s)",
+    )
 
     uninstall_cmd = subparsers.add_parser(
         "uninstall", help="Uninstall the devin-orchestrator service"
     )
     uninstall_cmd.add_argument(
-        "--system", action="store_true", help="Uninstall a system service (requires root)"
+        "--system",
+        action="store_true",
+        help="Uninstall a system service (requires root)",
     )
     uninstall_cmd.add_argument("--service-name", default="devin-orchestrator")
     uninstall_cmd.add_argument(
@@ -459,9 +540,7 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
         default=True,
         help="Pass --user to pip when upgrading",
     )
-    upgrade_cmd.add_argument(
-        "--no-user", dest="user_install", action="store_false"
-    )
+    upgrade_cmd.add_argument("--no-user", dest="user_install", action="store_false")
 
     return parser
 
@@ -502,6 +581,9 @@ def install(argv: list[str] | None = None) -> int:
         if not args.dry_run and args.system and not args.run_as:
             print("--run-as is required for --system installs.", file=sys.stderr)
             return 2
+        extra_args: list[str] | None = None
+        if args.message_log is not None:
+            extra_args = ["--message-log", args.message_log]
         return _install_service(
             system=args.system,
             service_name=args.service_name,
@@ -516,6 +598,7 @@ def install(argv: list[str] | None = None) -> int:
             python_arg=args.python,
             source_dir=args.source_dir,
             skip_smoke=args.skip_smoke,
+            extra_args=extra_args,
         )
 
     parser.print_help()

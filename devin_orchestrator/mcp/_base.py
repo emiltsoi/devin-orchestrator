@@ -1,4 +1,5 @@
 """Shared base class for the composed McpServer and its mixins."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -46,4 +47,3 @@ class McpServerBase:
 
     def __getattr__(self, name: str) -> Any:
         raise AttributeError(name)
-

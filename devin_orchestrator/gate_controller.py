@@ -140,7 +140,12 @@ class GateController:
                         f"Gate {verdict}: {gate_id}",
                     )
                     logger.info(f"Gate {gate_id} decision recorded: {verdict}")
-                except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
+                except (
+                    OSError,
+                    RuntimeError,
+                    InvalidInputError,
+                    PathTraversalError,
+                ) as e:
                     logger.error(f"Error recording gate decision: {e}")
                     self._engine.update_status(
                         session_dir,
@@ -173,9 +178,10 @@ class GateController:
         )
         verdict = bypass["verdict"]
         conditions = bypass["conditions"]
-        notes = "; ".join(
-            c["reason"] for c in conditions if c["triggered"]
-        ) or "No escalation triggers detected"
+        notes = (
+            "; ".join(c["reason"] for c in conditions if c["triggered"])
+            or "No escalation triggers detected"
+        )
 
         if verdict == "approve":
             try:
@@ -205,13 +211,17 @@ class GateController:
 
         # request_changes or block: signal the calling agent.
         signal = self.build_gate_signal(
-            gate_id, stage_name, session_dir, gate_decision_file, verdict, notes, conditions
+            gate_id,
+            stage_name,
+            session_dir,
+            gate_decision_file,
+            verdict,
+            notes,
+            conditions,
         )
         return signal
 
-    def read_gate_decision(
-        self, gate_decision_file: Path
-    ) -> tuple[str, str] | None:
+    def read_gate_decision(self, gate_decision_file: Path) -> tuple[str, str] | None:
         """Read a gate decision file once and return the parsed verdict if present."""
         try:
             content = gate_decision_file.read_text(encoding="utf-8")
@@ -358,9 +368,7 @@ class GateController:
 
         # Config-driven bypass: auto-approve non-security gates when the
         # preceding stage succeeded and reported HIGH confidence.
-        has_block = any(
-            c["triggered"] and c["verdict"] == "block" for c in conditions
-        )
+        has_block = any(c["triggered"] and c["verdict"] == "block" for c in conditions)
         bypass_config = self._engine.config.get("gate_bypass_conditions") or {}
         if (
             not has_block
@@ -456,10 +464,13 @@ Please edit this file with your decision.
                             verdict,
                             f"Gate {verdict}: {gate_id}",
                         )
-                        logger.info(
-                            f"Gate {gate_id} decision recorded: {verdict}"
-                        )
-                    except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
+                        logger.info(f"Gate {gate_id} decision recorded: {verdict}")
+                    except (
+                        OSError,
+                        RuntimeError,
+                        InvalidInputError,
+                        PathTraversalError,
+                    ) as e:
                         logger.error(f"Error recording gate decision: {e}")
                         self._engine.update_status(
                             session_dir,
@@ -540,9 +551,7 @@ Please edit this file with your decision.
                 "timeout",
                 f"Gate timeout: {gate_id}",
             )
-            logger.warning(
-                f"Gate {gate_id} timeout after {max_wait_seconds} seconds"
-            )
+            logger.warning(f"Gate {gate_id} timeout after {max_wait_seconds} seconds")
         except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
             logger.error(f"Error recording gate timeout: {e}")
             self._engine.update_status(
@@ -554,9 +563,7 @@ Please edit this file with your decision.
 
         return {"gate_id": gate_id, "verdict": verdict, "blocked": True}
 
-    def parse_gate_verdict(
-        self, content: str
-    ) -> tuple[str, str] | None:
+    def parse_gate_verdict(self, content: str) -> tuple[str, str] | None:
         """
         Parse verdict and notes from gate decision file content.
 

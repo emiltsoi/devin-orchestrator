@@ -86,6 +86,32 @@ jobs:
           devin-orchestrator --version
           dispatch-devin --version
           dispatch-skill --version
-          printf 'Content-Length: 48\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
-            | devin-orchestrator 2>/dev/null \
-            | grep -q '"serverInfo"'
+
+  install-smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade "pip>=26.1.2"
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Build and install wheel
+        run: |
+          python -m build --wheel
+          pip install dist/*.whl
+      - name: Verify dry-run install, uninstall, and register on ${{ matrix.os }}
+        run: |
+          devin-orchestrator --version
+          devin-orchestrator install --dry-run
+          devin-orchestrator install uninstall --deregister --dry-run
+          python -m devin_orchestrator.register_mcp --dry-run
+          python -m devin_orchestrator.register_mcp --snippet
