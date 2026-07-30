@@ -196,7 +196,7 @@ def test_install_py_main_deprecation_and_routing(monkeypatch: pytest.MonkeyPatch
         warnings.simplefilter("always")
         result = cli_install.install_py_main(["--uninstall"])
         assert result == 0
-        assert calls == [["uninstall"]]
+        assert calls == [["uninstall", "--deregister"]]
         assert any(issubclass(x.category, DeprecationWarning) for x in w)
 
 

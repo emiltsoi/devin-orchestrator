@@ -57,6 +57,7 @@ def _install_systemd(
     exec_start: str,
     system: bool,
     dry_run: bool,
+    skip_smoke: bool,
 ) -> int:
     if system:
         unit_dir = Path("/etc/systemd/system")
@@ -83,7 +84,7 @@ def _install_systemd(
         unit_file.write_text(rendered, encoding="utf-8")
         print(f"Wrote systemd unit: {unit_file}")
 
-    if not dry_run and not _smoke_test():
+    if not skip_smoke and not dry_run and not _smoke_test():
         print("Smoke test failed; run `devin-orchestrator doctor` for details.", file=sys.stderr)
 
     if not dry_run and not system:
@@ -127,6 +128,7 @@ def _install_launchd(
     command: list[str],
     system: bool,
     dry_run: bool,
+    skip_smoke: bool,
 ) -> int:
     if system:
         plist_dir = Path("/Library/LaunchDaemons")
@@ -158,7 +160,7 @@ def _install_launchd(
         plist_path.write_text(rendered, encoding="utf-8")
         print(f"Wrote launchd plist: {plist_path}")
 
-    if not dry_run and not _smoke_test():
+    if not skip_smoke and not dry_run and not _smoke_test():
         print("Smoke test failed; run `devin-orchestrator doctor` for details.", file=sys.stderr)
 
     if not dry_run:
@@ -194,6 +196,7 @@ def _install_windows(
     system: bool,
     dry_run: bool,
     user: str,
+    skip_smoke: bool,
 ) -> int:
     if system:
         base = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData"))
@@ -219,7 +222,7 @@ def _install_windows(
         bat_path.write_text(rendered, encoding="utf-8")
         print(f"Wrote {bat_path}")
 
-        if not _smoke_test():
+        if not skip_smoke and not _smoke_test():
             print("Smoke test failed; run `devin-orchestrator doctor` for details.", file=sys.stderr)
 
         task_args = [
@@ -273,19 +276,26 @@ def _install_service(
     register: bool = True,
     keep_backups: int = 10,
     create_missing: bool = True,
+    global_root: Path | None = None,
+    python_arg: str | None = None,
+    source_dir: Path | None = None,
+    skip_smoke: bool = False,
 ) -> int:
+    del source_dir  # Legacy no-op
+
     if command is None:
-        command = [sys.executable, "-m", "devin_orchestrator.mcp_server"]
+        python = python_arg or sys.executable
+        command = [python, "-m", "devin_orchestrator.mcp_server"]
 
     exec_start = " ".join(str(c) for c in command)
     platform = _platform()
 
     if platform == "launchd":
-        result = _install_launchd(service_name, work_dir, command, system, dry_run)
+        result = _install_launchd(service_name, work_dir, command, system, dry_run, skip_smoke)
     elif platform == "windows":
-        result = _install_windows(service_name, work_dir, command, system, dry_run, user)
+        result = _install_windows(service_name, work_dir, command, system, dry_run, user, skip_smoke)
     else:
-        result = _install_systemd(service_name, work_dir, user, exec_start, system, dry_run)
+        result = _install_systemd(service_name, work_dir, user, exec_start, system, dry_run, skip_smoke)
     if result != 0:
         return result
 
@@ -294,6 +304,7 @@ def _install_service(
             dry_run=dry_run,
             create_missing=create_missing,
             keep_backups=keep_backups,
+            global_root=global_root,
         )
         for target, changed in results:
             action = (
@@ -367,6 +378,28 @@ def _build_parser(prog: str) -> argparse.ArgumentParser:
         nargs=argparse.REMAINDER,
         default=None,
         help="Command to run in the service (default: run MCP server)",
+    )
+    install_cmd.add_argument(
+        "--global-root",
+        type=Path,
+        default=None,
+        help="Path to the devin-orchestrator global root for agent configs",
+    )
+    install_cmd.add_argument(
+        "--python",
+        default=None,
+        help="Python executable to use in the service command",
+    )
+    install_cmd.add_argument(
+        "--source-dir",
+        type=Path,
+        default=None,
+        help="Legacy no-op option kept for install.py compatibility",
+    )
+    install_cmd.add_argument(
+        "--skip-smoke",
+        action="store_true",
+        help="Skip the post-install smoke test",
     )
     install_cmd.add_argument(
         "--register",
@@ -479,6 +512,10 @@ def install(argv: list[str] | None = None) -> int:
             register=args.register,
             keep_backups=args.keep_backups,
             create_missing=args.create_missing,
+            global_root=args.global_root,
+            python_arg=args.python,
+            source_dir=args.source_dir,
+            skip_smoke=args.skip_smoke,
         )
 
     parser.print_help()
@@ -493,10 +530,38 @@ def _legacy_shim(legacy_name: str, argv: list[str] | None) -> int:
             stacklevel=2,
         )
     argv = list(argv) if argv is not None else []
-    if argv and argv[0] == "--uninstall":
-        argv = ["uninstall", *argv[1:]]
-    if argv and argv[0] == "--upgrade":
-        argv = ["upgrade", *argv[1:]]
+
+    if legacy_name == "deploy.py":
+        if "--list" in argv:
+            _register_mcp.list_status()
+            return 0
+        if "--smoke-only" in argv:
+            print("Running smoke test with launcher: devin-orchestrator")
+            if _smoke_test():
+                print("Smoke test OK")
+                return 0
+            print("Smoke test FAILED", file=sys.stderr)
+            return 1
+
+    if "--uninstall" in argv:
+        argv.remove("--uninstall")
+        argv = ["uninstall", "--deregister", *argv]
+    if "--upgrade" in argv:
+        argv.remove("--upgrade")
+        argv = ["upgrade", *argv]
+
+    for old, new in (("--skip-register", "--no-register"),):
+        argv = [new if a == old else a for a in argv]
+
+    if argv and argv[0] not in _SUBCOMMANDS and not argv[0].startswith("-"):
+        # install.py [global_root] [source_dir]
+        new_argv: list[str] = ["--global-root", argv[0]]
+        rest = argv[1:]
+        if rest and not rest[0].startswith("-"):
+            new_argv.extend(["--source-dir", rest[0]])
+            rest = rest[1:]
+        argv = [*new_argv, *rest]
+
     return install(argv)
 
 
