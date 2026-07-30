@@ -1,13 +1,13 @@
-# mypy: disable-error-code=attr-defined
-
 from __future__ import annotations
 
 import logging
 
+from devin_orchestrator.mcp._base import McpServerBase
+
 logger = logging.getLogger(__name__)
 
 
-class McpPromptsMixin:
+class McpPromptsMixin(McpServerBase):
 
     def _prompts_list(self, request: dict) -> dict:
         """Return the list of available MCP prompts."""

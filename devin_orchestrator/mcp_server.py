@@ -43,6 +43,7 @@ except ModuleNotFoundError as e:
     ) from e
 
 from devin_orchestrator import __version__  # noqa: E402
+from devin_orchestrator.mcp._base import McpServerBase  # noqa: E402
 from devin_orchestrator.mcp.artifact_mixin import McpArtifactMixin  # noqa: E402
 from devin_orchestrator.mcp.dispatch_mixin import McpDispatchMixin  # noqa: E402
 from devin_orchestrator.mcp.prompts_mixin import McpPromptsMixin  # noqa: E402
@@ -63,6 +64,7 @@ class McpServer(
     McpPromptsMixin,
     McpResourcesMixin,
     McpSecurityMixin,
+    McpServerBase,
 ):
     """Minimal stdio MCP server backed by the devin-orchestrator harness."""
 
