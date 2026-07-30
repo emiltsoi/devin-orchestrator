@@ -81,8 +81,11 @@ jobs:
         run: python -m build --wheel
       - name: Install wheel
         run: pip install dist/*.whl
-      - name: Verify console scripts
+      - name: Verify console scripts and smoke test
         run: |
-          devin-orchestrator --help
-          dispatch-devin --help
-          dispatch-skill --help
+          devin-orchestrator --version
+          dispatch-devin --version
+          dispatch-skill --version
+          printf 'Content-Length: 48\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+            | devin-orchestrator 2>/dev/null \
+            | grep -q '"serverInfo"'
