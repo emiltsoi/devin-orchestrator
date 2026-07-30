@@ -257,8 +257,8 @@ class TestDispatchDevinRelativePaths:
             # Validate the captured command and background dispatch artifacts.
             cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
             prompt_arg = cmd_data["cmd"][cmd_data["cmd"].index("--prompt-file") + 1]
-            assert str(work_dir / "prompt.md") == prompt_arg
-            assert cmd_data["cwd"] == str(work_dir)
+            assert (work_dir / "prompt.md").resolve() == Path(prompt_arg)
+            assert Path(cmd_data["cwd"]).resolve() == work_dir.resolve()
 
             result_data = json.loads((dispatch_dir / "result.json").read_text())
             assert result_data["exit_code"] == 0
@@ -297,7 +297,7 @@ class TestDispatchDevinRelativePaths:
             cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
             assert "--output-file" in cmd_data["cmd"]
             output_arg = cmd_data["cmd"][cmd_data["cmd"].index("--output-file") + 1]
-            assert str(work_dir / "out.log") == output_arg
+            assert (work_dir / "out.log").resolve() == Path(output_arg)
 
             result_data = json.loads((dispatch_dir / "result.json").read_text())
             assert result_data["success"] is True
@@ -561,7 +561,7 @@ class TestDispatchDevinOutputFileFromWorkDir:
             cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
             assert "--output-file" in cmd_data["cmd"]
             output_arg = cmd_data["cmd"][cmd_data["cmd"].index("--output-file") + 1]
-            assert str(work_dir / "out.log") == output_arg
+            assert (work_dir / "out.log").resolve() == Path(output_arg)
 
             result_data = json.loads((dispatch_dir / "result.json").read_text())
             assert result_data["success"] is True
@@ -653,8 +653,8 @@ class TestDispatchDevinRoleShortName:
 
             cmd_data = json.loads((dispatch_dir / "cmd.json").read_text())
             role_arg = cmd_data["cmd"][cmd_data["cmd"].index("--role") + 1]
-            expected = str(Path(tmpdir) / "root" / "roles" / "coder.md")
-            assert role_arg == expected
+            expected = (Path(tmpdir) / "root" / "roles" / "coder.md").resolve()
+            assert Path(role_arg).resolve() == expected
 
             result_data = json.loads((dispatch_dir / "result.json").read_text())
             assert result_data["success"] is True

@@ -177,8 +177,14 @@ class ConfigLoader:
                 # Allowed roots for configured paths. The workspace is included
                 # so workspace-local config files can point to directories under
                 # the workspace; tempdir is included for pytest/CI which use
-                # temporary directories outside home.
-                allowed_roots = [Path.home(), Path.cwd(), Path(tempfile.gettempdir())]
+                # temporary directories outside home. We resolve each root so
+                # symlinks (e.g. macOS /var -> /private/var) match the resolved
+                # path under tempfile.
+                allowed_roots = [
+                    Path.home().resolve(),
+                    Path.cwd().resolve(),
+                    Path(tempfile.gettempdir()).resolve(),
+                ]
                 if workspace is not None:
                     with contextlib.suppress(OSError, RuntimeError):
                         allowed_roots.append(Path(workspace).resolve())

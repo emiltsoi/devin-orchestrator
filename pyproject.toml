@@ -89,9 +89,6 @@ exclude = [
     "devin_orchestrator/work",
 ]
 
-[tool.hatch.build.force-include]
-"devin_orchestrator/templates" = "devin_orchestrator/templates"
-
 [tool.hatch.build.targets.wheel]
 packages = ["devin_orchestrator"]
 
