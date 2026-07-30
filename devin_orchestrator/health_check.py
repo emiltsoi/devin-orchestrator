@@ -341,6 +341,42 @@ class HealthChecker:
 
             if result.returncode == 0:
                 version = result.stdout.strip() or "unknown"
+
+                # Quick auth check: fail fast if the CLI is not logged in.
+                try:
+                    auth_result = subprocess.run(  # nosec B603
+                        [str(cli_path), "auth", "status"],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=15,
+                    )
+                    auth_output = (auth_result.stdout or "") + (auth_result.stderr or "")
+                    if "Not logged in" in auth_output:
+                        return HealthCheckResult(
+                            component="devin_cli",
+                            status="warning",
+                            message="Devin CLI is installed but not authenticated",
+                            details={
+                                "devin_cli_path": devin_cli_path,
+                                "version": version,
+                                "auth_status": auth_output.strip(),
+                                "login_command": "devin auth login",
+                            },
+                        )
+                except (subprocess.TimeoutExpired, OSError) as e:
+                    return HealthCheckResult(
+                        component="devin_cli",
+                        status="warning",
+                        message=f"Could not verify Devin CLI auth status: {e}",
+                        details={
+                            "devin_cli_path": devin_cli_path,
+                            "version": version,
+                            "error": str(e),
+                        },
+                    )
+
                 return HealthCheckResult(
                     component="devin_cli",
                     status="healthy",

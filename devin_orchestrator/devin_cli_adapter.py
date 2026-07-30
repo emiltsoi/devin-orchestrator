@@ -102,6 +102,34 @@ class DevinCliAdapter:
         self.skills = self._load_skills()
 
     @staticmethod
+    def _check_auth(self) -> tuple[bool, str]:
+        """
+        Check whether the configured devin-cli is authenticated.
+
+        Returns:
+            (authenticated, message) tuple. ``authenticated`` is ``True`` when
+            the CLI reports a logged-in session, ``False`` otherwise.
+            ``message`` contains the CLI output or an error string.
+        """
+        try:
+            result = subprocess.run(  # nosec B603
+                [self.devin_cli_path, "auth", "status"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+            )
+            output = (result.stdout or "") + (result.stderr or "")
+            if "Not logged in" in output:
+                return False, output
+            if result.returncode != 0:
+                return False, output
+            return True, output
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            return False, f"Failed to run devin auth status ({type(e).__name__}): {e}"
+
+    @staticmethod
     def _truncate_output(text: str, max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES) -> str:
         """Truncate ``text`` to ``max_bytes`` UTF-8 bytes and append a marker.
 
@@ -391,6 +419,22 @@ class DevinCliAdapter:
                     error=f"Invalid correction_artifact path: {e}",
                     exit_code=-1,
                 )
+
+        # Fail fast if the CLI is not authenticated, avoiding a multi-minute
+        # timeout while the unauthenticated process waits for login.
+        authenticated, auth_output = self._check_auth()
+        if not authenticated:
+            return InvocationResult(
+                success=False,
+                output="",
+                error=(
+                    "Devin CLI is not authenticated. "
+                    "Run 'devin auth login' (or 'devin auth login --force-manual-token-flow' "
+                    "for headless/SSH sessions). "
+                    f"Auth status output: {auth_output.strip()}"
+                ),
+                exit_code=-1,
+            )
 
         # Build command. The prompt is written to a temporary .md file inside
         # the workspace and passed via --prompt-file to avoid platform command
