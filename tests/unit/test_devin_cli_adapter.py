@@ -41,6 +41,14 @@ class TestDevinCliAdapter(unittest.TestCase):
 
         self.adapter = DevinCliAdapter(self.devin_cli_path, str(self.workspace))
 
+        # Bypass the auth pre-flight so existing invoke tests continue to
+        # exercise the devin CLI call rather than the auth check.
+        self._check_auth_patch = patch.object(
+            DevinCliAdapter, "_check_auth", return_value=(True, "")
+        )
+        self._check_auth_patch.start()
+        self.addCleanup(self._check_auth_patch.stop)
+
     def tearDown(self):
         """Clean up test fixtures"""
         shutil.rmtree(self.temp_dir)
@@ -237,6 +245,23 @@ class TestDevinCliAdapter(unittest.TestCase):
 
             self.assertEqual(result.output, "Stdout content")
             self.assertEqual(result.error, "Stderr content")
+
+    def test_invoke_auth_failure(self):
+        """Should fail fast when devin-cli reports it is not logged in"""
+        self._check_auth_patch.stop()
+        try:
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout="Not logged in.\n", stderr=""
+                )
+
+                result = self.adapter.invoke("test prompt")
+
+                self.assertFalse(result.success)
+                self.assertEqual(result.exit_code, -1)
+                self.assertIn("not authenticated", result.error.lower())
+        finally:
+            self._check_auth_patch.start()
 
 
 class TestPermissionModeValidation(unittest.TestCase):

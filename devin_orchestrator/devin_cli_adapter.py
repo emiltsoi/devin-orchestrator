@@ -102,6 +102,12 @@ class DevinCliAdapter:
         self.skills = self._load_skills()
 
     @staticmethod
+    def _to_str(value: Any) -> str:
+        """Decode bytes or stringify output safely."""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return value or ""
+
     def _check_auth(self) -> tuple[bool, str]:
         """
         Check whether the configured devin-cli is authenticated.
@@ -120,13 +126,15 @@ class DevinCliAdapter:
                 errors="replace",
                 timeout=15,
             )
-            output = (result.stdout or "") + (result.stderr or "")
+            output = self._to_str(result.stdout) + self._to_str(result.stderr)
             if "Not logged in" in output:
                 return False, output
             if result.returncode != 0:
                 return False, output
             return True, output
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            return False, f"Failed to run devin auth status ({type(e).__name__}): {e}"
+        except Exception as e:  # pragma: no cover - defensive catch-all
             return False, f"Failed to run devin auth status ({type(e).__name__}): {e}"
 
     @staticmethod
