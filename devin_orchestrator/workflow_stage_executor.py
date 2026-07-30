@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from devin_orchestrator.artifact_validator import ArtifactValidator
@@ -21,6 +22,7 @@ from devin_orchestrator.security_utils import (
     PathTraversalError,
 )
 from devin_orchestrator.stage_skill_dispatcher import StageSkillDispatcher
+from devin_orchestrator.state_store import JsonlStateStore
 from devin_orchestrator.triage_evaluator import TriageDecision, TriageEvaluator
 
 if TYPE_CHECKING:
@@ -28,6 +30,7 @@ if TYPE_CHECKING:
 
     from devin_orchestrator.orchestration_engine import OrchestrationEngine
     from devin_orchestrator.skill_invoker import SkillInvocationResult
+    from devin_orchestrator.state_store import StateStore
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +50,39 @@ class WorkflowStageExecutor:
         artifact_validator: ArtifactValidator | None = None,
         triage_evaluator: TriageEvaluator | None = None,
         stage_skill_dispatcher: StageSkillDispatcher | None = None,
+        state_store: StateStore | None = None,
     ) -> None:
         self._engine = engine
         self._artifact_validator = artifact_validator or ArtifactValidator(engine)
         self._triage_evaluator = triage_evaluator or TriageEvaluator(engine)
         self._stage_skill_dispatcher = stage_skill_dispatcher or StageSkillDispatcher(engine)
+        self._state_store = state_store or JsonlStateStore()
 
     def __getattr__(self, name: str) -> Any:
         """Forward attribute access to the parent engine."""
         return getattr(self._engine, name)
+
+    def _refresh_results(self, results: dict[str, Any]) -> None:
+        """Sync the in-memory results dict from the durable state store."""
+        results["stages"] = [
+            self._normalize_stage_result(s) for s in self._state_store.list_stages()
+        ]
+        results["final_status"] = self._state_store.get_status()
+
+    def _normalize_stage_result(self, stage_result: dict[str, Any]) -> dict[str, Any]:
+        """Convert triage_decision strings back to TriageDecision enum values."""
+        triage = stage_result.get("triage_decision")
+        if isinstance(triage, str):
+            with suppress(ValueError):
+                stage_result["triage_decision"] = TriageDecision(triage)
+        return stage_result
+
+    def _persist_stage(
+        self, stage_name: str, stage_result: dict[str, Any], status: str = "completed"
+    ) -> None:
+        """Persist a stage result, tagging it with a status for resume logic."""
+        stage_result["status"] = status
+        self._state_store.save_stage(stage_name, stage_result)
 
     def _is_session_cancelled(self, session_dir: Path) -> bool:
         """Check whether the session has been marked for cancellation."""
@@ -86,9 +113,11 @@ class WorkflowStageExecutor:
             session_id: Session identifier
             config_overrides: Optional configuration overrides for skills
             results: Results dictionary to update in place
-            resume: If True, skip stages already marked completed in session.json
+            resume: If True, _execute_stage uses the state store for completed stages
         """
         manifest = Manifest.ensure(manifest)
+        self._state_store.init(session_id, session_dir)
+
         for stage in manifest.stages:
             if self._process_stage(
                 stage,
@@ -100,6 +129,18 @@ class WorkflowStageExecutor:
                 resume,
             ):
                 break
+
+        self._refresh_results(results)
+        # Leave final_status for the OrchestrationEngine unless the workflow
+        # paused or ended inside a stage (escalated, cancelled, waiting, blocked).
+        if results["final_status"] not in {
+            "escalated",
+            "cancelled",
+            "waiting_for_input",
+            "blocked",
+            "failed",
+        }:
+            results["final_status"] = "unknown"
 
     def _process_stage(
         self,
@@ -115,15 +156,17 @@ class WorkflowStageExecutor:
         stage = Stage.ensure(stage)
         manifest = Manifest.ensure(manifest)
         stage_name = stage.name
+        self._state_store.init(session_id, session_dir)
 
         if self._is_session_cancelled(session_dir):
-            results["final_status"] = "cancelled"
+            self._state_store.set_status("cancelled", "Session cancelled")
             self._engine.update_status(
                 session_dir,
                 stage_name,
                 "cancelled",
                 "Session cancelled",
             )
+            self._refresh_results(results)
             return True
 
         try:
@@ -135,42 +178,43 @@ class WorkflowStageExecutor:
                 config_overrides=config_overrides,
                 resume=resume,
             )
-            results["stages"].append(stage_result)
         except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
             logger.error(f"Error executing stage {stage_name}: {e}")
-            results["stages"].append(
-                {
-                    "stage": stage_name,
-                    "skill": stage.skill,
-                    "success": False,
-                    "output": None,
-                    "error": f"Error during stage execution: {str(e)}",
-                    "validation": {
-                        "valid": False,
-                        "errors": [f"Error: {str(e)}"],
-                        "artifact_results": {},
-                    },
-                    "triage_decision": TriageDecision.ESCALATE,
-                }
-            )
-            results["final_status"] = "escalated"
+            stage_result = {
+                "stage": stage_name,
+                "skill": stage.skill,
+                "success": False,
+                "output": None,
+                "error": f"Error during stage execution: {str(e)}",
+                "validation": {
+                    "valid": False,
+                    "errors": [f"Error: {str(e)}"],
+                    "artifact_results": {},
+                },
+                "triage_decision": TriageDecision.ESCALATE,
+            }
+            self._persist_stage(stage_name, stage_result, "escalated")
+            self._state_store.set_status("escalated", f"Unexpected error: {e}")
             self._engine.update_status(
                 session_dir,
                 stage_name,
                 "error",
                 f"Unexpected error: {str(e)}",
             )
+            self._refresh_results(results)
             return True
 
         triage = stage_result["triage_decision"]
         if triage == TriageDecision.ESCALATE:
-            results["final_status"] = "escalated"
+            self._persist_stage(stage_name, stage_result, "escalated")
+            self._state_store.set_status("escalated", "Workflow escalated to human")
             self._engine.update_status(
                 session_dir,
                 stage_name,
                 "escalated",
                 "Workflow escalated to human",
             )
+            self._refresh_results(results)
             return True
 
         if triage == TriageDecision.RETRY:
@@ -181,9 +225,13 @@ class WorkflowStageExecutor:
                 session_id,
                 config_overrides,
                 stage_result,
-                results,
             )
-            results["stages"][-1] = stage_result
+            self._persist_stage(
+                stage_name, stage_result, "escalated" if should_break else "completed"
+            )
+            if should_break:
+                self._state_store.set_status("escalated", "Retry exhausted")
+            self._refresh_results(results)
             if should_break:
                 return True
 
@@ -198,6 +246,8 @@ class WorkflowStageExecutor:
                 results,
             )
 
+        self._persist_stage(stage_name, stage_result, "completed")
+        self._refresh_results(results)
         return False
 
     def _process_stage_gate(
@@ -215,6 +265,7 @@ class WorkflowStageExecutor:
         manifest = Manifest.ensure(manifest)
         gate_id = stage.gate
         stage_name = stage.name
+        self._state_store.init(session_id, session_dir)
         max_gate_request_changes = self._resolve_max_gate_request_changes(stage)
         gate_request_changes_count = 0
 
@@ -227,23 +278,33 @@ class WorkflowStageExecutor:
                 stage_result=stage_result,
             )
             if gate_result.get("requires_input"):
-                results["final_status"] = "waiting_for_input"
+                self._persist_stage(stage_name, stage_result, "completed")
+                self._state_store.set_status(
+                    "waiting_for_input",
+                    gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
+                )
                 self._engine.update_status(
                     session_dir,
                     f"gate_{gate_id}",
                     "waiting",
                     gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
                 )
+                self._refresh_results(results)
                 return True
 
             if gate_result.get("blocked"):
-                results["final_status"] = "blocked"
+                self._persist_stage(stage_name, stage_result, "completed")
+                self._state_store.set_status(
+                    "blocked",
+                    gate_result.get("notes", f"Gate {gate_id} blocked"),
+                )
                 self._engine.update_status(
                     session_dir,
                     f"gate_{gate_id}",
                     "block",
                     gate_result.get("notes", f"Gate {gate_id} blocked"),
                 )
+                self._refresh_results(results)
                 return True
 
             if gate_result.get("verdict") == "request_changes":
@@ -255,13 +316,15 @@ class WorkflowStageExecutor:
                         f"{stage_name}; escalating to avoid infinite loop"
                     )
                     logger.warning(error_msg)
-                    results["final_status"] = "escalated"
+                    self._persist_stage(stage_name, stage_result, "escalated")
+                    self._state_store.set_status("escalated", error_msg)
                     self._engine.update_status(
                         session_dir,
                         stage_name,
                         "escalated",
                         error_msg,
                     )
+                    self._refresh_results(results)
                     return True
 
                 self._engine.update_status(
@@ -288,18 +351,21 @@ class WorkflowStageExecutor:
                         "validation": {"valid": False, "errors": [], "artifact_results": {}},
                         "triage_decision": TriageDecision.RETRY,
                     },
-                    results,
                 )
                 if should_break:
-                    results["final_status"] = "escalated"
+                    self._persist_stage(stage_name, stage_result, "escalated")
+                    self._state_store.set_status("escalated", "Retry exhausted")
+                    self._refresh_results(results)
                     return True
 
-                results["stages"][-1] = stage_result
+                self._persist_stage(stage_name, stage_result, "completed")
                 continue
 
             break
 
-        return results["final_status"] != "unknown"
+        self._persist_stage(stage_name, stage_result, "completed")
+        self._refresh_results(results)
+        return False
 
     def _retry_stage_execution(
         self,
@@ -309,7 +375,6 @@ class WorkflowStageExecutor:
         session_id: str,
         config_overrides: dict[str, Any] | None,
         stage_result: dict[str, Any],
-        results: dict[str, Any],
     ) -> tuple[bool, dict[str, Any]]:
         """
         Retry a failed stage with exponential backoff and correction artifacts.
@@ -321,7 +386,6 @@ class WorkflowStageExecutor:
             session_id: Session identifier
             config_overrides: Optional configuration overrides for skills
             stage_result: Previous stage execution result
-            results: Results dictionary to update in place
 
         Returns:
             Tuple of (break_loop, final_stage_result). ``break_loop`` is True if
@@ -390,7 +454,6 @@ class WorkflowStageExecutor:
             retry_count >= max_retries
             and stage_result["triage_decision"] != TriageDecision.PROCEED
         ):
-            results["final_status"] = "escalated"
             self._engine.update_status(
                 session_dir,
                 stage.name,
@@ -521,34 +584,13 @@ class WorkflowStageExecutor:
         stage_name = stage.name
         skill_name = stage.skill
 
-        # When resuming, check the session log before re-running a stage that has
+        # When resuming, check the state store before re-running a stage that has
         # already completed. Statuses like "request_changes" cause a re-run.
+        self._state_store.init(session_id, session_dir)
         if resume:
-            try:
-                session_data = json.loads(
-                    (session_dir / "session.json").read_text(encoding="utf-8")
-                )
-                latest_status = None
-                for entry in reversed(session_data.get("stages", [])):
-                    if entry.get("stage") == stage_name:
-                        latest_status = entry.get("status")
-                        break
-                if latest_status == "completed":
-                    return {
-                        "stage": stage_name,
-                        "skill": skill_name,
-                        "success": True,
-                        "output": "Stage already completed (resumed)",
-                        "error": None,
-                        "validation": {
-                            "valid": True,
-                            "errors": [],
-                            "artifact_results": {},
-                        },
-                        "triage_decision": TriageDecision.PROCEED,
-                    }
-            except (OSError, json.JSONDecodeError) as e:
-                logger.warning(f"Failed to read session.json for resume check: {e}")
+            previous = self._state_store.load_stage(stage_name)
+            if previous and previous.get("status") == "completed":
+                return self._normalize_stage_result(previous)
 
         self._engine.update_status(
             session_dir, stage_name, "in_progress", f"Starting stage: {stage_name}"

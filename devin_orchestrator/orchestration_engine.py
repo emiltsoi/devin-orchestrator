@@ -14,7 +14,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from devin_orchestrator.artifact_validator import ArtifactValidator
 from devin_orchestrator.config_loader import ConfigLoader
@@ -42,8 +42,12 @@ from devin_orchestrator.security_utils import (
 from devin_orchestrator.session_manager import resolve_session
 from devin_orchestrator.skill_invoker import SkillInvoker
 from devin_orchestrator.stage_skill_dispatcher import StageSkillDispatcher
+from devin_orchestrator.state_store import JsonlStateStore
 from devin_orchestrator.triage_evaluator import TriageDecision, TriageEvaluator
 from devin_orchestrator.workflow_stage_executor import WorkflowStageExecutor
+
+if TYPE_CHECKING:
+    from devin_orchestrator.state_store import StateStore
 
 # Configure logging
 logging.basicConfig(
@@ -61,7 +65,23 @@ class OrchestrationEngine:
             return globals()[name]
         raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
-    def __init__(self, work_dir: Path, config: dict[str, Any] | None = None, metrics: "MetricsCollector | None" = None, monitoring: "MonitoringSystem | None" = None):
+    def resume_from_state_store(self, session_id: str) -> dict[str, Any] | None:
+        """Rebuild the current session state from disk without re-running any stages."""
+        try:
+            session_dir = resolve_session(self.work_dir, session_id)
+        except (InvalidInputError, PathTraversalError, FileNotFoundError):
+            return None
+        self._state_store.init(session_id, session_dir)
+        return self._state_store.as_dict()
+
+    def __init__(
+        self,
+        work_dir: Path,
+        config: dict[str, Any] | None = None,
+        metrics: "MetricsCollector | None" = None,
+        monitoring: "MonitoringSystem | None" = None,
+        state_store: "StateStore | None" = None,
+    ):
         """
         Initialize orchestration engine
 
@@ -70,6 +90,7 @@ class OrchestrationEngine:
             config: Optional configuration dictionary
             metrics: Optional metrics collector (creates a fresh instance by default)
             monitoring: Optional monitoring system (creates a fresh instance by default)
+            state_store: Optional workflow state store (defaults to JsonlStateStore)
         """
         try:
             self.work_dir = work_dir
@@ -85,11 +106,13 @@ class OrchestrationEngine:
             self.triage_evaluator = TriageEvaluator(self)
             self.stage_skill_dispatcher = StageSkillDispatcher(self)
             self.gate_controller = GateController(self)
+            self._state_store = state_store or JsonlStateStore()
             self.workflow_stage_executor = WorkflowStageExecutor(
                 self,
                 artifact_validator=self.artifact_validator,
                 triage_evaluator=self.triage_evaluator,
                 stage_skill_dispatcher=self.stage_skill_dispatcher,
+                state_store=self._state_store,
             )
             logger.info(f"OrchestrationEngine initialized with work_dir: {work_dir}")
         except Exception as e:
@@ -155,6 +178,11 @@ class OrchestrationEngine:
         # call can locate the manifest without requiring the caller to resupply it.
         self._update_session_manifest(session_dir, manifest.name)
 
+        # Durable state store for idempotency and crash recovery
+        self._state_store.init(session_id, session_dir)
+        if self._state_store.is_final():
+            return self._state_store.as_dict(manifest.name)
+
         # Override skip_brainstorming if provided
         if skip_brainstorming is not None:
             manifest.skip_brainstorming = skip_brainstorming
@@ -163,6 +191,7 @@ class OrchestrationEngine:
         self.metrics.start_workflow(session_id, manifest.name)
 
         # Execute stages
+        self._state_store.set_status("in_progress", "Starting workflow execution")
         results = {
             "session_id": session_id,
             "manifest": manifest.name,
@@ -175,6 +204,8 @@ class OrchestrationEngine:
 
         if results["final_status"] == "unknown":
             results["final_status"] = "completed"
+        assert isinstance(results["final_status"], str)
+        self._state_store.set_status(results["final_status"])
 
         # Finalize metrics, export, and monitoring
         self._finalize_workflow(session_id, session_dir, results)
@@ -220,6 +251,8 @@ class OrchestrationEngine:
                 "error": f"Failed to resolve session: {str(e)}",
             }
 
+        self._state_store.init(session_id, session_dir)
+
         session_file = session_dir / "session.json"
         try:
             session_data = json.loads(session_file.read_text(encoding="utf-8"))
@@ -242,6 +275,9 @@ class OrchestrationEngine:
                 "final_status": "failed",
                 "error": "Session manifest not recorded; cannot continue workflow",
             }
+
+        if self._state_store.is_final():
+            return self._state_store.as_dict(manifest_name)
 
         workflows_dir = self.config.get("workflows_dir")
         if workflows_dir:
@@ -307,6 +343,7 @@ class OrchestrationEngine:
         # Start/resume metrics tracking
         self.metrics.start_workflow(session_id, manifest.name)
 
+        self._state_store.set_status("in_progress", "Resuming workflow")
         results = {
             "session_id": session_id,
             "manifest": manifest.name,
@@ -319,6 +356,8 @@ class OrchestrationEngine:
 
         if results["final_status"] == "unknown":
             results["final_status"] = "completed"
+        assert isinstance(results["final_status"], str)
+        self._state_store.set_status(results["final_status"])
 
         self._finalize_workflow(session_id, session_dir, results)
         return results
