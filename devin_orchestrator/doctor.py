@@ -9,6 +9,7 @@ from pathlib import Path
 
 from devin_orchestrator import __version__
 from devin_orchestrator.config_loader import ConfigLoader
+from devin_orchestrator.manifest_loader import ManifestLoader
 from register_mcp import _launcher_path, _targets
 
 
@@ -93,6 +94,16 @@ def main() -> int:
                 _warn(f"{target['name']:<12} {path}", "devin-orchestrator not found")
         else:
             _warn(f"{target['name']:<12} {path}", f"config file {status}")
+
+    # Workflow manifests
+    print()
+    print("Workflow manifests:")
+    loader = ManifestLoader(global_root)
+    valid, errors = loader.validate_all()
+    for name in valid:
+        _ok(name)
+    for name, error in errors:
+        _fail(name, error)
 
     print()
     print("Run 'deploy.py' to install or 'register_mcp.py' to update agent configs.")
