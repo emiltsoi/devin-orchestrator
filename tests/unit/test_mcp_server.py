@@ -8,6 +8,7 @@ implementations without requiring a real Devin CLI.
 import base64
 import json
 import sys
+import threading
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,6 +16,12 @@ from unittest.mock import Mock, patch
 import pytest
 
 import devin_orchestrator.mcp_server as mcp_server
+
+
+@pytest.fixture(autouse=True)
+def _sync_threads(monkeypatch):
+    """Run Thread.start() synchronously so dispatch tests are deterministic."""
+    monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
 
 
 @pytest.fixture
