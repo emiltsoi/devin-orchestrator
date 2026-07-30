@@ -1,3 +1,9 @@
+# Agent Installation Guide (deprecated)
+
+> This guide has been replaced by the cross-platform one-click deploy instructions in [DEPLOY.md](DEPLOY.md).
+>
+> For troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 # Agent Installation Guide
 
 This guide provides step-by-step instructions for agents (Cascade, Devin, etc.) to install and deploy devin-orchestrator.

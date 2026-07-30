@@ -2,10 +2,12 @@
 
 **Purpose:** Document the hybrid deployment model for orchestrator–worker workflows.
 
+> For the public one-click deploy instructions, see [DEPLOY.md](DEPLOY.md).
+
 **See Also:**
-- [INSTALL.md](INSTALL.md) - Installation instructions
+- [DEPLOY.md](DEPLOY.md) - One-click cross-platform deployment
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
-- [AGENT-INSTALL.md](AGENT-INSTALL.md) - Agent-specific installation guide
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Developer/release workflow
 
 ## Deployment Model
 
