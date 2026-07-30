@@ -13,6 +13,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from devin_orchestrator.models import Stage
 from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
 from devin_orchestrator.triage_evaluator import TriageDecision
 
@@ -109,7 +110,7 @@ class StageSkillDispatcher:
         self,
         skill_name: str,
         stage_name: str,
-        stage: dict[str, Any],
+        stage: Stage,
         session_dir: Path,
         session_id: str,
         config_overrides: dict[str, Any] | None,
@@ -120,6 +121,7 @@ class StageSkillDispatcher:
 
         Returns (result, error_dict) where error_dict is None on success.
         """
+        stage = Stage.ensure(stage)
         try:
             result = self._engine.skill_invoker.invoke_skill(
                 skill_name=skill_name,
@@ -129,7 +131,7 @@ class StageSkillDispatcher:
                     "skill": skill_name,
                 },
                 workspace=str(session_dir),
-                is_reviewer=stage.get("skill") == "requesting-code-review",
+                is_reviewer=stage.skill == "requesting-code-review",
                 config_overrides=config_overrides,
                 correction_artifact=correction_artifact,
                 timeout=self._engine.config.get("dispatch_timeout_seconds"),

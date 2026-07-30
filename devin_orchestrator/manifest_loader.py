@@ -2,25 +2,12 @@
 Manifest Loader - Loads and validates workflow manifests
 """
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-
-@dataclass
-class Manifest:
-    """Parsed workflow manifest"""
-
-    name: str
-    description: str
-    version: str
-    schema_version: int
-    session_shape: str
-    skip_brainstorming: bool
-    stages: list[dict[str, Any]]
-    gates: list[dict[str, Any]]
+from devin_orchestrator.models import Manifest
 
 
 class ManifestLoader:
@@ -87,16 +74,7 @@ class ManifestLoader:
         # Validate stage -> gate references
         self._validate_stage_gate_references(data["stages"], data.get("gates", []))
 
-        return Manifest(
-            name=data["name"],
-            description=data["description"],
-            version=data["version"],
-            schema_version=data["schema_version"],
-            session_shape=data["session_shape"],
-            skip_brainstorming=data.get("skip_brainstorming", False),
-            stages=data["stages"],
-            gates=data.get("gates", []),
-        )
+        return Manifest.model_validate(data)
 
     def _validate_required_fields(self, data: dict[str, Any]) -> None:
         """Validate that all required fields are present"""

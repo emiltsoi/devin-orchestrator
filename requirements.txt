@@ -2,3 +2,4 @@ PyYAML>=5.1
 psutil>=5.9.0
 watchdog>=3.0.0
 requests>=2.25.0
+pydantic>=2.0

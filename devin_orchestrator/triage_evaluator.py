@@ -16,6 +16,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from devin_orchestrator.guardrails import Guardrails
+from devin_orchestrator.models import Stage
 from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
 
 if TYPE_CHECKING:
@@ -393,7 +394,7 @@ class TriageEvaluator:
         return verdict, confidence, review_text
 
     def skip_stage(
-        self, stage: dict[str, Any], session_dir: Path, session_id: str
+        self, stage: Stage, session_dir: Path, session_id: str
     ) -> dict[str, Any]:
         """
         Skip a stage (e.g., brainstorming when spec is clear).
@@ -406,7 +407,8 @@ class TriageEvaluator:
         Returns:
             Dictionary with stage skip results
         """
-        stage_name = stage["name"]
+        stage = Stage.ensure(stage)
+        stage_name = stage.name
 
         self._engine.update_status(
             session_dir, stage_name, "skipped", "Skipping stage - spec is clear"
@@ -414,7 +416,7 @@ class TriageEvaluator:
 
         # Create placeholder artifacts
         try:
-            output_artifacts = stage.get("output_artifacts", [])
+            output_artifacts = stage.output_artifacts
             for artifact in output_artifacts:
                 artifact_path = self._engine.artifact_validator.validate_artifact_path(
                     artifact, session_dir
@@ -430,7 +432,7 @@ class TriageEvaluator:
             logger.error(f"Error creating placeholder artifacts: {e}")
             return {
                 "stage": stage_name,
-                "skill": stage["skill"],
+                "skill": stage.skill,
                 "success": False,
                 "output": "Stage skip failed - artifact creation error",
                 "error": f"Error creating placeholder artifacts: {str(e)}",
@@ -444,7 +446,7 @@ class TriageEvaluator:
 
         return {
             "stage": stage_name,
-            "skill": stage["skill"],
+            "skill": stage.skill,
             "success": True,
             "output": "Stage skipped - spec is clear",
             "error": None,

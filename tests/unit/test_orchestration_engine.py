@@ -1808,7 +1808,7 @@ class TestOrchestrationEngine(unittest.TestCase):
 
         def mock_execute_stage(*args, **kwargs):
             stage = kwargs.get("stage") or (args[0] if args else {})
-            stage_name = stage.get("name", "unknown") if isinstance(stage, dict) else "unknown"
+            stage_name = stage.get("name", "unknown")
             call_count[0] += 1
             if stage_name == "stage1":
                 if call_count[0] == 1:
@@ -2313,21 +2313,22 @@ class TestArtifactPathValidation(unittest.TestCase):
 
     def test_resolve_max_retries(self):
         """_resolve_max_retries should parse and validate stage retry config"""
-        self.assertEqual(self.engine._resolve_max_retries({}), 3)
+        base = {"name": "s", "skill": "test", "output_artifacts": []}
+        self.assertEqual(self.engine._resolve_max_retries({**base}), 3)
         self.assertEqual(
-            self.engine._resolve_max_retries({"name": "s", "max_retries": 1}), 1
+            self.engine._resolve_max_retries({**base, "max_retries": 1}), 1
         )
         self.assertEqual(
-            self.engine._resolve_max_retries({"name": "s", "max_retries": "5"}), 5
+            self.engine._resolve_max_retries({**base, "max_retries": "5"}), 5
         )
         self.assertEqual(
-            self.engine._resolve_max_retries({"name": "s", "max_retries": -2}), 3
+            self.engine._resolve_max_retries({**base, "max_retries": -2}), 3
         )
         self.assertEqual(
-            self.engine._resolve_max_retries({"name": "s", "max_retries": "bad"}), 3
+            self.engine._resolve_max_retries({**base, "max_retries": "bad"}), 3
         )
         self.assertEqual(
-            self.engine._resolve_max_retries({"name": "s", "max_retries": 99}), 10
+            self.engine._resolve_max_retries({**base, "max_retries": 99}), 10
         )
 
 
