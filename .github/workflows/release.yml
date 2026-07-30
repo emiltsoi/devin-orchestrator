@@ -59,7 +59,7 @@ jobs:
         dispatch-devin --version
         dispatch-skill --version
         printf 'Content-Length: 48\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
-          | devin-orchestrator 2>/dev/null \
+          | devin-orchestrator mcp 2>/dev/null \
           | grep -q '"serverInfo"'
 
     - name: Publish to PyPI
