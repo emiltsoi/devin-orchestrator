@@ -246,7 +246,9 @@ def main() -> int:
 
     print("\n=== Done ===")
     if not args.skip_register and not args.dry_run:
-        print("Restart your agent/IDE to pick up the new devin-orchestrator MCP server.")
+        print(
+            "Restart your agent/IDE to pick up the new devin-orchestrator MCP server."
+        )
     return 0
 
 

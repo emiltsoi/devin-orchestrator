@@ -166,10 +166,12 @@ workflow:
 from workflow_engine import WorkflowEngine
 
 engine = WorkflowEngine()
-engine.load_manifest('workflows/feature.manifest.yaml')  # or .devin/workflows/feature.manifest.yaml for local override
-engine.initialize_session('FEATURE-001')
-engine.execute_step('step_0')
-engine.execute_step('step_1')
+engine.load_manifest(
+    "workflows/feature.manifest.yaml"
+)  # or .devin/workflows/feature.manifest.yaml for local override
+engine.initialize_session("FEATURE-001")
+engine.execute_step("step_0")
+engine.execute_step("step_1")
 # ... continue through steps
 engine.finalize_session()
 ```

@@ -50,9 +50,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--skill-name", dest="skill_name", help="Name of the skill")
     parser.add_argument("--session-id", dest="session_id", help="Session identifier")
     parser.add_argument("--workspace", dest="workspace", help="Workspace directory")
-    parser.add_argument(
-        "--is-reviewer", dest="is_reviewer_flag", action="store_true"
-    )
+    parser.add_argument("--is-reviewer", dest="is_reviewer_flag", action="store_true")
     parser.add_argument("--demo-mode", dest="demo_mode_flag", action="store_true")
     parser.add_argument(
         "--config-overrides", dest="config_overrides_json", help="JSON config overrides"

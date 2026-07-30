@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 
 class McpDispatchMixin(McpServerBase):
-
     def _tool_dispatch_devin(self, arguments: dict) -> list[dict]:
         """
         Dispatch a generic Devin run with a role and prompt file.
@@ -243,7 +242,9 @@ class McpDispatchMixin(McpServerBase):
         except (InvalidInputError, OSError) as e:
             return [self._text_content(f"Failed to create dispatch session: {e}")]
 
-        request_content = f"skill={skill_name}\nsession_id={session_id}\nworkspace={workspace}"
+        request_content = (
+            f"skill={skill_name}\nsession_id={session_id}\nworkspace={workspace}"
+        )
         session_init(dispatch_id, self.config.session_work_dir, request_content)
 
         thread = threading.Thread(

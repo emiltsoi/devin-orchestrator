@@ -1,4 +1,5 @@
 """Workflow session state store with append-only JSONL persistence."""
+
 from __future__ import annotations
 
 import json

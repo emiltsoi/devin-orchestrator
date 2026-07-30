@@ -164,7 +164,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         request_content = "Test request"
 
         # Mock _execute_stage to avoid encoding issues with global skills
-        with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+        with patch(
+            "devin_orchestrator.orchestration_engine.validate_path_safe"
+        ) as mock_validate:
             mock_validate.return_value = self.manifest_path
 
             with patch.object(self.engine, "_execute_stage") as mock_execute:
@@ -201,7 +203,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         request_content = "Test request"
 
         # Mock _execute_stage to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+        with patch(
+            "devin_orchestrator.orchestration_engine.validate_path_safe"
+        ) as mock_validate:
             mock_validate.return_value = self.manifest_path
 
             # Mock different results for different stages
@@ -273,7 +277,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         config_overrides = {"interactive_mode": True}
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -290,7 +296,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = self.manifest_path
 
                 with patch.object(self.engine, "_execute_stage") as mock_execute:
@@ -384,7 +392,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 }
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -401,7 +411,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = retry_manifest_path
 
                 with patch.object(
@@ -458,7 +470,9 @@ class TestOrchestrationEngine(unittest.TestCase):
             }
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -475,7 +489,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = retry_manifest_path
 
                 with patch.object(
@@ -544,7 +560,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 }
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -561,7 +579,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = retry_manifest_path
 
                 with patch.object(
@@ -621,7 +641,9 @@ class TestOrchestrationEngine(unittest.TestCase):
             return {"gate_id": "g1_approval", "verdict": "approve", "blocked": False}
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -638,7 +660,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = gate_manifest_path
 
                 with patch.object(
@@ -693,7 +717,9 @@ class TestOrchestrationEngine(unittest.TestCase):
             return {"gate_id": "g1_approval", "verdict": "block", "blocked": True}
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -710,7 +736,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = gate_manifest_path
 
                 with patch.object(
@@ -793,7 +821,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         def mock_validate_path_safe(base, candidate, allow_absolute=False):
             return candidate
 
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -910,7 +940,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         )
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker to succeed
@@ -962,7 +994,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         (session_dir / "design.md").write_text("# Design content\n\nSome design here.")
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker to succeed
@@ -1006,7 +1040,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         Path(correction_artifact).write_text("# Correction\n\nFix this issue\n")
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker
@@ -1049,7 +1085,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         manifest = self.valid_manifest
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker to succeed but create empty artifact
@@ -1090,7 +1128,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         manifest = self.valid_manifest
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker to fail
@@ -1168,7 +1208,9 @@ class TestOrchestrationEngine(unittest.TestCase):
     def test_manifest_loading(self):
         """Should load manifest correctly"""
         # Mock _execute_stage to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+        with patch(
+            "devin_orchestrator.orchestration_engine.validate_path_safe"
+        ) as mock_validate:
             mock_validate.return_value = self.manifest_path
 
             with patch.object(self.engine, "_execute_stage") as mock_execute:
@@ -1200,7 +1242,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         """Should handle missing manifest file"""
         missing_manifest = self.workflows_dir / "missing-manifest.yaml"
 
-        with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+        with patch(
+            "devin_orchestrator.orchestration_engine.validate_path_safe"
+        ) as mock_validate:
             mock_validate.return_value = missing_manifest
 
             result = self.engine.execute_workflow(
@@ -1247,7 +1291,9 @@ class TestOrchestrationEngine(unittest.TestCase):
             }
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1264,7 +1310,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = escalate_manifest_path
 
                 with patch.object(
@@ -1311,7 +1359,9 @@ class TestOrchestrationEngine(unittest.TestCase):
             }
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1328,7 +1378,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = no_gate_manifest_path
 
                 with patch.object(
@@ -1406,7 +1458,9 @@ class TestOrchestrationEngine(unittest.TestCase):
             },
         ]
 
-        with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+        with patch(
+            "devin_orchestrator.orchestration_engine.validate_path_safe"
+        ) as mock_validate:
             mock_validate.return_value = multi_stage_manifest_path
 
             with patch.object(self.engine, "_execute_stage", side_effect=stage_results):
@@ -1440,7 +1494,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         config_overrides = {"custom_param": "custom_value"}
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1493,7 +1549,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         manifest = self.valid_manifest
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1580,7 +1638,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                     "triage_decision": TriageDecision.PROCEED,
                 }
 
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1597,7 +1657,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = retry_manifest_path
 
                 with patch.object(
@@ -1650,7 +1712,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "triage_decision": TriageDecision.RETRY,
             }
 
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1667,7 +1731,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = retry_manifest_path
 
                 with patch.object(
@@ -1738,7 +1804,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                     "triage_decision": TriageDecision.PROCEED,
                 }
 
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1755,7 +1823,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = retry_manifest_path
 
                 with patch.object(
@@ -1832,7 +1902,11 @@ class TestOrchestrationEngine(unittest.TestCase):
                         "success": True,
                         "output": "Success",
                         "error": None,
-                        "validation": {"valid": True, "errors": [], "artifact_results": {}},
+                        "validation": {
+                            "valid": True,
+                            "errors": [],
+                            "artifact_results": {},
+                        },
                         "triage_decision": TriageDecision.PROCEED,
                     }
             return {
@@ -1845,7 +1919,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "triage_decision": TriageDecision.PROCEED,
             }
 
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1862,7 +1938,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = retry_manifest_path
 
                 with patch.object(
@@ -1877,7 +1955,8 @@ class TestOrchestrationEngine(unittest.TestCase):
                         self.assertEqual(len(results["stages"]), 2)
                         self.assertEqual(results["stages"][0]["stage"], "stage1")
                         self.assertEqual(
-                            results["stages"][0]["triage_decision"], TriageDecision.PROCEED
+                            results["stages"][0]["triage_decision"],
+                            TriageDecision.PROCEED,
                         )
                         self.assertEqual(results["stages"][1]["stage"], "stage2")
                         self.assertEqual(call_count[0], 3)
@@ -1927,7 +2006,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "blocked": True,
             }
 
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -1944,7 +2025,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = gate_manifest_path
 
                 with patch.object(
@@ -2005,7 +2088,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "blocked": False,
             }
 
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = {
                 "definition": {
                     "schema_version": 1,
@@ -2022,7 +2107,9 @@ class TestOrchestrationEngine(unittest.TestCase):
                 "format": "separate",
             }
 
-            with patch("devin_orchestrator.orchestration_engine.validate_path_safe") as mock_validate:
+            with patch(
+                "devin_orchestrator.orchestration_engine.validate_path_safe"
+            ) as mock_validate:
                 mock_validate.return_value = gate_manifest_path
 
                 with patch("devin_orchestrator.orchestration_engine.time.sleep"):
@@ -2089,7 +2176,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         config_overrides = {"interactive_mode": True}
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker to succeed
@@ -2145,7 +2234,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         (session_dir / "design.md").write_text("# Design content\n\nSome design here.")
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker to succeed
@@ -2194,7 +2285,9 @@ class TestOrchestrationEngine(unittest.TestCase):
         (session_dir / "design.md").write_text("# Design content\n\nSome design here.")
 
         # Mock load_skill to avoid encoding issues
-        with patch("devin_orchestrator.orchestration_engine.load_skill") as mock_load_skill:
+        with patch(
+            "devin_orchestrator.orchestration_engine.load_skill"
+        ) as mock_load_skill:
             mock_load_skill.return_value = self.mock_load_skill("brainstorming")
 
             # Mock skill invoker to succeed
@@ -2239,9 +2332,7 @@ class TestArtifactPathValidation(unittest.TestCase):
         session_dir.mkdir()
         # A traversal attempt in the artifact name should be sanitized such
         # that the resulting path stays inside the session directory.
-        safe_path = self.engine._validate_artifact_path(
-            "../../evil.md", session_dir
-        )
+        safe_path = self.engine._validate_artifact_path("../../evil.md", session_dir)
         # The sanitized path must resolve inside session_dir
         self.assertTrue(
             str(safe_path).startswith(str(session_dir.resolve()))
@@ -2285,9 +2376,7 @@ class TestArtifactPathValidation(unittest.TestCase):
         )
         self.assertFalse(result["valid"])
         self.assertEqual(artifact_paths, [])
-        self.assertTrue(
-            any("Invalid artifact path" in e for e in result["errors"])
-        )
+        self.assertTrue(any("Invalid artifact path" in e for e in result["errors"]))
 
     def test_manifest_path_traversal_rejected(self):
         """_validate_and_load_manifest should reject traversal manifest paths"""

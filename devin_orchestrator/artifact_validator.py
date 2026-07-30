@@ -32,9 +32,7 @@ class ArtifactValidator:
     def __init__(self, engine: OrchestrationEngine) -> None:
         self._engine = engine
 
-    def validate_artifact_path(
-        self, artifact_name: str, session_dir: Path
-    ) -> Path:
+    def validate_artifact_path(self, artifact_name: str, session_dir: Path) -> Path:
         """
         Validate and resolve a stage artifact path so it is contained within
         the session directory.
@@ -80,9 +78,7 @@ class ArtifactValidator:
                     self.validate_artifact_path(artifact, session_dir)
                 )
             except (InvalidInputError, PathTraversalError) as e:
-                logger.error(
-                    f"Invalid artifact path for stage {stage_name}: {e}"
-                )
+                logger.error(f"Invalid artifact path for stage {stage_name}: {e}")
                 return (
                     {
                         "valid": False,
@@ -125,9 +121,7 @@ class ArtifactValidator:
                 artifact_paths,
             )
         except (OSError, RuntimeError, InvalidInputError, PathTraversalError) as e:
-            logger.error(
-                f"Error during validation for stage {stage_name}: {e}"
-            )
+            logger.error(f"Error during validation for stage {stage_name}: {e}")
             return (
                 {
                     "valid": False,

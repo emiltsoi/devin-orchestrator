@@ -436,7 +436,9 @@ class SystemHealthMonitor:
         self.config = config
         self.alert_manager = alert_manager
         self.health_checker = health_checker or HealthChecker()
-        self.metrics_collector = metrics_collector if metrics_collector is not None else MetricsCollector()
+        self.metrics_collector = (
+            metrics_collector if metrics_collector is not None else MetricsCollector()
+        )
 
         self._monitoring_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -779,7 +781,9 @@ class WorkflowExecutionMonitor:
         """
         self.config = config
         self.alert_manager = alert_manager
-        self.metrics_collector = metrics_collector if metrics_collector is not None else MetricsCollector()
+        self.metrics_collector = (
+            metrics_collector if metrics_collector is not None else MetricsCollector()
+        )
 
     def monitor_workflow_completion(self, session_id: str) -> None:
         """

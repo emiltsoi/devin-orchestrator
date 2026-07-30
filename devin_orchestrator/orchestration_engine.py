@@ -62,9 +62,18 @@ class OrchestrationEngine:
 
     def __getattr__(self, name: str) -> Any:
         """Expose selected module-level helpers so collaborators call patched versions during tests."""
-        if name in ("update_status", "load_skill", "validate_path_safe", "validate_structural", "load_manifest", "create_placeholder_artifact"):
+        if name in (
+            "update_status",
+            "load_skill",
+            "validate_path_safe",
+            "validate_structural",
+            "load_manifest",
+            "create_placeholder_artifact",
+        ):
             return globals()[name]
-        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {name!r}"
+        )
 
     def resume_from_state_store(self, session_id: str) -> dict[str, Any] | None:
         """Rebuild the current session state from disk without re-running any stages."""
@@ -98,7 +107,9 @@ class OrchestrationEngine:
             self.config = config or {}
             self.metrics = metrics if metrics is not None else MetricsCollector()
             self.monitoring = (
-                monitoring if monitoring is not None else MonitoringSystem(metrics_collector=self.metrics)
+                monitoring
+                if monitoring is not None
+                else MonitoringSystem(metrics_collector=self.metrics)
             )
             self.skill_invoker = SkillInvoker(
                 demo_mode=self.config.get("demo_mode", False), metrics=self.metrics
@@ -204,7 +215,12 @@ class OrchestrationEngine:
                 "final_status": "unknown",
             }
             self._run_workflow_stages(
-                manifest, session_dir, session_id, config_overrides, results, resume=False
+                manifest,
+                session_dir,
+                session_id,
+                config_overrides,
+                results,
+                resume=False,
             )
 
             if results["final_status"] == "unknown":
@@ -364,7 +380,12 @@ class OrchestrationEngine:
                 "final_status": "unknown",
             }
             self._run_workflow_stages(
-                manifest, session_dir, session_id, config_overrides, results, resume=True
+                manifest,
+                session_dir,
+                session_id,
+                config_overrides,
+                results,
+                resume=True,
             )
 
             if results["final_status"] == "unknown":
@@ -418,14 +439,19 @@ class OrchestrationEngine:
                 )
             except (InvalidInputError, PathTraversalError) as e:
                 logger.error(f"Input validation failed: {e}")
-                return None, None, None, {
-                    "session_id": session_id,
-                    "manifest": "unknown",
-                    "stages": [],
-                    "final_status": "failed",
-                    "error": f"Input validation failed: {str(e)}",
-                    "error_type": "InvalidInputError",
-                }
+                return (
+                    None,
+                    None,
+                    None,
+                    {
+                        "session_id": session_id,
+                        "manifest": "unknown",
+                        "stages": [],
+                        "final_status": "failed",
+                        "error": f"Input validation failed: {str(e)}",
+                        "error_type": "InvalidInputError",
+                    },
+                )
 
             # Load manifest
             raw_manifest = load_manifest(manifest_path)
@@ -434,57 +460,70 @@ class OrchestrationEngine:
             # instead of an uncaught KeyError downstream.
             self._validate_manifest_structure(raw_manifest, manifest_path)
             manifest = Manifest.model_validate(raw_manifest)
-            logger.info(
-                f"Loaded manifest from {manifest_path}: "
-                f"{manifest.name}"
-            )
+            logger.info(f"Loaded manifest from {manifest_path}: {manifest.name}")
             return session_id, manifest_path, manifest, None
         except FileNotFoundError as e:
             logger.error(f"Manifest file not found: {manifest_path} - {e}")
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"Manifest file not found: {manifest_path}",
-                "error_type": "FileNotFoundError",
-            }
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"Manifest file not found: {manifest_path}",
+                    "error_type": "FileNotFoundError",
+                },
+            )
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in manifest file {manifest_path}: {e}")
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"Invalid JSON in manifest file: {e}",
-                "error_type": "JSONDecodeError",
-            }
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"Invalid JSON in manifest file: {e}",
+                    "error_type": "JSONDecodeError",
+                },
+            )
         except WorkflowManifestError as e:
             logger.error(f"Invalid YAML in manifest file {manifest_path}: {e}")
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"Invalid YAML in manifest file: {e}",
-                "error_type": "WorkflowManifestError",
-            }
-        except (OSError, RuntimeError) as e:
-            logger.error(
-                f"System error loading manifest {manifest_path}: {e}"
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"Invalid YAML in manifest file: {e}",
+                    "error_type": "WorkflowManifestError",
+                },
             )
-            return None, None, None, {
-                "session_id": session_id,
-                "manifest": "unknown",
-                "stages": [],
-                "final_status": "failed",
-                "error": f"System error loading manifest: {str(e)}",
-                "error_type": type(e).__name__,
-            }
+        except (OSError, RuntimeError) as e:
+            logger.error(f"System error loading manifest {manifest_path}: {e}")
+            return (
+                None,
+                None,
+                None,
+                {
+                    "session_id": session_id,
+                    "manifest": "unknown",
+                    "stages": [],
+                    "final_status": "failed",
+                    "error": f"System error loading manifest: {str(e)}",
+                    "error_type": type(e).__name__,
+                },
+            )
 
-    def _validate_manifest_structure(
-        self, manifest: Any, manifest_path: Path
-    ) -> None:
+    def _validate_manifest_structure(self, manifest: Any, manifest_path: Path) -> None:
         """Validate that a parsed manifest has the required structure.
 
         Raises ``WorkflowManifestError`` if the manifest is not a mapping, is
@@ -566,10 +605,20 @@ class OrchestrationEngine:
                 "error_type": type(e).__name__,
             }
 
-    def _run_workflow_stages(self, manifest: Manifest, session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None, results: dict[str, Any], resume: bool=False) -> None:
+    def _run_workflow_stages(
+        self,
+        manifest: Manifest,
+        session_dir: Path,
+        session_id: str,
+        config_overrides: dict[str, Any] | None,
+        results: dict[str, Any],
+        resume: bool = False,
+    ) -> None:
         """Delegate to WorkflowStageExecutor._run_workflow_stages."""
         manifest = Manifest.ensure(manifest)
-        return self.workflow_stage_executor._run_workflow_stages(manifest, session_dir, session_id, config_overrides, results, resume)
+        return self.workflow_stage_executor._run_workflow_stages(
+            manifest, session_dir, session_id, config_overrides, results, resume
+        )
 
     def _finalize_workflow(
         self,
@@ -601,12 +650,28 @@ class OrchestrationEngine:
         except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in workflow monitoring: {e}")
 
-    def _execute_stage(self, stage: Stage, manifest: Manifest, session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None=None, correction_artifact: str | None=None, resume: bool=False) -> dict[str, Any]:
+    def _execute_stage(
+        self,
+        stage: Stage,
+        manifest: Manifest,
+        session_dir: Path,
+        session_id: str,
+        config_overrides: dict[str, Any] | None = None,
+        correction_artifact: str | None = None,
+        resume: bool = False,
+    ) -> dict[str, Any]:
         """Delegate to WorkflowStageExecutor._execute_stage."""
         stage = Stage.ensure(stage)
         manifest = Manifest.ensure(manifest)
-        return self.workflow_stage_executor._execute_stage(stage, manifest, session_dir, session_id, config_overrides, correction_artifact, resume)
-
+        return self.workflow_stage_executor._execute_stage(
+            stage,
+            manifest,
+            session_dir,
+            session_id,
+            config_overrides,
+            correction_artifact,
+            resume,
+        )
 
     def _handle_gate(
         self,
@@ -623,9 +688,7 @@ class OrchestrationEngine:
             gate_id, stage_name, session_dir, manifest, stage_result
         )
 
-    def _validate_artifact_path(
-        self, artifact_name: str, session_dir: Path
-    ) -> Path:
+    def _validate_artifact_path(self, artifact_name: str, session_dir: Path) -> Path:
         """Delegate to ArtifactValidator."""
         return self.artifact_validator.validate_artifact_path(
             artifact_name, session_dir
@@ -652,9 +715,7 @@ class OrchestrationEngine:
     ) -> dict[str, Any]:
         """Delegate to WorkflowStageExecutor._skip_stage."""
         stage = Stage.ensure(stage)
-        return self.workflow_stage_executor._skip_stage(
-            stage, session_dir, session_id
-        )
+        return self.workflow_stage_executor._skip_stage(stage, session_dir, session_id)
 
     def _handle_interactive_pause(
         self, stage_name: str, skill_name: str, session_dir: Path
@@ -692,9 +753,7 @@ input: [your input here]
 
 Edit this file with your input, then save to continue.
 """)
-            logger.info(
-                f"Created pause file for interactive mode: {pause_file}"
-            )
+            logger.info(f"Created pause file for interactive mode: {pause_file}")
         except PermissionError as e:
             logger.error(f"Permission error creating pause file: {e}")
             return {
@@ -839,7 +898,10 @@ Edit this file with your input, then save to continue.
         # No valid input found
         return None
 
-def _print_cli_error(message: str, error_type: str, details: str | None = None) -> NoReturn:
+
+def _print_cli_error(
+    message: str, error_type: str, details: str | None = None
+) -> NoReturn:
     """Print a CLI error as JSON and exit with code 1."""
     error_data: dict[str, Any] = {"error": message, "error_type": error_type}
     if details is not None:
@@ -882,18 +944,28 @@ def _load_cli_config() -> tuple:
         _print_cli_error(
             "Invalid JSON in configuration file", "JSONDecodeError", str(e)
         )
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error loading configuration: {e}")
-        _print_cli_error(
-            "Error loading configuration", type(e).__name__, str(e)
-        )
+        _print_cli_error("Error loading configuration", type(e).__name__, str(e))
 
 
 def _create_cli_engine(work_dir: Path, config: Any) -> OrchestrationEngine:
     """Create orchestration engine, exiting on error."""
     try:
         return OrchestrationEngine(work_dir, config.__dict__)
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error initializing orchestration engine: {e}")
         _print_cli_error(
             "Error initializing orchestration engine", type(e).__name__, str(e)
@@ -913,11 +985,15 @@ def _run_cli_workflow(
             manifest_path, session_id, request_content, skip_brainstorming
         )
         print(json.dumps(results, indent=2, default=str))
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error executing workflow: {e}")
-        _print_cli_error(
-            "Error executing workflow", type(e).__name__, str(e)
-        )
+        _print_cli_error("Error executing workflow", type(e).__name__, str(e))
 
 
 def main():
@@ -946,7 +1022,13 @@ def main():
             )
         )
         sys.exit(130)
-    except (OSError, RuntimeError, ValueError, InvalidInputError, PathTraversalError) as e:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        InvalidInputError,
+        PathTraversalError,
+    ) as e:
         logger.error(f"Error in main: {e}")
         print(
             json.dumps(

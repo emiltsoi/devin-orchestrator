@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Deprecated launcher; use `devin-orchestrator install`."""
+
 from __future__ import annotations
 
 import sys

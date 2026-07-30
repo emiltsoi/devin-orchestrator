@@ -127,7 +127,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
 
         stop = self.wse._process_stage(
             stage,
-            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
+            {
+                "stages": [stage],
+                "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}],
+            },
             self.session_dir,
             self.session_id,
             None,
@@ -152,7 +155,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
+            {
+                "stages": [stage],
+                "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}],
+            },
             self.session_dir,
             self.session_id,
             None,
@@ -177,7 +183,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
+            {
+                "stages": [stage],
+                "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}],
+            },
             self.session_dir,
             self.session_id,
             None,
@@ -202,7 +211,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
+            {
+                "stages": [stage],
+                "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}],
+            },
             self.session_dir,
             self.session_id,
             None,
@@ -215,7 +227,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
 
     @patch.object(WorkflowStageExecutor, "_retry_stage_execution")
     def test_process_stage_gate_request_changes_exceeds_max(self, mock_retry):
-        self.engine._handle_gate.return_value = {"verdict": "request_changes", "notes": "fix it"}
+        self.engine._handle_gate.return_value = {
+            "verdict": "request_changes",
+            "notes": "fix it",
+        }
         mock_retry.return_value = (False, self._proceed_result())
 
         stage = {**self.base_stage, "gate": "g1_approve", "max_gate_request_changes": 1}
@@ -225,7 +240,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
+            {
+                "stages": [stage],
+                "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}],
+            },
             self.session_dir,
             self.session_id,
             None,
@@ -238,7 +256,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
 
     @patch.object(WorkflowStageExecutor, "_retry_stage_execution")
     def test_process_stage_gate_retry_exhausted(self, mock_retry):
-        self.engine._handle_gate.return_value = {"verdict": "request_changes", "notes": "fix it"}
+        self.engine._handle_gate.return_value = {
+            "verdict": "request_changes",
+            "notes": "fix it",
+        }
         mock_retry.return_value = (True, {})  # retry exhausted
 
         stage = {**self.base_stage, "gate": "g1_approve"}
@@ -248,7 +269,10 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
+            {
+                "stages": [stage],
+                "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}],
+            },
             self.session_dir,
             self.session_id,
             None,

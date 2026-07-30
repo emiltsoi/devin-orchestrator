@@ -424,17 +424,8 @@ def test_write_artifact(server, tmp_path):
 def test_apply_patch(server, tmp_path):
     """apply_patch applies a simple unified diff to a file."""
     workspace = tmp_path / "workspace"
-    (workspace / "file.txt").write_text(
-        "line1\nline2\nline3\n", encoding="utf-8"
-    )
-    patch = (
-        "--- file.txt\n"
-        "+++ file.txt\n"
-        "@@ -2,2 +2,3 @@\n"
-        " line2\n"
-        "+line2.5\n"
-        " line3\n"
-    )
+    (workspace / "file.txt").write_text("line1\nline2\nline3\n", encoding="utf-8")
+    patch = "--- file.txt\n+++ file.txt\n@@ -2,2 +2,3 @@\n line2\n+line2.5\n line3\n"
     response = server.handle(
         {
             "jsonrpc": "2.0",
@@ -680,7 +671,9 @@ def test_missing_required_argument(server):
         }
     )
     assert response["result"]["isError"] is True
-    assert "Missing required arguments: name" in response["result"]["content"][0]["text"]
+    assert (
+        "Missing required arguments: name" in response["result"]["content"][0]["text"]
+    )
 
 
 def test_close_is_idempotent(server):

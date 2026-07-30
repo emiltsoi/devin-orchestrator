@@ -56,7 +56,9 @@ class WorkflowStageExecutor:
         self._engine = engine
         self._artifact_validator = artifact_validator or ArtifactValidator(engine)
         self._triage_evaluator = triage_evaluator or TriageEvaluator(engine)
-        self._stage_skill_dispatcher = stage_skill_dispatcher or StageSkillDispatcher(engine)
+        self._stage_skill_dispatcher = stage_skill_dispatcher or StageSkillDispatcher(
+            engine
+        )
         self._state_store = state_store or JsonlStateStore()
 
     def __getattr__(self, name: str) -> Any:
@@ -236,7 +238,9 @@ class WorkflowStageExecutor:
                     stage_result,
                 )
                 self._persist_stage(
-                    stage_name, stage_result, "escalated" if should_break else "completed"
+                    stage_name,
+                    stage_result,
+                    "escalated" if should_break else "completed",
                 )
                 if should_break:
                     self._state_store.set_status("escalated", "Retry exhausted")
@@ -298,13 +302,17 @@ class WorkflowStageExecutor:
                     self._persist_stage(stage_name, stage_result, "completed")
                     self._state_store.set_status(
                         "waiting_for_input",
-                        gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
+                        gate_result.get(
+                            "notes", f"Gate {gate_id} waiting for agent decision"
+                        ),
                     )
                     self._engine.update_status(
                         session_dir,
                         f"gate_{gate_id}",
                         "waiting",
-                        gate_result.get("notes", f"Gate {gate_id} waiting for agent decision"),
+                        gate_result.get(
+                            "notes", f"Gate {gate_id} waiting for agent decision"
+                        ),
                     )
                     self._refresh_results(results)
                     return True
@@ -365,7 +373,11 @@ class WorkflowStageExecutor:
                             "error": gate_result.get(
                                 "notes", f"Gate {gate_id} requested changes"
                             ),
-                            "validation": {"valid": False, "errors": [], "artifact_results": {}},
+                            "validation": {
+                                "valid": False,
+                                "errors": [],
+                                "artifact_results": {},
+                            },
                             "triage_decision": TriageDecision.RETRY,
                         },
                     )
@@ -441,10 +453,13 @@ class WorkflowStageExecutor:
                     f"Error: {last_error}\n\n"
                     "Please fix the issue and re-run the stage."
                 )
-                logger.info(
-                    f"Created correction artifact: {correction_artifact}"
-                )
-            except (OSError, PermissionError, InvalidInputError, PathTraversalError) as e:
+                logger.info(f"Created correction artifact: {correction_artifact}")
+            except (
+                OSError,
+                PermissionError,
+                InvalidInputError,
+                PathTraversalError,
+            ) as e:
                 logger.error(f"Error creating correction artifact: {e}")
                 self._engine.update_status(
                     session_dir,
@@ -485,6 +500,7 @@ class WorkflowStageExecutor:
             return True, stage_result
 
         return False, stage_result
+
     def _resolve_max_gate_request_changes(self, stage: Stage) -> int:
         """
         Resolve the maximum number of gate request_changes cycles for a stage.
@@ -571,6 +587,7 @@ class WorkflowStageExecutor:
             )
             return 10
         return max_retries
+
     def _execute_stage(
         self,
         stage: Stage,
@@ -666,13 +683,12 @@ class WorkflowStageExecutor:
                 artifact_paths,
                 correction_artifact,
             )
+
     def _load_stage_skill(
         self, skill_name: str, stage_name: str
     ) -> dict[str, Any] | None:
         """Delegate to StageSkillDispatcher."""
-        return self._stage_skill_dispatcher.load_stage_skill(
-            skill_name, stage_name
-        )
+        return self._stage_skill_dispatcher.load_stage_skill(skill_name, stage_name)
 
     def _dispatch_stage_skill(
         self,
@@ -695,9 +711,8 @@ class WorkflowStageExecutor:
             config_overrides,
             correction_artifact,
         )
-    def _validate_artifact_path(
-        self, artifact_name: str, session_dir: Path
-    ) -> Path:
+
+    def _validate_artifact_path(self, artifact_name: str, session_dir: Path) -> Path:
         """Delegate to ArtifactValidator."""
         return self._artifact_validator.validate_artifact_path(
             artifact_name, session_dir
@@ -713,6 +728,7 @@ class WorkflowStageExecutor:
         return self._artifact_validator.validate_stage_artifacts(
             stage_name, session_dir, output_artifacts
         )
+
     def _evaluate_stage_and_triage(
         self,
         stage_name: str,

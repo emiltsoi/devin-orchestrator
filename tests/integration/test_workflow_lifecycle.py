@@ -1,4 +1,5 @@
 """Integration test for the full workflow lifecycle with gates."""
+
 from __future__ import annotations
 
 import json
@@ -117,7 +118,9 @@ def _make_engine(
 
 def test_workflow_approve_and_complete(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     engine = _make_engine(tmp_path, monkeypatch)
-    manifest_path = Path(engine.config["workflows_dir"]) / "integration-gated.manifest.yaml"
+    manifest_path = (
+        Path(engine.config["workflows_dir"]) / "integration-gated.manifest.yaml"
+    )
 
     results = engine.execute_workflow(manifest_path, "INT-001", "Build a feature")
     assert results["final_status"] == "waiting_for_input"
@@ -138,9 +141,13 @@ def test_workflow_approve_and_complete(tmp_path: Path, monkeypatch: pytest.Monke
     assert impl.is_file()
 
 
-def test_workflow_request_changes_escalates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_workflow_request_changes_escalates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     engine = _make_engine(tmp_path, monkeypatch, max_gate_request_changes=0)
-    manifest_path = Path(engine.config["workflows_dir"]) / "integration-gated.manifest.yaml"
+    manifest_path = (
+        Path(engine.config["workflows_dir"]) / "integration-gated.manifest.yaml"
+    )
 
     results = engine.execute_workflow(manifest_path, "INT-002", "Build a feature")
     assert results["final_status"] == "waiting_for_input"
@@ -152,7 +159,9 @@ def test_workflow_request_changes_escalates(tmp_path: Path, monkeypatch: pytest.
 
 def test_workflow_block_ends_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     engine = _make_engine(tmp_path, monkeypatch)
-    manifest_path = Path(engine.config["workflows_dir"]) / "integration-gated.manifest.yaml"
+    manifest_path = (
+        Path(engine.config["workflows_dir"]) / "integration-gated.manifest.yaml"
+    )
 
     results = engine.execute_workflow(manifest_path, "INT-003", "Build a feature")
     assert results["final_status"] == "waiting_for_input"

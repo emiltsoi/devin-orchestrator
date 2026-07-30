@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class McpArtifactMixin(McpServerBase):
-
     def _tool_read_artifact(self, arguments: dict) -> list[dict]:
         """
         Read a file from a workspace or session directory.
@@ -109,8 +108,15 @@ class McpArtifactMixin(McpServerBase):
         if session_id:
             try:
                 return resolve_session(self.config.session_work_dir, str(session_id))
-            except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
-                raise FileNotFoundError(f"Failed to resolve session {session_id}: {e}") from e
+            except (
+                FileNotFoundError,
+                ValueError,
+                InvalidInputError,
+                PathTraversalError,
+            ) as e:
+                raise FileNotFoundError(
+                    f"Failed to resolve session {session_id}: {e}"
+                ) from e
 
         provided_workspace = arguments.get("workspace") or self.workspace
         if provided_workspace:
@@ -168,7 +174,9 @@ class McpArtifactMixin(McpServerBase):
                         size = entry.stat().st_size
                 except OSError:
                     size = -1
-                entries.append({"name": entry.name, "type": etype, "size": size, "path": rel})
+                entries.append(
+                    {"name": entry.name, "type": etype, "size": size, "path": rel}
+                )
             return entries
 
         for root, dirs, files in os.walk(target):
@@ -344,7 +352,9 @@ class McpArtifactMixin(McpServerBase):
         for old_start, hunk in hunks:
             pos = old_start - 1 + offset
             if pos < 0 or pos > len(lines):
-                raise InvalidInputError(f"Hunk starting at line {old_start} is out of range")
+                raise InvalidInputError(
+                    f"Hunk starting at line {old_start} is out of range"
+                )
             old_idx = pos
             new_lines: list[str] = []
             for dl in hunk:
@@ -354,12 +364,16 @@ class McpArtifactMixin(McpServerBase):
                     continue
                 if dl.startswith(" "):
                     if old_idx >= len(lines) or lines[old_idx] != dl[1:]:
-                        raise InvalidInputError(f"Context mismatch at line {old_idx + 1}")
+                        raise InvalidInputError(
+                            f"Context mismatch at line {old_idx + 1}"
+                        )
                     new_lines.append(dl[1:])
                     old_idx += 1
                 elif dl.startswith("-"):
                     if old_idx >= len(lines) or lines[old_idx] != dl[1:]:
-                        raise InvalidInputError(f"Remove mismatch at line {old_idx + 1}")
+                        raise InvalidInputError(
+                            f"Remove mismatch at line {old_idx + 1}"
+                        )
                     old_idx += 1
                 elif dl.startswith("+"):
                     new_lines.append(dl[1:])
@@ -368,4 +382,6 @@ class McpArtifactMixin(McpServerBase):
             lines[pos:old_idx] = new_lines
             offset += len(new_lines) - (old_idx - pos)
 
-        file_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        file_path.write_text(
+            "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
+        )

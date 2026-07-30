@@ -1,4 +1,5 @@
 """Unit tests for devin_orchestrator.otel_tracing."""
+
 from __future__ import annotations
 
 import os
@@ -29,7 +30,9 @@ class TestOtelTracing(unittest.TestCase):
             span.record_exception(ValueError("test"))
 
     def test_trace_span_disabled_by_default(self):
-        with patch("devin_orchestrator.otel_tracing._is_tracing_enabled", return_value=False):
+        with patch(
+            "devin_orchestrator.otel_tracing._is_tracing_enabled", return_value=False
+        ):
             tracer = get_tracer("test")
             assert tracer.__class__.__name__ == "_NoopTracer"
 

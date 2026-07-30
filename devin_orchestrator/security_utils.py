@@ -142,6 +142,7 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     # Decode URL-encoded strings (e.g., %2e%2e -> ..)
     try:
         from urllib.parse import unquote
+
         sanitized = unquote(sanitized)
     except Exception as exc:  # noqa: BLE001 - URL decoding is best-effort sanitization
         logger.warning("URL decoding failed for %r: %s", filename, exc)
@@ -164,7 +165,9 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
 
     # After stripping, check again for leading/trailing dots
     if sanitized.startswith(".") or sanitized.endswith("."):
-        raise InvalidInputError(f"Filename cannot start or end with dot after sanitization: {filename}")
+        raise InvalidInputError(
+            f"Filename cannot start or end with dot after sanitization: {filename}"
+        )
 
     # Limit length
     if len(sanitized) > max_length:
@@ -176,7 +179,9 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
 
     # Ensure filename contains only safe characters (alphanumeric, hyphen, underscore, dot)
     if not re.match(r"^[a-zA-Z0-9._-]+$", sanitized):
-        raise InvalidInputError(f"Filename contains invalid characters after sanitization: {filename}")
+        raise InvalidInputError(
+            f"Filename contains invalid characters after sanitization: {filename}"
+        )
 
     return sanitized
 
@@ -320,9 +325,13 @@ def validate_session_id(session_id: str) -> str:
             f"Session ID contains leading/trailing whitespace: {session_id!r}"
         )
     if session_id.startswith(".") or session_id.endswith("."):
-        raise InvalidInputError(f"Session ID contains leading/trailing dot: {session_id!r}")
+        raise InvalidInputError(
+            f"Session ID contains leading/trailing dot: {session_id!r}"
+        )
     if re.search(r"[\x00-\x1f\x7f-\x9f]", session_id):
-        raise InvalidInputError(f"Session ID contains control characters: {session_id!r}")
+        raise InvalidInputError(
+            f"Session ID contains control characters: {session_id!r}"
+        )
 
     # Reject path separators and traversal sequences before sanitization
     if "/" in session_id or "\\" in session_id or ".." in session_id:
@@ -363,9 +372,13 @@ def validate_skill_name(skill_name: str) -> str:
             f"Skill name contains leading/trailing whitespace: {skill_name!r}"
         )
     if skill_name.startswith(".") or skill_name.endswith("."):
-        raise InvalidInputError(f"Skill name contains leading/trailing dot: {skill_name!r}")
+        raise InvalidInputError(
+            f"Skill name contains leading/trailing dot: {skill_name!r}"
+        )
     if re.search(r"[\x00-\x1f\x7f-\x9f]", skill_name):
-        raise InvalidInputError(f"Skill name contains control characters: {skill_name!r}")
+        raise InvalidInputError(
+            f"Skill name contains control characters: {skill_name!r}"
+        )
 
     # Reject path separators and traversal sequences before sanitization
     if "/" in skill_name or "\\" in skill_name or ".." in skill_name:
@@ -467,12 +480,16 @@ def validate_backup_name(backup_name: str) -> str:
         )
 
     if "/" in backup_name or "\\" in backup_name or ".." in backup_name:
-        raise InvalidInputError(f"Backup name contains invalid characters: {backup_name}")
+        raise InvalidInputError(
+            f"Backup name contains invalid characters: {backup_name}"
+        )
 
     sanitized = sanitize_filename(backup_name, max_length=100)
 
     if not re.match(r"^[a-zA-Z0-9_-]+$", sanitized):
-        raise InvalidInputError(f"Backup name contains invalid characters: {backup_name}")
+        raise InvalidInputError(
+            f"Backup name contains invalid characters: {backup_name}"
+        )
 
     return sanitized
 

@@ -4,32 +4,32 @@
 
 ### `ModuleNotFoundError: No module named 'devin_orchestrator'`
 
-You ran a script with an absolute path from a different directory. Either:
+You are running a script from the repository without the package installed. Either:
 
-- `cd` into the repository and use relative paths:
+- Install the package and use the CLI:
   ```bash
-  cd /path/to/devin-orchestrator
-  python3 deploy.py
+  pip install -e .
+  devin-orchestrator doctor
   ```
-- Set `PYTHONPATH` to the repo root:
+- Or set `PYTHONPATH` to the repo root when running from source:
   ```bash
-  PYTHONPATH=/path/to/devin-orchestrator python3 /path/to/devin-orchestrator/deploy.py
+  PYTHONPATH=/path/to/devin-orchestrator python3 -m devin_orchestrator.cli install
   ```
 
 ### Launcher not found after install
 
 **Linux / macOS:**
-The launcher is at `~/.local/bin/devin-orchestrator`. Add it to your PATH:
+The console script is at `~/.local/bin/devin-orchestrator` (pipx) or in the active virtual environment's `bin/`. Add it to your PATH:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
 **Windows:**
-The launcher is at `%USERPROFILE%\.devin-orchestrator\bin\devin-orchestrator.bat`. The agent config points to it directly, so PATH changes are not needed.
+The console script is in the Python `Scripts` directory (e.g. `%USERPROFILE%\AppData\Local\Programs\Python\Python312\Scripts\devin-orchestrator.exe`). Add the `Scripts` directory to PATH, or use the absolute path in the agent config.
 
 ### `PyYAML not installed` warning for Hermes
 
-Hermes uses a YAML config. If you want `register_mcp.py` to edit it:
+Hermes uses a YAML config. If you want `devin-orchestrator install` to edit it:
 ```bash
 pip install pyyaml
 ```
@@ -49,17 +49,17 @@ Get-Process | Where-Object {$_.ProcessName -like "*python*" -and $_.CommandLine 
 
 Run it by hand with verbose output:
 ```bash
-python3 deploy.py --smoke-only
+devin-orchestrator doctor
 ```
 Common causes:
-- The launcher path is wrong or not on PATH.
-- `mcp_server.py` fails to import because `PYTHONPATH` is missing.
+- The `devin-orchestrator` console script is not on PATH.
+- The package fails to import because the wrong Python environment is active.
 - A stale process is holding the stdio pipe.
 
 ## Uninstall
 
 ```bash
-python3 deploy.py --uninstall
+devin-orchestrator install uninstall
 ```
 
 Use `--dry-run` first to see what would be removed.

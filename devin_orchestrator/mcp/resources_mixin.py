@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class McpResourcesMixin(McpServerBase):
-
     # --------------------------------------------------------------------- #
     # MCP resources support
     # --------------------------------------------------------------------- #
@@ -53,7 +52,9 @@ class McpResourcesMixin(McpServerBase):
             text = target.read_text(encoding="utf-8")
             raw = text.encode("utf-8")
             if len(raw) > self.MAX_OUTPUT_BYTES:
-                truncated = raw[: self.MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
+                truncated = raw[: self.MAX_OUTPUT_BYTES].decode(
+                    "utf-8", errors="replace"
+                )
                 text = truncated + "\n\n[... resource truncated ...]"
             mime = mimetypes.guess_type(str(target))[0] or "text/plain"
             return {"uri": uri, "mimeType": mime, "text": text}
@@ -127,16 +128,24 @@ class McpResourcesMixin(McpServerBase):
                 return self._error(request, -32602, "Invalid session resource uri")
             session_id, path = parts
             from devin_orchestrator.session_manager import resolve_session
+
             try:
                 base = resolve_session(self.config.session_work_dir, session_id)
-            except (FileNotFoundError, ValueError, InvalidInputError, PathTraversalError) as e:
+            except (
+                FileNotFoundError,
+                ValueError,
+                InvalidInputError,
+                PathTraversalError,
+            ) as e:
                 return self._error(request, -32602, f"Invalid session: {e}")
             try:
                 target = validate_path_safe(base, base / path, allow_absolute=False)
             except (InvalidInputError, PathTraversalError) as e:
                 return self._error(request, -32602, f"Invalid session resource: {e}")
         else:
-            return self._error(request, -32602, f"Unsupported resource scheme: {scheme}")
+            return self._error(
+                request, -32602, f"Unsupported resource scheme: {scheme}"
+            )
 
         if not target.is_file():
             return self._error(request, -32602, f"Resource not found: {uri}")

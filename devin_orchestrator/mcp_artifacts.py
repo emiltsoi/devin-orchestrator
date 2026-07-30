@@ -74,9 +74,7 @@ class McpCallLogger:
                     record["timestamp"] = datetime.now(timezone.utc).isoformat()
                 f.write(json.dumps(record, default=str) + "\n")
         except (OSError, ValueError, FileNotFoundError) as e:
-            logger.debug(
-                "Could not write session call log for %s: %s", session_id, e
-            )
+            logger.debug("Could not write session call log for %s: %s", session_id, e)
 
     def close(self) -> None:
         """Close the underlying log file handle."""
@@ -172,7 +170,9 @@ class SubprocessArtifactRunner:
                 json.dumps(result_data, indent=2, default=str), encoding="utf-8"
             )
         except (OSError, ValueError) as e:
-            logger.warning("Could not write result artifacts for %s: %s", session_dir, e)
+            logger.warning(
+                "Could not write result artifacts for %s: %s", session_dir, e
+            )
 
         # Best-effort update of session.json status
         try:
@@ -187,6 +187,4 @@ class SubprocessArtifactRunner:
                 json.dumps(data, indent=2, default=str), encoding="utf-8"
             )
         except (OSError, ValueError, json.JSONDecodeError) as e:
-            logger.warning(
-                "Could not update session.json for %s: %s", session_dir, e
-            )
+            logger.warning("Could not update session.json for %s: %s", session_dir, e)

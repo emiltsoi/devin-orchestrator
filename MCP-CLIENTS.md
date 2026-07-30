@@ -17,42 +17,57 @@ The `tools/list` response is ordered from highest-level to lowest-level. Pick th
 
 **Avoid `run_skill` for implementation tasks.** `run_skill` is a low-level process-skill runner. For coding work, `implement`, `run_workflow`, or `dispatch_devin` carry the right context and produce focused results.
 
-**Note for agents:** The `py -3.14 install.py` and `py -3.14 mcp_server.py` commands below are for configuring the *MCP client* (Claude Desktop, Cursor, etc.). If you are already connected to the devin-orchestrator MCP server, use the MCP tools in `tools/list` instead of running these commands.
+**Note for agents:** If you are already connected to the devin-orchestrator MCP server, use the MCP tools in `tools/list` instead of running the commands below.
 
 ## Server installation
 
-For a headless Linux VM with multiple agents, the easiest path is the one-click
-deploy script:
+Install with [pipx](https://pypa.github.io/pipx/) (recommended) or `pip`, then create the service and register the MCP server with your agents:
 
 ```bash
-./deploy.sh
+pipx install devin-orchestrator
+devin-orchestrator install
 ```
 
-See [DEPLOY.md](DEPLOY.md) for details, dry-run mode, and manual steps.
-
-For Windows or other environments, run the global installer directly:
+On Windows:
 
 ```powershell
-py -3.14 install.py
+py -3.14 -m pip install devin-orchestrator
+py -3.14 -m devin_orchestrator.cli install
 ```
 
-This copies `mcp_server.py` into `~/.devin-orchestrator/`.
+`devin-orchestrator install` registers the server in Claude Desktop, Cursor, Windsurf, and other agent configs automatically. See [DEPLOY.md](DEPLOY.md) for dry-run mode, system installs, and uninstall/upgrade.
 
 ## Client configuration examples
 
+The exact command that `devin-orchestrator install` writes depends on your system. You can see it with:
+
+```bash
+devin-orchestrator register --snippet
+```
+
 ### Claude Desktop (stdio)
 
-Edit `claude_desktop_config.json`:
+A typical pip/pipx install produces this in `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "devin-orchestrator": {
-      "command": "py",
-      "args": [
-        "-3.14",
-        "C:/Users/<username>/.devin-orchestrator/mcp_server.py"
-      ]
+      "command": "devin-orchestrator",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+If the console script is not on the agent's PATH, use the full path:
+
+```json
+{
+  "mcpServers": {
+    "devin-orchestrator": {
+      "command": "/home/<username>/.local/bin/devin-orchestrator",
+      "args": ["mcp"]
     }
   }
 }
@@ -64,12 +79,11 @@ Edit `claude_desktop_config.json`:
 {
   "mcpServers": {
     "devin-orchestrator": {
-      "command": "py",
+      "command": "devin-orchestrator",
       "args": [
-        "-3.14",
-        "C:/Users/<username>/.devin-orchestrator/mcp_server.py",
+        "mcp",
         "--workspace",
-        "C:/Users/<username>/OneDrive/Documents/Work/hermes-agent-a2a"
+        "/home/<username>/work/hermes-agent-a2a"
       ]
     }
   }
@@ -83,7 +97,16 @@ Most clients accept a command array:
 ```json
 {
   "name": "devin-orchestrator",
-  "command": ["py", "-3.14", "C:/Users/<username>/.devin-orchestrator/mcp_server.py"]
+  "command": ["devin-orchestrator", "mcp"]
+}
+```
+
+If the console script is not on the agent's PATH, fall back to the module:
+
+```json
+{
+  "name": "devin-orchestrator",
+  "command": ["python3", "-m", "devin_orchestrator.mcp_server"]
 }
 ```
 
@@ -234,16 +257,21 @@ For troubleshooting and backtracing, the server can log every JSON-RPC request a
 {
   "mcpServers": {
     "devin-orchestrator": {
-      "command": "py",
+      "command": "devin-orchestrator",
       "args": [
-        "-3.14",
-        "C:/Users/<username>/.devin-orchestrator/mcp_server.py",
+        "mcp",
         "--message-log",
         "C:/Users/<username>/.devin-orchestrator/logs/mcp-server.jsonl"
       ]
     }
   }
 }
+```
+
+You can also pass `--message-log` to `devin-orchestrator install` so every registered agent config includes it:
+
+```bash
+devin-orchestrator install --message-log
 ```
 
 `--message-log` with no value defaults to `~/.devin-orchestrator/logs/mcp-server.jsonl`. Each line contains `timestamp`, `direction` (`in`/`out`), and the message payload.
