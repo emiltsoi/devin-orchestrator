@@ -1,11 +1,10 @@
-# mypy: disable-error-code=attr-defined
-
 from __future__ import annotations
 
 import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from devin_orchestrator.mcp._base import McpServerBase
 from devin_orchestrator.security_utils import (  # noqa: E402
     InvalidInputError,
 )
@@ -16,7 +15,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class McpSecurityMixin:
+class McpSecurityMixin(McpServerBase):
 
     def _check_rate_limit(self, tool_name: str) -> bool:
         """

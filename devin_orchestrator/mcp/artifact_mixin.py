@@ -1,5 +1,3 @@
-# mypy: disable-error-code=attr-defined
-
 from __future__ import annotations
 
 import base64
@@ -11,6 +9,7 @@ import os
 import re
 from pathlib import Path
 
+from devin_orchestrator.mcp._base import McpServerBase
 from devin_orchestrator.security_utils import (  # noqa: E402
     InvalidInputError,
     PathTraversalError,
@@ -21,7 +20,7 @@ from devin_orchestrator.security_utils import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-class McpArtifactMixin:
+class McpArtifactMixin(McpServerBase):
 
     def _tool_read_artifact(self, arguments: dict) -> list[dict]:
         """

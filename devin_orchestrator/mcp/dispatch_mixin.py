@@ -1,5 +1,3 @@
-# mypy: disable-error-code=attr-defined
-
 from __future__ import annotations
 
 import json
@@ -10,6 +8,7 @@ import threading
 from pathlib import Path
 
 from devin_orchestrator.deterministic_tools import session_init  # noqa: E402
+from devin_orchestrator.mcp._base import McpServerBase
 from devin_orchestrator.mcp_artifacts import (  # noqa: E402
     SubprocessArtifactRunner,
 )
@@ -27,7 +26,7 @@ from devin_orchestrator.session_manager import create_session  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-class McpDispatchMixin:
+class McpDispatchMixin(McpServerBase):
 
     def _tool_dispatch_devin(self, arguments: dict) -> list[dict]:
         """

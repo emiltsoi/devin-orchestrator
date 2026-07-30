@@ -1,5 +1,3 @@
-# mypy: disable-error-code=attr-defined
-
 from __future__ import annotations
 
 import atexit
@@ -18,6 +16,7 @@ from devin_orchestrator.log_rotate import (  # noqa: E402
     cleanup_old_logs,
     rotate_if_needed,
 )
+from devin_orchestrator.mcp._base import McpServerBase
 from devin_orchestrator.mcp_artifacts import (  # noqa: E402
     McpCallLogger,
 )
@@ -30,7 +29,7 @@ from devin_orchestrator.security_utils import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-class McpServerMixin:
+class McpServerMixin(McpServerBase):
 
     def __init__(
         self,
