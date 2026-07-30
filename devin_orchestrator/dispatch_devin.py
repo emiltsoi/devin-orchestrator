@@ -28,6 +28,7 @@ import re
 import sys
 from pathlib import Path
 
+from devin_orchestrator import __version__  # noqa: E402
 from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
 from devin_orchestrator.devin_cli_adapter import DevinCliAdapter  # noqa: E402
 from devin_orchestrator.model_resolver import resolve_model  # noqa: E402
@@ -105,6 +106,11 @@ def build_prompt(role_file: Path, prompt_file: Path) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generic Devin dispatcher with role and prompt files."
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "--model",
