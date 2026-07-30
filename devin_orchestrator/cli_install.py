@@ -150,18 +150,21 @@ def _uninstall_systemd(service_name: str, system: bool, dry_run: bool) -> int:
         systemctl = ["systemctl", "--user"]
 
     unit_file = unit_dir / f"{service_name}.service"
-    if unit_file.exists():
+    if not unit_file.exists():
         if dry_run:
-            print(f"Would remove service unit: {unit_file}")
-        else:
-            subprocess.run([*systemctl, "stop", service_name], check=False)  # nosec
-            subprocess.run([*systemctl, "disable", service_name], check=False)  # nosec
-            unit_file.unlink()
-            subprocess.run([*systemctl, "daemon-reload"], check=False)  # nosec
-            print(f"Removed {unit_file}")
-        return 0
-    print(f"Service unit not found: {unit_file}")
-    return 1
+            print(f"Would remove service unit: {unit_file} (not present)")
+            return 0
+        print(f"Service unit not found: {unit_file}")
+        return 1
+    if dry_run:
+        print(f"Would remove service unit: {unit_file}")
+    else:
+        subprocess.run([*systemctl, "stop", service_name], check=False)  # nosec
+        subprocess.run([*systemctl, "disable", service_name], check=False)  # nosec
+        unit_file.unlink()
+        subprocess.run([*systemctl, "daemon-reload"], check=False)  # nosec
+        print(f"Removed {unit_file}")
+    return 0
 
 
 def _install_launchd(
@@ -222,16 +225,19 @@ def _uninstall_launchd(service_name: str, system: bool, dry_run: bool) -> int:
         plist_dir = Path.home() / "Library/LaunchAgents"
 
     plist_path = plist_dir / f"{service_name}.plist"
-    if plist_path.exists():
+    if not plist_path.exists():
         if dry_run:
-            print(f"Would remove launchd plist: {plist_path}")
-        else:
-            subprocess.run(["launchctl", "unload", "-w", str(plist_path)], check=False)  # nosec
-            plist_path.unlink()
-            print(f"Removed {plist_path}")
-        return 0
-    print(f"Launchd plist not found: {plist_path}")
-    return 1
+            print(f"Would remove launchd plist: {plist_path} (not present)")
+            return 0
+        print(f"Launchd plist not found: {plist_path}")
+        return 1
+    if dry_run:
+        print(f"Would remove launchd plist: {plist_path}")
+    else:
+        subprocess.run(["launchctl", "unload", "-w", str(plist_path)], check=False)  # nosec
+        plist_path.unlink()
+        print(f"Removed {plist_path}")
+    return 0
 
 
 def _install_windows(
