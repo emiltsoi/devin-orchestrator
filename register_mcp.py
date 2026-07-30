@@ -7,6 +7,7 @@ before mutating it.
 """
 
 import argparse
+import glob
 import json
 import os
 import shutil
@@ -148,9 +149,24 @@ def _targets() -> list[ConfigTarget]:
     ]
 
 
-def _backup(path: Path) -> Path:
+def _prune_backups(backups_dir: Path, keep: int) -> None:
+    """Keep only the ``keep`` most recent backups in a directory."""
+    if keep <= 0:
+        return
+    pattern = str(backups_dir / "*.bak")
+    backups = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    for old in backups[keep:]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
+
+def _backup(path: Path, keep_backups: int = 10) -> Path:
     backup = path.parent / f"{path.name}.{int(time.time())}.bak"
+    path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(path, backup)
+    _prune_backups(path.parent, keep_backups)
     return backup
 
 
@@ -199,6 +215,7 @@ def register(
     dry_run: bool = False,
     create_missing: bool = True,
     global_root: Path | None = None,
+    keep_backups: int = 10,
 ) -> list[tuple[ConfigTarget, bool]]:
     """Add or update devin-orchestrator in every agent config."""
     results = []
@@ -225,7 +242,7 @@ def register(
 
         if not dry_run and (not exists or changed):
             if exists:
-                _backup(path)
+                _backup(path, keep_backups)
             servers["devin-orchestrator"] = new
             _save(path, target["format"], data)
 
@@ -233,7 +250,7 @@ def register(
     return results
 
 
-def remove(dry_run: bool = False) -> list[tuple[ConfigTarget, bool]]:
+def remove(dry_run: bool = False, keep_backups: int = 10) -> list[tuple[ConfigTarget, bool]]:
     """Remove devin-orchestrator from every agent config."""
     results = []
     for target in _targets():
@@ -254,7 +271,7 @@ def remove(dry_run: bool = False) -> list[tuple[ConfigTarget, bool]]:
             results.append((target, False))
             continue
         if not dry_run:
-            _backup(path)
+            _backup(path, keep_backups)
             del servers["devin-orchestrator"]
             _save(path, target["format"], data)
         results.append((target, True))
@@ -265,6 +282,12 @@ def list_status() -> None:
     print(f"{'Agent':<12} {'Status':<12} {'Path'}")
     for target in _targets():
         print(f"{target['name']:<12} {_status(target):<12} {target['path']}")
+
+
+def print_snippet(global_root: Path | None = None) -> None:
+    """Print a generic mcpServers snippet for unsupported clients."""
+    snippet = {"mcpServers": {"devin-orchestrator": devin_mcp_config(global_root)}}
+    print(json.dumps(snippet, indent=2))
 
 
 def main() -> int:
@@ -298,6 +321,17 @@ def main() -> int:
         default=None,
         help="Path to the devin-orchestrator global root (default: ~/.devin-orchestrator)",
     )
+    parser.add_argument(
+        "--keep-backups",
+        type=int,
+        default=10,
+        help="Number of backups to retain (default: 10)",
+    )
+    parser.add_argument(
+        "--snippet",
+        action="store_true",
+        help="Print a generic mcpServers snippet for any client",
+    )
 
     args = parser.parse_args()
 
@@ -305,13 +339,18 @@ def main() -> int:
         list_status()
         return 0
 
+    if args.snippet:
+        print_snippet(args.global_root)
+        return 0
+
     if args.remove:
-        results = remove(dry_run=args.dry_run)
+        results = remove(dry_run=args.dry_run, keep_backups=args.keep_backups)
     else:
         results = register(
             dry_run=args.dry_run,
             create_missing=args.create_missing,
             global_root=args.global_root,
+            keep_backups=args.keep_backups,
         )
 
     for target, changed in results:
