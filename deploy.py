@@ -16,19 +16,19 @@ import sys
 from pathlib import Path
 
 from devin_orchestrator import __version__
-from install import install as do_install
-from register_mcp import (
+from devin_orchestrator.register_mcp import (
     _launcher_path,
 )
-from register_mcp import (
+from devin_orchestrator.register_mcp import (
     list_status as do_list_status,
 )
-from register_mcp import (
+from devin_orchestrator.register_mcp import (
     register as do_register,
 )
-from register_mcp import (
+from devin_orchestrator.register_mcp import (
     remove as do_remove,
 )
+from install import install as do_install
 
 
 def _mcp_request(method: str, params: dict, request_id: int = 1) -> bytes:

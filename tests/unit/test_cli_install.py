@@ -49,6 +49,7 @@ def test_install_service_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         service_name="devin-orchestrator",
         work_dir=tmp_path / "work",
         user="emil",
+        register=False,
     )
 
     assert result == 0
@@ -68,6 +69,7 @@ def test_install_service_smoke_failure_is_non_fatal(tmp_path: Path, monkeypatch:
         service_name="devin-orchestrator",
         work_dir=tmp_path,
         user="emil",
+        register=False,
     )
     assert result == 0
 
@@ -97,7 +99,7 @@ def test_uninstall_service_missing_unit(tmp_path: Path, monkeypatch: pytest.Monk
 def test_install_cli_routes_uninstall(monkeypatch: pytest.MonkeyPatch):
     calls: list[tuple[bool, str]] = []
 
-    def fake_uninstall(system, service_name):
+    def fake_uninstall(system, service_name, **kwargs):
         calls.append((system, service_name))
         return 0
 
@@ -123,7 +125,7 @@ def test_install_cli_routes_upgrade(monkeypatch: pytest.MonkeyPatch):
 def test_install_cli_routes_install_bare_default(monkeypatch: pytest.MonkeyPatch):
     calls: list[dict[str, Any]] = []
 
-    def fake_install(system, service_name, work_dir, user, command=None):
+    def fake_install(system, service_name, work_dir, user, command=None, **kwargs):
         calls.append(
             {
                 "system": system,
@@ -154,7 +156,7 @@ def test_install_cli_routes_install_bare_default(monkeypatch: pytest.MonkeyPatch
 def test_install_cli_routes_install_explicit(monkeypatch: pytest.MonkeyPatch):
     calls: list[dict[str, Any]] = []
 
-    def fake_install(system, service_name, work_dir, user, command=None):
+    def fake_install(system, service_name, work_dir, user, command=None, **kwargs):
         calls.append(
             {
                 "system": system,

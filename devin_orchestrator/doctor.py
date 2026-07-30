@@ -10,7 +10,7 @@ from pathlib import Path
 from devin_orchestrator import __version__
 from devin_orchestrator.config_loader import ConfigLoader
 from devin_orchestrator.manifest_loader import ManifestLoader
-from register_mcp import _launcher_path, _targets
+from devin_orchestrator.register_mcp import _launcher_path, _targets
 
 
 def _ok(label: str) -> None:
