@@ -21,6 +21,16 @@ import argparse
 import logging
 from pathlib import Path
 
+from devin_orchestrator.mcp.constants import (
+    DEFAULT_TIMEOUT_SECONDS,
+    MAX_MESSAGE_SIZE,
+    MAX_OUTPUT_BYTES,
+    MAX_TIMEOUT_SECONDS,
+    MIN_TIMEOUT_SECONDS,
+    RATE_LIMIT_MAX_CALLS,
+    RATE_LIMIT_WINDOW_SECONDS,
+)
+
 logger = logging.getLogger(__name__)
 
 # security_utils without requiring the harness to be installed as a package.
@@ -59,17 +69,17 @@ class McpServer(
     PROTOCOL_VERSION = "2024-11-05"
     SERVER_NAME = "devin-orchestrator"
     SERVER_VERSION = __version__
-    MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+    MAX_MESSAGE_SIZE = MAX_MESSAGE_SIZE
     # Maximum bytes of subprocess output to keep per stdout/stderr stream.
     # Larger outputs are truncated before being returned to MCP clients.
-    MAX_OUTPUT_BYTES = 5 * 1024 * 1024  # 5 MB
+    MAX_OUTPUT_BYTES = MAX_OUTPUT_BYTES
     # Rate limiting: max 10 calls per tool per 60-second window
-    RATE_LIMIT_MAX_CALLS = 10
-    RATE_LIMIT_WINDOW_SECONDS = 60
+    RATE_LIMIT_MAX_CALLS = RATE_LIMIT_MAX_CALLS
+    RATE_LIMIT_WINDOW_SECONDS = RATE_LIMIT_WINDOW_SECONDS
     # Timeout validation: min 1 second, max 1 hour (3600 seconds)
-    DEFAULT_TIMEOUT_SECONDS = 300
-    MIN_TIMEOUT_SECONDS = 1
-    MAX_TIMEOUT_SECONDS = 3600
+    DEFAULT_TIMEOUT_SECONDS = DEFAULT_TIMEOUT_SECONDS
+    MIN_TIMEOUT_SECONDS = MIN_TIMEOUT_SECONDS
+    MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_SECONDS
 
     DEFAULT_MESSAGE_LOG = (
         Path.home() / ".devin-orchestrator" / "logs" / "mcp-server.jsonl"
