@@ -1,0 +1,10 @@
+"""Shared constants for the MCP server and mixins."""
+from __future__ import annotations
+
+MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_OUTPUT_BYTES = 5 * 1024 * 1024  # 5 MB
+RATE_LIMIT_MAX_CALLS = 10
+RATE_LIMIT_WINDOW_SECONDS = 60
+DEFAULT_TIMEOUT_SECONDS = 300
+MIN_TIMEOUT_SECONDS = 1
+MAX_TIMEOUT_SECONDS = 3600

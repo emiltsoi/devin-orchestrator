@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
+from devin_orchestrator.mcp.constants import MAX_OUTPUT_BYTES  # noqa: E402
 from devin_orchestrator.security_utils import (  # noqa: E402
     InvalidInputError,
     PathTraversalError,
@@ -20,9 +21,6 @@ from devin_orchestrator.security_utils import (  # noqa: E402
 )
 
 logger = logging.getLogger(__name__)
-
-
-MAX_OUTPUT_BYTES = 5 * 1024 * 1024  # keep in sync with McpServer
 
 
 class McpToolsMixin:
