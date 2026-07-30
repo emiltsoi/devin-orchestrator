@@ -60,6 +60,7 @@ Documentation = "README.md"
 
 [tool.hatch.build]
 ignore-vcs = true
+only-packages = false
 exclude = [
     ".git",
     ".github",
@@ -87,6 +88,9 @@ exclude = [
     "devin_orchestrator/logs",
     "devin_orchestrator/work",
 ]
+
+[tool.hatch.build.force-include]
+"devin_orchestrator/templates" = "devin_orchestrator/templates"
 
 [tool.hatch.build.targets.wheel]
 packages = ["devin_orchestrator"]
