@@ -98,7 +98,7 @@ def test_dispatch_skill_accepts_workspace_under_global_root_outside_session_work
 
         # Validation passed -> stub was called -> exit code 0
         assert exc_info.value.code == 0
-        assert captured.get("workspace") == str(workspace)
+        assert Path(captured.get("workspace")).resolve() == workspace.resolve()
         assert captured.get("skill_name") == "my-skill"
 
         # No validation error on stderr

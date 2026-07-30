@@ -412,14 +412,15 @@ class DevinCliAdapter:
                 text=True,
             )
             try:
-                # Set restrictive permissions (0o600 on Unix, owner-only on Windows)
-                # On Windows, we use the most restrictive permissions available
-                if hasattr(os, "chmod"):
-                    with contextlib.suppress(OSError, AttributeError):
-                        os.chmod(fd, 0o600)
-
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(prompt)
+
+                # Set restrictive permissions (0o600 on Unix, owner-only on Windows)
+                # Use the path after closing the descriptor so Windows can apply it;
+                # on Unix, mkstemp already creates with 0o600, but re-apply for safety.
+                with contextlib.suppress(OSError, AttributeError):
+                    os.chmod(temp_path, 0o600)
+
                 prompt_file = Path(temp_path)
             except OSError:
                 # If writing fails, clean up the file descriptor
