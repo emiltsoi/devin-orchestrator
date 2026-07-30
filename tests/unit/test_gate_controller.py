@@ -56,12 +56,12 @@ class TestGateController(unittest.TestCase):
     # ---------- get_gate_config ----------
 
     def test_get_gate_config_found(self):
-        manifest = {"gates": [{"id": "g1", "mandatory": True}]}
+        manifest = {"gates": [{"id": "g1", "name": "g1", "type": "auto", "mandatory": True}]}
         cfg = self.controller.get_gate_config("g1", manifest)
         self.assertTrue(cfg["mandatory"])
 
     def test_get_gate_config_missing(self):
-        manifest = {"gates": [{"id": "g1"}]}
+        manifest = {"gates": [{"id": "g1", "name": "g1", "type": "auto"}]}
         cfg = self.controller.get_gate_config("g2", manifest)
         self.assertEqual(cfg, {})
 
@@ -80,7 +80,7 @@ class TestGateController(unittest.TestCase):
 
     def test_bypass_mandatory_gate(self):
         """A mandatory gate blocks by default."""
-        manifest = {"gates": [{"id": "g1", "mandatory": True}]}
+        manifest = {"gates": [{"id": "g1", "name": "g1", "type": "auto", "mandatory": True}]}
         result = self.controller.evaluate_gate_bypass_conditions(
             "g1",
             "stage",
@@ -193,7 +193,7 @@ class TestGateController(unittest.TestCase):
         self.engine.config = {
             "gate_bypass_conditions": {"confidence_high_non_security": True}
         }
-        manifest = {"gates": [{"id": "g1", "mandatory": True}]}
+        manifest = {"gates": [{"id": "g1", "name": "g1", "type": "auto", "mandatory": True}]}
         result = self.controller.evaluate_gate_bypass_conditions(
             "g1",
             "stage",

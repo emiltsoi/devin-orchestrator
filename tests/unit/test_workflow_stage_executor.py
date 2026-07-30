@@ -127,7 +127,7 @@ class TestWorkflowStageExecutor(unittest.TestCase):
 
         stop = self.wse._process_stage(
             stage,
-            {"stages": [stage], "gates": [{"id": "g1_approve", "type": "human"}]},
+            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
             self.session_dir,
             self.session_id,
             None,
@@ -152,7 +152,7 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "type": "human"}]},
+            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
             self.session_dir,
             self.session_id,
             None,
@@ -177,7 +177,7 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "type": "human"}]},
+            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
             self.session_dir,
             self.session_id,
             None,
@@ -202,7 +202,7 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "type": "human"}]},
+            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
             self.session_dir,
             self.session_id,
             None,
@@ -225,7 +225,7 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "type": "human"}]},
+            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
             self.session_dir,
             self.session_id,
             None,
@@ -248,7 +248,7 @@ class TestWorkflowStageExecutor(unittest.TestCase):
         stop = self.wse._process_stage_gate(
             stage,
             self._proceed_result(),
-            {"stages": [stage], "gates": [{"id": "g1_approve", "type": "human"}]},
+            {"stages": [stage], "gates": [{"id": "g1_approve", "name": "g1", "type": "human"}]},
             self.session_dir,
             self.session_id,
             None,

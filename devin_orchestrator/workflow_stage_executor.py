@@ -15,6 +15,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from devin_orchestrator.artifact_validator import ArtifactValidator
+from devin_orchestrator.models import Manifest, Stage
 from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
@@ -69,7 +70,7 @@ class WorkflowStageExecutor:
 
     def _run_workflow_stages(
         self,
-        manifest: dict[str, Any],
+        manifest: Manifest,
         session_dir: Path,
         session_id: str,
         config_overrides: dict[str, Any] | None,
@@ -87,7 +88,8 @@ class WorkflowStageExecutor:
             results: Results dictionary to update in place
             resume: If True, skip stages already marked completed in session.json
         """
-        for stage in manifest["stages"]:
+        manifest = Manifest.ensure(manifest)
+        for stage in manifest.stages:
             if self._process_stage(
                 stage,
                 manifest,
@@ -101,8 +103,8 @@ class WorkflowStageExecutor:
 
     def _process_stage(
         self,
-        stage: dict[str, Any],
-        manifest: dict[str, Any],
+        stage: Stage,
+        manifest: Manifest,
         session_dir: Path,
         session_id: str,
         config_overrides: dict[str, Any] | None,
@@ -110,7 +112,9 @@ class WorkflowStageExecutor:
         resume: bool,
     ) -> bool:
         """Execute a single stage and return True if the outer stage loop should stop."""
-        stage_name = stage.get("name", "unknown")
+        stage = Stage.ensure(stage)
+        manifest = Manifest.ensure(manifest)
+        stage_name = stage.name
 
         if self._is_session_cancelled(session_dir):
             results["final_status"] = "cancelled"
@@ -137,7 +141,7 @@ class WorkflowStageExecutor:
             results["stages"].append(
                 {
                     "stage": stage_name,
-                    "skill": stage.get("skill", "unknown"),
+                    "skill": stage.skill,
                     "success": False,
                     "output": None,
                     "error": f"Error during stage execution: {str(e)}",
@@ -183,7 +187,7 @@ class WorkflowStageExecutor:
             if should_break:
                 return True
 
-        if "gate" in stage and stage["gate"] != "none":
+        if stage.gate and stage.gate != "none":
             return self._process_stage_gate(
                 stage,
                 stage_result,
@@ -198,17 +202,19 @@ class WorkflowStageExecutor:
 
     def _process_stage_gate(
         self,
-        stage: dict[str, Any],
+        stage: Stage,
         stage_result: dict[str, Any],
-        manifest: dict[str, Any],
+        manifest: Manifest,
         session_dir: Path,
         session_id: str,
         config_overrides: dict[str, Any] | None,
         results: dict[str, Any],
     ) -> bool:
         """Handle the gate after a stage, including request-changes retries."""
-        gate_id = stage["gate"]
-        stage_name = stage.get("name", "unknown")
+        stage = Stage.ensure(stage)
+        manifest = Manifest.ensure(manifest)
+        gate_id = stage.gate
+        stage_name = stage.name
         max_gate_request_changes = self._resolve_max_gate_request_changes(stage)
         gate_request_changes_count = 0
 
@@ -273,7 +279,7 @@ class WorkflowStageExecutor:
                     config_overrides,
                     {
                         "stage": stage_name,
-                        "skill": stage.get("skill", "unknown"),
+                        "skill": stage.skill,
                         "success": False,
                         "output": None,
                         "error": gate_result.get(
@@ -297,8 +303,8 @@ class WorkflowStageExecutor:
 
     def _retry_stage_execution(
         self,
-        stage: dict[str, Any],
-        manifest: dict[str, Any],
+        stage: Stage,
+        manifest: Manifest,
         session_dir: Path,
         session_id: str,
         config_overrides: dict[str, Any] | None,
@@ -323,6 +329,8 @@ class WorkflowStageExecutor:
             ``final_stage_result`` is the last stage execution result produced
             by the retry loop so callers can re-evaluate gates with fresh data.
         """
+        stage = Stage.ensure(stage)
+        manifest = Manifest.ensure(manifest)
         max_retries = self._resolve_max_retries(stage)
         retry_count = 0
         last_error = stage_result["error"]
@@ -331,7 +339,7 @@ class WorkflowStageExecutor:
             retry_count += 1
             self._engine.update_status(
                 session_dir,
-                stage["name"],
+                stage.name,
                 "retrying",
                 f"Retry {retry_count}/{max_retries}: {last_error}",
             )
@@ -344,11 +352,11 @@ class WorkflowStageExecutor:
             # Re-dispatch with correction artifact
             try:
                 correction_artifact = self._validate_artifact_path(
-                    f"correction-{stage['name']}-attempt{retry_count}.md",
+                    f"correction-{stage.name}-attempt{retry_count}.md",
                     session_dir,
                 )
                 correction_artifact.write_text(
-                    f"# Correction for {stage['name']}\n\n"
+                    f"# Correction for {stage.name}\n\n"
                     f"Error: {last_error}\n\n"
                     "Please fix the issue and re-run the stage."
                 )
@@ -359,7 +367,7 @@ class WorkflowStageExecutor:
                 logger.error(f"Error creating correction artifact: {e}")
                 self._engine.update_status(
                     session_dir,
-                    stage["name"],
+                    stage.name,
                     "error",
                     f"Failed to create correction artifact: {str(e)}",
                 )
@@ -385,19 +393,19 @@ class WorkflowStageExecutor:
             results["final_status"] = "escalated"
             self._engine.update_status(
                 session_dir,
-                stage["name"],
+                stage.name,
                 "escalated",
                 f"Max retries ({max_retries}) exceeded: {last_error}",
             )
             # Log retry exhaustion
             logger.warning(
-                f"Retry attempts exhausted for stage {stage['name']} "
+                f"Retry attempts exhausted for stage {stage.name} "
                 f"after {max_retries} attempts: {last_error}"
             )
             return True, stage_result
 
         return False, stage_result
-    def _resolve_max_gate_request_changes(self, stage: dict[str, Any]) -> int:
+    def _resolve_max_gate_request_changes(self, stage: Stage) -> int:
         """
         Resolve the maximum number of gate request_changes cycles for a stage.
 
@@ -413,12 +421,15 @@ class WorkflowStageExecutor:
         Returns:
             Maximum number of gate request_changes cycles
         """
+        stage = Stage.ensure(stage)
         default_max = 3
-        stage_name = stage.get("name", "<unknown>")
+        stage_name = stage.name
 
-        raw_max = stage.get("max_gate_request_changes")
+        raw_max = stage.max_gate_request_changes
         if raw_max is None:
-            raw_max = stage.get("max_retries", default_max)
+            raw_max = stage.max_retries
+        if raw_max is None:
+            return default_max
 
         try:
             max_gate_request_changes = int(raw_max)
@@ -441,7 +452,7 @@ class WorkflowStageExecutor:
             return 10
         return max_gate_request_changes
 
-    def _resolve_max_retries(self, stage: dict[str, Any]) -> int:
+    def _resolve_max_retries(self, stage: Stage) -> int:
         """
         Resolve max retry count for a stage from its configuration.
 
@@ -454,9 +465,12 @@ class WorkflowStageExecutor:
         Returns:
             Maximum number of retries for this stage
         """
+        stage = Stage.ensure(stage)
         default_max = 3
-        stage_name = stage.get("name", "<unknown>")
-        raw_max = stage.get("max_retries", default_max)
+        stage_name = stage.name
+        raw_max = stage.max_retries
+        if raw_max is None:
+            return default_max
         try:
             max_retries = int(raw_max)
         except (TypeError, ValueError):
@@ -479,8 +493,8 @@ class WorkflowStageExecutor:
         return max_retries
     def _execute_stage(
         self,
-        stage: dict[str, Any],
-        manifest: dict[str, Any],
+        stage: Stage,
+        manifest: Manifest,
         session_dir: Path,
         session_id: str,
         config_overrides: dict[str, Any] | None = None,
@@ -502,8 +516,10 @@ class WorkflowStageExecutor:
         Returns:
             Dictionary with stage execution results
         """
-        stage_name = stage["name"]
-        skill_name = stage["skill"]
+        stage = Stage.ensure(stage)
+        manifest = Manifest.ensure(manifest)
+        stage_name = stage.name
+        skill_name = stage.skill
 
         # When resuming, check the session log before re-running a stage that has
         # already completed. Statuses like "request_changes" cause a re-run.
@@ -539,7 +555,7 @@ class WorkflowStageExecutor:
         )
 
         # Check if stage should be skipped
-        if manifest.get("skip_brainstorming", False) and stage_name == "brainstorming":
+        if manifest.skip_brainstorming and stage_name == "brainstorming":
             return self._skip_stage(stage, session_dir, session_id)
 
         # Track stage execution with metrics
@@ -561,7 +577,7 @@ class WorkflowStageExecutor:
             with self.metrics.track_skill_invocation(
                 skill_name,
                 session_id,
-                stage.get("skill") == "requesting-code-review",
+                stage.skill == "requesting-code-review",
             ):
                 result, dispatch_error = self._dispatch_stage_skill(
                     skill_name,
@@ -577,7 +593,7 @@ class WorkflowStageExecutor:
 
             # Validate output artifacts
             validation_result, artifact_paths = self._validate_stage_artifacts(
-                stage_name, session_dir, stage.get("output_artifacts", [])
+                stage_name, session_dir, stage.output_artifacts
             )
 
             # Dispatch reviewer, make triage decision, and build result
@@ -603,13 +619,14 @@ class WorkflowStageExecutor:
         self,
         skill_name: str,
         stage_name: str,
-        stage: dict[str, Any],
+        stage: Stage,
         session_dir: Path,
         session_id: str,
         config_overrides: dict[str, Any] | None,
         correction_artifact: str | None,
     ) -> tuple[SkillInvocationResult | None, dict[str, Any] | None]:
         """Delegate to StageSkillDispatcher."""
+        stage = Stage.ensure(stage)
         return self._stage_skill_dispatcher.dispatch_stage_skill(
             skill_name,
             stage_name,
@@ -661,7 +678,8 @@ class WorkflowStageExecutor:
         )
 
     def _skip_stage(
-        self, stage: dict[str, Any], session_dir: Path, session_id: str
+        self, stage: Stage, session_dir: Path, session_id: str
     ) -> dict[str, Any]:
         """Delegate to TriageEvaluator."""
+        stage = Stage.ensure(stage)
         return self._triage_evaluator.skip_stage(stage, session_dir, session_id)

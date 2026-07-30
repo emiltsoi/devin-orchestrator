@@ -12,12 +12,12 @@ import os
 import re
 import sys
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from devin_orchestrator.models import GlobalConfig
 from devin_orchestrator.security_utils import InvalidInputError
 
 # Allowlist of valid devin-cli permission modes. Must match the allowlist
@@ -26,34 +26,6 @@ from devin_orchestrator.security_utils import InvalidInputError
 ALLOWED_PERMISSION_MODES = frozenset({"dangerous", "smart", "auto"})
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class GlobalConfig:
-    """Global configuration for devin-orchestrator"""
-
-    global_root: Path
-    skills_dir: Path
-    workflows_dir: Path
-    workflow_engine_dir: Path
-    devin_cli_path: str
-    default_model: str
-    default_permission_mode: str
-    session_work_dir: Path
-    # Optional model routing fields. Empty dicts/strings mean "unset" and
-    # resolve_model() falls back to default_model. These are populated from
-    # config.yaml by ConfigLoader.load() with {} / "" defaults.
-    model_profile: str = ""
-    models: dict[str, str] | None = None
-    model_overrides: dict[str, str] | None = None
-    # Optional agent skill injection: maps agent name -> list of skill names.
-    agent_skills: dict[str, list[str]] | None = None
-    dispatch_timeout_seconds: int = 300
-    gate_mode: str = "auto"
-    gate_bypass_conditions: dict[str, Any] | None = None
-    # Log rotation settings
-    log_max_bytes: int = 10 * 1024 * 1024  # 10 MB
-    log_backup_count: int = 5
 
 
 class ConfigLoader:

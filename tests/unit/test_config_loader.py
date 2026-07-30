@@ -300,7 +300,7 @@ class TestGlobalConfig:
             "default_permission_mode",
             "session_work_dir",
         }
-        assert fields.issubset(set(GlobalConfig.__dataclass_fields__))
+        assert fields.issubset(set(GlobalConfig.model_fields))
 
     def test_construction_preserves_values(self, tmp_path):
         cfg = GlobalConfig(

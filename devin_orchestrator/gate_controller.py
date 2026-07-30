@@ -14,11 +14,13 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from devin_orchestrator.deterministic_tools import record_gate, wait_for_file_change
+from devin_orchestrator.models import Manifest
 from devin_orchestrator.security_utils import InvalidInputError, PathTraversalError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from devin_orchestrator.models import Gate
     from devin_orchestrator.orchestration_engine import OrchestrationEngine
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,7 @@ class GateController:
         gate_id: str,
         stage_name: str,
         session_dir: Path,
-        manifest: dict[str, Any] | None = None,
+        manifest: Manifest | None = None,
         stage_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
@@ -228,13 +230,14 @@ class GateController:
         }
 
     def get_gate_config(
-        self, gate_id: str, manifest: dict[str, Any] | None
-    ) -> dict[str, Any]:
+        self, gate_id: str, manifest: Manifest | None
+    ) -> Gate | dict[str, Any]:
         """Return gate configuration from the manifest, or an empty dict."""
         if not manifest:
             return {}
-        for gate in manifest.get("gates", []):
-            if gate.get("id") == gate_id:
+        manifest = Manifest.ensure(manifest)
+        for gate in manifest.gates:
+            if gate.id == gate_id:
                 return gate
         return {}
 
@@ -244,7 +247,7 @@ class GateController:
         _stage_name: str,
         _session_dir: Path,
         _gate_decision_file: Path,
-        manifest: dict[str, Any] | None,
+        manifest: Manifest | None,
         stage_result: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """

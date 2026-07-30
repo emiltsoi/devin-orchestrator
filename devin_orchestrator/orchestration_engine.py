@@ -30,6 +30,7 @@ from devin_orchestrator.deterministic_tools import (
 )
 from devin_orchestrator.gate_controller import GateController
 from devin_orchestrator.metrics import MetricsCollector
+from devin_orchestrator.models import Manifest, Stage
 from devin_orchestrator.monitoring import MonitoringSystem
 from devin_orchestrator.security_utils import (
     InvalidInputError,
@@ -136,7 +137,7 @@ class OrchestrationEngine:
             logger.error(f"Invalid config_overrides: {e}")
             return {
                 "session_id": session_id,
-                "manifest": manifest["name"],
+                "manifest": manifest.name,
                 "stages": [],
                 "final_status": "failed",
                 "error": f"Invalid config_overrides: {e}",
@@ -152,19 +153,19 @@ class OrchestrationEngine:
 
         # Persist manifest name in session.json so a later continue_workflow
         # call can locate the manifest without requiring the caller to resupply it.
-        self._update_session_manifest(session_dir, manifest["name"])
+        self._update_session_manifest(session_dir, manifest.name)
 
         # Override skip_brainstorming if provided
         if skip_brainstorming is not None:
-            manifest["skip_brainstorming"] = skip_brainstorming
+            manifest.skip_brainstorming = skip_brainstorming
 
         # Start metrics tracking for this workflow
-        self.metrics.start_workflow(session_id, manifest["name"])
+        self.metrics.start_workflow(session_id, manifest.name)
 
         # Execute stages
         results = {
             "session_id": session_id,
-            "manifest": manifest["name"],
+            "manifest": manifest.name,
             "stages": [],
             "final_status": "unknown",
         }
@@ -304,11 +305,11 @@ class OrchestrationEngine:
                     }
 
         # Start/resume metrics tracking
-        self.metrics.start_workflow(session_id, manifest["name"])
+        self.metrics.start_workflow(session_id, manifest.name)
 
         results = {
             "session_id": session_id,
-            "manifest": manifest["name"],
+            "manifest": manifest.name,
             "stages": [],
             "final_status": "unknown",
         }
@@ -343,7 +344,7 @@ class OrchestrationEngine:
 
     def _validate_and_load_manifest(
         self, session_id: str, manifest_path: Path
-    ) -> tuple[str | None, Path | None, dict[str, Any] | None, dict[str, Any] | None]:
+    ) -> tuple[str | None, Path | None, Manifest | None, dict[str, Any] | None]:
         """
         Validate and sanitize inputs, then load the workflow manifest.
 
@@ -375,14 +376,15 @@ class OrchestrationEngine:
                 }
 
             # Load manifest
-            manifest = load_manifest(manifest_path)
+            raw_manifest = load_manifest(manifest_path)
             # Validate required structure so a malformed manifest (missing
             # name/stages or per-stage skill/name) raises WorkflowManifestError
             # instead of an uncaught KeyError downstream.
-            self._validate_manifest_structure(manifest, manifest_path)
+            self._validate_manifest_structure(raw_manifest, manifest_path)
+            manifest = Manifest.model_validate(raw_manifest)
             logger.info(
                 f"Loaded manifest from {manifest_path}: "
-                f"{manifest.get('name', 'unknown')}"
+                f"{manifest.name}"
             )
             return session_id, manifest_path, manifest, None
         except FileNotFoundError as e:
@@ -469,13 +471,14 @@ class OrchestrationEngine:
                 )
 
     def _init_workflow_session(
-        self, session_id: str, request_content: str, manifest: dict[str, Any]
+        self, session_id: str, request_content: str, manifest: Manifest
     ) -> tuple[Path | None, dict[str, Any] | None]:
         """
         Initialize the session directory.
 
         Returns (session_dir, error_dict) where error_dict is None on success.
         """
+        manifest = Manifest.ensure(manifest)
         try:
             session_dir = session_init(session_id, self.work_dir, request_content)
             logger.info(f"Initialized session {session_id} at {session_dir}")
@@ -484,7 +487,7 @@ class OrchestrationEngine:
             logger.error(f"Permission error initializing session directory: {e}")
             return None, {
                 "session_id": session_id,
-                "manifest": manifest.get("name", "unknown"),
+                "manifest": manifest.name,
                 "stages": [],
                 "final_status": "failed",
                 "error": f"Permission error initializing session: {str(e)}",
@@ -494,7 +497,7 @@ class OrchestrationEngine:
             logger.error(f"OS error initializing session directory: {e}")
             return None, {
                 "session_id": session_id,
-                "manifest": manifest.get("name", "unknown"),
+                "manifest": manifest.name,
                 "stages": [],
                 "final_status": "failed",
                 "error": f"OS error initializing session: {str(e)}",
@@ -504,15 +507,16 @@ class OrchestrationEngine:
             logger.error(f"Input error initializing session: {e}")
             return None, {
                 "session_id": session_id,
-                "manifest": manifest.get("name", "unknown"),
+                "manifest": manifest.name,
                 "stages": [],
                 "final_status": "failed",
                 "error": f"Input error initializing session: {str(e)}",
                 "error_type": type(e).__name__,
             }
 
-    def _run_workflow_stages(self, manifest: dict[str, Any], session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None, results: dict[str, Any], resume: bool=False) -> None:
+    def _run_workflow_stages(self, manifest: Manifest, session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None, results: dict[str, Any], resume: bool=False) -> None:
         """Delegate to WorkflowStageExecutor._run_workflow_stages."""
+        manifest = Manifest.ensure(manifest)
         return self.workflow_stage_executor._run_workflow_stages(manifest, session_dir, session_id, config_overrides, results, resume)
 
     def _finalize_workflow(
@@ -545,8 +549,10 @@ class OrchestrationEngine:
         except (OSError, RuntimeError, ValueError) as e:
             logger.error(f"Error in workflow monitoring: {e}")
 
-    def _execute_stage(self, stage: dict[str, Any], manifest: dict[str, Any], session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None=None, correction_artifact: str | None=None, resume: bool=False) -> dict[str, Any]:
+    def _execute_stage(self, stage: Stage, manifest: Manifest, session_dir: Path, session_id: str, config_overrides: dict[str, Any] | None=None, correction_artifact: str | None=None, resume: bool=False) -> dict[str, Any]:
         """Delegate to WorkflowStageExecutor._execute_stage."""
+        stage = Stage.ensure(stage)
+        manifest = Manifest.ensure(manifest)
         return self.workflow_stage_executor._execute_stage(stage, manifest, session_dir, session_id, config_overrides, correction_artifact, resume)
 
 
@@ -555,10 +561,12 @@ class OrchestrationEngine:
         gate_id: str,
         stage_name: str,
         session_dir: Path,
-        manifest: dict[str, Any] | None = None,
+        manifest: Manifest | None = None,
         stage_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Delegate gate handling to GateController."""
+        if manifest is not None:
+            manifest = Manifest.ensure(manifest)
         return self.gate_controller.handle_gate(
             gate_id, stage_name, session_dir, manifest, stage_result
         )
@@ -582,14 +590,16 @@ class OrchestrationEngine:
             stage_name, session_dir, output_artifacts
         )
 
-    def _resolve_max_retries(self, stage: dict[str, Any]) -> int:
+    def _resolve_max_retries(self, stage: Stage) -> int:
         """Delegate to WorkflowStageExecutor._resolve_max_retries."""
+        stage = Stage.ensure(stage)
         return self.workflow_stage_executor._resolve_max_retries(stage)
 
     def _skip_stage(
-        self, stage: dict[str, Any], session_dir: Path, session_id: str
+        self, stage: Stage, session_dir: Path, session_id: str
     ) -> dict[str, Any]:
         """Delegate to WorkflowStageExecutor._skip_stage."""
+        stage = Stage.ensure(stage)
         return self.workflow_stage_executor._skip_stage(
             stage, session_dir, session_id
         )
