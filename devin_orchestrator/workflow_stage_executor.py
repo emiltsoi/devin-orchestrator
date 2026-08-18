@@ -265,7 +265,6 @@ class WorkflowStageExecutor(WorkflowStageGateMixin):
             self._refresh_results(results)
             return False
 
-
     def _retry_stage_execution(
         self,
         stage: Stage,
@@ -370,7 +369,6 @@ class WorkflowStageExecutor(WorkflowStageGateMixin):
             return True, stage_result
 
         return False, stage_result
-
 
     def _resolve_max_retries(self, stage: Stage) -> int:
         """

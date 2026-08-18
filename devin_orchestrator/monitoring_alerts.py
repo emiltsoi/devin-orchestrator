@@ -335,5 +335,3 @@ Metadata:
             "by_type": by_type,
             "recent_24h": recent_24h,
         }
-
-

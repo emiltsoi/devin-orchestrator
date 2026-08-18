@@ -121,12 +121,16 @@ def _install_systemd(
         )
 
     if not dry_run and not system:
-        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S603,S607 - trusted platform service utility
-        subprocess.run(["systemctl", "--user", "enable", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
+        subprocess.run(["systemctl", "--user", "enable", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         print(f"Enabled {service_name} for the current user.")
     elif not dry_run:
-        subprocess.run(["systemctl", "daemon-reload"], check=False)  # noqa: S603,S607 - trusted platform service utility
-        subprocess.run(["systemctl", "enable", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility
+        subprocess.run(["systemctl", "daemon-reload"], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
+        subprocess.run(["systemctl", "enable", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         print(f"Enabled {service_name} system-wide.")
 
     return 0
@@ -150,10 +154,13 @@ def _uninstall_systemd(service_name: str, system: bool, dry_run: bool) -> int:
     if dry_run:
         print(f"Would remove service unit: {unit_file}")
     else:
-        subprocess.run([*systemctl, "stop", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility
-        subprocess.run([*systemctl, "disable", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility
+        subprocess.run([*systemctl, "stop", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
+        subprocess.run([*systemctl, "disable", service_name], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         unit_file.unlink()
-        subprocess.run([*systemctl, "daemon-reload"], check=False)  # noqa: S603,S607 - trusted platform service utility
+        subprocess.run([*systemctl, "daemon-reload"], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         print(f"Removed {unit_file}")
     return 0
 
@@ -203,7 +210,8 @@ def _install_launchd(
         )
 
     if not dry_run:
-        subprocess.run(["launchctl", "load", "-w", str(plist_path)], check=False)  # noqa: S603,S607 - trusted platform service utility
+        subprocess.run(["launchctl", "load", "-w", str(plist_path)], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         print(f"Loaded {service_name}")
 
     return 0
@@ -225,7 +233,8 @@ def _uninstall_launchd(service_name: str, system: bool, dry_run: bool) -> int:
     if dry_run:
         print(f"Would remove launchd plist: {plist_path}")
     else:
-        subprocess.run(["launchctl", "unload", "-w", str(plist_path)], check=False)  # noqa: S603,S607 - trusted platform service utility
+        subprocess.run(["launchctl", "unload", "-w", str(plist_path)], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         plist_path.unlink()
         print(f"Removed {plist_path}")
     return 0
@@ -287,7 +296,8 @@ def _install_windows(
             task_args.extend(["/rl", "HIGHEST"])
         elif user == getpass.getuser():
             task_args.append("/np")
-        result = subprocess.run(task_args, check=False)  # noqa: S603,S607 - trusted platform service utility
+        result = subprocess.run(task_args, check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         if result.returncode != 0:
             print(
                 "Failed to create scheduled task. "
@@ -305,7 +315,8 @@ def _uninstall_windows(service_name: str, system: bool, dry_run: bool) -> int:
     if dry_run:
         print(f"Would remove Windows scheduled task: {service_name}")
     else:
-        subprocess.run(["schtasks", "/delete", "/tn", service_name, "/f"], check=False)  # noqa: S603,S607 - trusted platform service utility
+        subprocess.run(["schtasks", "/delete", "/tn", service_name, "/f"], check=False)  # noqa: S603,S607 - trusted platform service utility  # nosec
+
         if system:
             bat_path = (
                 Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData"))

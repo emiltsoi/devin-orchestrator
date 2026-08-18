@@ -117,7 +117,7 @@ def _upgrade_package(user: bool) -> int:
         cmd = [pip, "install", "--upgrade", "devin-orchestrator"]
     if user:
         cmd.append("--user")
-    return subprocess.run(cmd).returncode  # noqa: S603 - pip path is resolved with shutil.which
+    return subprocess.run(cmd).returncode  # noqa: S603 - pip path is resolved with shutil.which  # nosec
 
 
 _SUBCOMMANDS = ("install", "uninstall", "upgrade")

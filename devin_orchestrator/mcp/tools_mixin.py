@@ -66,7 +66,9 @@ class McpToolsMixin(McpSkillToolsMixin):
                     )
             except (FileNotFoundError, yaml.YAMLError, ValueError, TypeError) as e:
                 # Malformed use-cases should not break workflow listing, but should be logged.
-                logger.warning("Failed to parse use-cases file %s: %s", use_cases_file, e)
+                logger.warning(
+                    "Failed to parse use-cases file %s: %s", use_cases_file, e
+                )
         if workflows_dir.exists():
             for manifest in sorted(workflows_dir.glob("*.manifest.yaml")):
                 try:

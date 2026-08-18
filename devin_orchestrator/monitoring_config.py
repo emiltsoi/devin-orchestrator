@@ -46,5 +46,3 @@ class MonitoringConfig:
     webhook_enabled: bool = False
     webhook_url: str = ""
     webhook_headers: dict[str, str] = field(default_factory=dict)
-
-

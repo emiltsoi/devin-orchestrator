@@ -13,7 +13,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-import subprocess  # nosec B404
+import subprocess  # nosec
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -124,7 +124,7 @@ class SubprocessArtifactRunner:
         try:
             resolved_cmd = [resolve_command(str(cmd[0]))]
             resolved_cmd.extend(str(c) for c in cmd[1:])
-            result = subprocess.run(  # noqa: S603 - cmd[0] is resolve_command validated
+            result = subprocess.run(  # noqa: S603 - cmd[0] is resolve_command validated # nosec
                 resolved_cmd,
                 capture_output=True,
                 text=True,

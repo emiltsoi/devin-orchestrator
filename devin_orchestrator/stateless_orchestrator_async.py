@@ -41,7 +41,6 @@ class StatelessAsyncMixin:
     """Mixin providing background async workflow/skill dispatch."""
 
     @staticmethod
-
     def _detect_intent(request: str) -> str:
         """
         Detect intent from request using weighted keyword matching with word boundaries.
@@ -147,7 +146,6 @@ class StatelessAsyncMixin:
             return "plan"
 
         return "implement"
-
 
     def _prepare_workflow(
         self, workflow_name: str, request: str
@@ -397,9 +395,6 @@ class StatelessAsyncMixin:
                 "error": f"Failed to continue workflow: {str(e)}",
             }
 
-
-
-
     def _run_skill_thread(
         self,
         session_id: str,
@@ -453,9 +448,6 @@ class StatelessAsyncMixin:
             )
         finally:
             _clear_session_event(session_id)
-
-
-
 
     def run_skill_async(self, skill_name: str, request: str) -> dict[str, Any]:
         """Start a skill invocation in a background thread and return session_id."""

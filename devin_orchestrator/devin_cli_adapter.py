@@ -12,7 +12,7 @@ import contextlib
 import logging
 import os
 import re
-import subprocess  # nosec B404
+import subprocess  # nosec
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -120,7 +120,7 @@ class DevinCliAdapter:
         """
         try:
             resolved_cli = resolve_command(self.devin_cli_path)
-            result = subprocess.run(  # noqa: S603 - resolved_cli is validated
+            result = subprocess.run(  # noqa: S603 - resolved_cli is validated # nosec
                 [resolved_cli, "auth", "status"],
                 capture_output=True,
                 text=True,
@@ -137,7 +137,9 @@ class DevinCliAdapter:
         except (subprocess.TimeoutExpired, OSError, InvalidInputError) as e:
             return False, f"Failed to run devin auth status ({type(e).__name__}): {e}"
 
-    def _truncate_output(self, text: str | bytes, max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES) -> str:
+    def _truncate_output(
+        self, text: str | bytes, max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES
+    ) -> str:
         """Truncate ``text`` to ``max_bytes`` UTF-8 bytes and append a marker.
 
         This prevents multi-megabyte devin-cli outputs from propagating back
@@ -480,7 +482,7 @@ class DevinCliAdapter:
                     cmd.extend(["--model", self.model])
                 cmd.extend(["--prompt-file", str(prompt_file), "--print"])
 
-                result = subprocess.run(  # noqa: S603 - cmd[0] is resolve_command validated
+                result = subprocess.run(  # noqa: S603 - cmd[0] is resolve_command validated # nosec
                     cmd,
                     capture_output=True,
                     text=True,

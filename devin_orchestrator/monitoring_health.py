@@ -596,5 +596,3 @@ class WorkflowExecutionMonitor:
                     "failed_workflows": failed_count,
                 },
             )
-
-

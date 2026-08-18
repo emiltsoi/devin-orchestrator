@@ -18,6 +18,7 @@ from devin_orchestrator.security_utils import (
 
 logger = logging.getLogger(__name__)
 
+
 def _print_cli_error(
     message: str, error_type: str, details: str | None = None
 ) -> NoReturn:

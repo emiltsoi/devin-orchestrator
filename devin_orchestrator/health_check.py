@@ -9,7 +9,7 @@ Checks the health of all devin-orchestrator components:
 - Devin CLI availability
 """
 
-import subprocess  # nosec B404
+import subprocess  # nosec
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -337,7 +337,7 @@ class HealthChecker:
         # Try to run devin-cli --version
         try:
             resolved_cli = resolve_command(devin_cli_path)
-            result = subprocess.run(  # noqa: S603 - resolved_cli is validated
+            result = subprocess.run(  # noqa: S603 - resolved_cli is validated # nosec
                 [resolved_cli, "--version"], capture_output=True, text=True, timeout=10
             )
 
@@ -346,7 +346,7 @@ class HealthChecker:
 
                 # Quick auth check: fail fast if the CLI is not logged in.
                 try:
-                    auth_result = subprocess.run(  # noqa: S603 - resolved_cli is validated
+                    auth_result = subprocess.run(  # noqa: S603 - resolved_cli is validated # nosec
                         [resolved_cli, "auth", "status"],
                         capture_output=True,
                         text=True,

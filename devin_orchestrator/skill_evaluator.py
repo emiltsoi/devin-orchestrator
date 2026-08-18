@@ -309,10 +309,10 @@ Respond with JSON only, no other text.
             }
 
         try:
-            import subprocess  # nosec B404
+            import subprocess  # nosec
 
             resolved_cli = resolve_command(self.devin_cli_path)
-            subprocess_result = subprocess.run(  # noqa: S603 - resolved_cli is validated
+            subprocess_result = subprocess.run(  # noqa: S603 - resolved_cli is validated # nosec
                 [
                     resolved_cli,
                     "--permission-mode",
@@ -385,7 +385,13 @@ Respond with JSON only, no other text.
                 "issues": [],
                 "error": "Semantic evaluation timed out",
             }
-        except (OSError, InvalidInputError, ValueError, TypeError, json.JSONDecodeError) as e:
+        except (
+            OSError,
+            InvalidInputError,
+            ValueError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as e:
             return {
                 "checked": False,
                 "passed": True,

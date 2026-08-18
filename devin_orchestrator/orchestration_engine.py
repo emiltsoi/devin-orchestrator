@@ -129,15 +129,6 @@ class OrchestrationEngine(OrchestrationWorkflowMixin, OrchestrationInteractiveMi
             logger.error(f"Error initializing OrchestrationEngine: {e}")
             raise
 
-
-
-
-
-
-
-
-
-
     def _execute_stage(
         self,
         stage: Stage,
@@ -204,20 +195,3 @@ class OrchestrationEngine(OrchestrationWorkflowMixin, OrchestrationInteractiveMi
         """Delegate to WorkflowStageExecutor._skip_stage."""
         stage = Stage.ensure(stage)
         return self.workflow_stage_executor._skip_stage(stage, session_dir, session_id)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

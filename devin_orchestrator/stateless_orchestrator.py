@@ -571,6 +571,7 @@ class StatelessOrchestrator(StatelessAsyncMixin):
             "result": result_data,
             "artifacts": artifacts,
         }
+
     def cancel_session(self, session_id: str) -> dict[str, Any]:
         """Mark a session as cancelling and signal the background thread."""
         from devin_orchestrator.session_manager import resolve_session
