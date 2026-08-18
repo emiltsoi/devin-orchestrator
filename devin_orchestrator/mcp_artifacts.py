@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from devin_orchestrator.log_rotate import rotate_if_needed
+from devin_orchestrator.security_utils import InvalidInputError, resolve_command
 from devin_orchestrator.session_manager import resolve_session
 
 logger = logging.getLogger(__name__)
@@ -121,8 +122,10 @@ class SubprocessArtifactRunner:
 
         start = time.time()
         try:
-            result = subprocess.run(  # nosec B603
-                [str(c) for c in cmd],
+            resolved_cmd = [resolve_command(str(cmd[0]))]
+            resolved_cmd.extend(str(c) for c in cmd[1:])
+            result = subprocess.run(  # noqa: S603 - cmd[0] is resolve_command validated
+                resolved_cmd,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -150,7 +153,7 @@ class SubprocessArtifactRunner:
             stderr += f"\n\nTimed out after {timeout} seconds"
             exit_code = -1
             run_error = f"Timeout after {timeout} seconds"
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, InvalidInputError) as e:
             stdout = ""
             stderr = f"Failed to run dispatch: {e}"
             exit_code = -1

@@ -20,6 +20,7 @@ from devin_orchestrator.security_utils import (
     get_secret_from_env,
     redact_sensitive_data,
     sanitize_filename,
+    resolve_command,
     sanitize_string,
     validate_path_safe,
     validate_session_id,
@@ -479,3 +480,25 @@ class TestRedactSensitiveData:
         patterns = [r"password:\s*\w+"]
         result = redact_sensitive_data(data, patterns)
         assert "Secret123" not in result
+
+
+class TestResolveCommand:
+    """Tests for resolve_command helper"""
+
+    def test_resolves_absolute_file_path(self, tmp_path):
+        script = tmp_path / "script.sh"
+        script.write_text("#!/bin/bash\necho hello", encoding="utf-8")
+        script.chmod(0o755)
+        assert resolve_command(str(script)) == str(script)
+
+    def test_resolves_bare_name_on_path(self):
+        assert resolve_command("python3").endswith("python3")
+
+    def test_rejects_missing_command(self):
+        with pytest.raises(InvalidInputError):
+            resolve_command("definitely-not-a-real-binary-12345")
+
+    def test_rejects_nonexistent_absolute_path(self, tmp_path):
+        missing = tmp_path / "missing-binary"
+        with pytest.raises(InvalidInputError):
+            resolve_command(str(missing))

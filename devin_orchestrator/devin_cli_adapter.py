@@ -23,6 +23,7 @@ import yaml
 from devin_orchestrator.security_utils import (
     InvalidInputError,
     PathTraversalError,
+    resolve_command,
     validate_path_safe,
 )
 
@@ -118,8 +119,9 @@ class DevinCliAdapter:
             ``message`` contains the CLI output or an error string.
         """
         try:
-            result = subprocess.run(  # nosec B603
-                [self.devin_cli_path, "auth", "status"],
+            resolved_cli = resolve_command(self.devin_cli_path)
+            result = subprocess.run(  # noqa: S603 - resolved_cli is validated
+                [resolved_cli, "auth", "status"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -132,19 +134,17 @@ class DevinCliAdapter:
             if result.returncode != 0:
                 return False, output
             return True, output
-        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-            return False, f"Failed to run devin auth status ({type(e).__name__}): {e}"
-        except Exception as e:  # pragma: no cover - defensive catch-all
+        except (subprocess.TimeoutExpired, OSError, InvalidInputError) as e:
             return False, f"Failed to run devin auth status ({type(e).__name__}): {e}"
 
-    @staticmethod
-    def _truncate_output(text: str, max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES) -> str:
+    def _truncate_output(self, text: str | bytes, max_bytes: int = DEFAULT_MAX_OUTPUT_BYTES) -> str:
         """Truncate ``text`` to ``max_bytes`` UTF-8 bytes and append a marker.
 
         This prevents multi-megabyte devin-cli outputs from propagating back
         through the orchestration layer or MCP responses while still giving the
         caller the leading portion of the output.
         """
+        text = self._to_str(text)
         if not text:
             return text
         encoded = text.encode("utf-8")
@@ -224,7 +224,7 @@ class DevinCliAdapter:
                             "content": content,
                             "triggers": [],
                         }
-                except Exception as e:
+                except (OSError, ValueError, TypeError) as e:
                     # Log warning and skip skills that fail to load
                     logger.warning(
                         "Failed to load legacy skill from %s: %s", skill_dir, e
@@ -254,7 +254,7 @@ class DevinCliAdapter:
                         )
                         if isinstance(loaded, dict):
                             sidecar = loaded
-                    except Exception as e:
+                    except (yaml.YAMLError, OSError, ValueError, TypeError) as e:
                         # A malformed sidecar should not break skill loading.
                         logger.warning(
                             "Failed to load sidecar YAML from %s: %s", yaml_candidate, e
@@ -288,7 +288,7 @@ class DevinCliAdapter:
                     "content": md_content,
                     "triggers": triggers,
                 }
-            except Exception as e:
+            except (OSError, yaml.YAMLError, ValueError, TypeError) as e:
                 # Log warning and skip skills that fail to load
                 logger.warning("Failed to load v1 skill from %s: %s", skill_dir, e)
                 continue
@@ -312,7 +312,7 @@ class DevinCliAdapter:
             return {}
         try:
             loaded = yaml.safe_load(match.group(1))
-        except Exception as e:
+        except (yaml.YAMLError, ValueError, TypeError) as e:
             logger.debug("Failed to parse frontmatter: %s", e)
             return {}
         return loaded if isinstance(loaded, dict) else {}
@@ -444,16 +444,9 @@ class DevinCliAdapter:
                 exit_code=-1,
             )
 
-        # Build command. The prompt is written to a temporary .md file inside
-        # the workspace and passed via --prompt-file to avoid platform command
-        # line length limits and to keep the prompt contents out of the process
-        # table / shell history.
-        cmd = [self.devin_cli_path, "--permission-mode", self.permission_mode]
-
-        # Add model if specified
-        if self.model:
-            cmd.extend(["--model", self.model])
-
+        # The prompt is written to a temporary .md file inside the workspace
+        # and passed via --prompt-file to avoid platform command line length
+        # limits and to keep the prompt contents out of the process table.
         prompt_file: Path | None = None
         try:
             # Use mkstemp for atomic temporary file creation to avoid race conditions
@@ -480,10 +473,14 @@ class DevinCliAdapter:
                     os.close(fd)
                 raise
 
-            cmd.extend(["--prompt-file", str(prompt_file), "--print"])
-
             try:
-                result = subprocess.run(  # nosec B603
+                resolved_cli = resolve_command(self.devin_cli_path)
+                cmd = [resolved_cli, "--permission-mode", self.permission_mode]
+                if self.model:
+                    cmd.extend(["--model", self.model])
+                cmd.extend(["--prompt-file", str(prompt_file), "--print"])
+
+                result = subprocess.run(  # noqa: S603 - cmd[0] is resolve_command validated
                     cmd,
                     capture_output=True,
                     text=True,
@@ -507,14 +504,14 @@ class DevinCliAdapter:
                     error=f"Command timed out after {timeout} seconds",
                     exit_code=-1,
                 )
-            except (OSError, FileNotFoundError) as e:
+            except (OSError, ValueError, TypeError, InvalidInputError) as e:
                 return InvocationResult(
                     success=False,
                     output="",
-                    error=(f"Failed to execute devin-cli ({type(e).__name__}): {e}"),
+                    error=f"Failed to execute devin-cli ({type(e).__name__}): {e}",
                     exit_code=-1,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - last-resort dispatch fallback
                 return InvocationResult(
                     success=False,
                     output="",

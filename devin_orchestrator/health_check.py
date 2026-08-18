@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from devin_orchestrator.config_loader import ConfigLoader
+from devin_orchestrator.security_utils import InvalidInputError, resolve_command
 from devin_orchestrator.state_store import JsonlStateStore
 
 
@@ -335,8 +336,9 @@ class HealthChecker:
 
         # Try to run devin-cli --version
         try:
-            result = subprocess.run(  # nosec B603
-                [str(cli_path), "--version"], capture_output=True, text=True, timeout=10
+            resolved_cli = resolve_command(devin_cli_path)
+            result = subprocess.run(  # noqa: S603 - resolved_cli is validated
+                [resolved_cli, "--version"], capture_output=True, text=True, timeout=10
             )
 
             if result.returncode == 0:
@@ -344,8 +346,8 @@ class HealthChecker:
 
                 # Quick auth check: fail fast if the CLI is not logged in.
                 try:
-                    auth_result = subprocess.run(  # nosec B603
-                        [str(cli_path), "auth", "status"],
+                    auth_result = subprocess.run(  # noqa: S603 - resolved_cli is validated
+                        [resolved_cli, "auth", "status"],
                         capture_output=True,
                         text=True,
                         encoding="utf-8",
@@ -404,7 +406,7 @@ class HealthChecker:
                 message="Devin CLI --version command timed out",
                 details={"devin_cli_path": devin_cli_path},
             )
-        except Exception as e:
+        except (OSError, InvalidInputError, ValueError, TypeError) as e:
             return HealthCheckResult(
                 component="devin_cli",
                 status="error",

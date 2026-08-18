@@ -6,7 +6,6 @@ Loads global configuration for devin-orchestrator.
 Supports environment variables and config file.
 """
 
-import contextlib
 import logging
 import os
 import re
@@ -186,8 +185,12 @@ class ConfigLoader:
                     Path(tempfile.gettempdir()).resolve(),
                 ]
                 if workspace is not None:
-                    with contextlib.suppress(OSError, RuntimeError):
+                    try:
                         allowed_roots.append(Path(workspace).resolve())
+                    except (OSError, RuntimeError) as e:
+                        logger.warning(
+                            "Could not resolve workspace for allowed roots: %s", e
+                        )
 
                 # Resolve to absolute path
                 resolved = path.resolve()

@@ -84,6 +84,8 @@ exclude = [
     "archive",
     "sessions",
     "**/test_*.py",
+    "workflow-engine/",
+    "**/*.pyc",
     "devin_orchestrator/logs",
     "devin_orchestrator/work",
 ]

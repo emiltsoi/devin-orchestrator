@@ -1,108 +1,24 @@
 #!/usr/bin/env python3
-"""
-Security Utilities - Security hardening functions for devin-orchestrator
+"""Input sanitization, name validation, permission checks and secret helpers."""
 
-Provides:
-- Path validation and traversal protection
-- Input sanitization
-- File permission checks
-- Secrets management helpers
-"""
+from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import stat
-from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from devin_orchestrator.security_exceptions import (
+    InvalidInputError,
+    SecurityError,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
-
-class SecurityError(Exception):
-    """Base exception for security-related errors"""
-
-    pass
-
-
-class PathTraversalError(SecurityError):
-    """Raised when path traversal is detected"""
-
-    pass
-
-
-class InvalidInputError(SecurityError):
-    """Raised when input validation fails"""
-
-    pass
-
-
-class PermissionError(SecurityError):
-    """Raised when file permission checks fail"""
-
-    pass
-
-
-def validate_path_safe(
-    base_path: Path, target_path: Path, allow_absolute: bool = False
-) -> Path:
-    """
-    Validate that a target path is safe and doesn't escape the base path.
-
-    Args:
-        base_path: The base directory that paths should be contained within
-        target_path: The target path to validate
-        allow_absolute: Whether to allow absolute paths (default: False)
-
-    Returns:
-        The resolved, validated absolute path
-
-    Raises:
-        PathTraversalError: If the path attempts to escape the base directory
-        InvalidInputError: If the path is invalid
-    """
-    # Reject empty path objects (e.g. Path("") or Path(".")) and string forms
-    # that contain null bytes before any resolution to avoid ambiguous behavior.
-    # Note: Path("") normalizes to Path(".") in Python, so treat both as empty.
-    target_str = str(target_path)
-    if not target_str or target_str.strip() in ("", "."):
-        raise InvalidInputError("Target path cannot be empty")
-    if "\x00" in target_str:
-        raise InvalidInputError("Target path contains null bytes")
-
-    base_str = str(base_path)
-    if not base_str or base_str.strip() in ("", "."):
-        raise InvalidInputError("Base path cannot be empty")
-    if "\x00" in base_str:
-        raise InvalidInputError("Base path contains null bytes")
-
-    try:
-        # Resolve the base path to its canonical absolute form. Using
-        # os.path.realpath ensures symlinks are resolved and containment cannot
-        # be bypassed via symlink chains pointing outside the base.
-        resolved_base = Path(os.path.realpath(base_str))
-
-        # Resolve the target. Relative targets are interpreted relative to the
-        # base directory; absolute targets are resolved as-is. This lets callers
-        # pass either form while still enforcing containment.
-        if target_path.is_absolute():
-            resolved_target = Path(os.path.realpath(target_str))
-        else:
-            resolved_target = Path(os.path.realpath(resolved_base / target_str))
-
-        # Check if the resolved target is within the base path. Absolute paths
-        # that resolve inside the base are safe; absolute (or relative) paths
-        # that escape the base are always rejected, regardless of allow_absolute.
-        try:
-            resolved_target.relative_to(resolved_base)
-            return resolved_target
-        except ValueError:
-            raise PathTraversalError(
-                f"Path traversal detected: {target_path} resolves to {resolved_target} "
-                f"which is outside base directory {resolved_base}"
-            ) from None
-
-    except (OSError, RuntimeError) as e:
-        raise InvalidInputError(f"Invalid path {target_path}: {e}") from e
 
 
 def sanitize_filename(filename: str, max_length: int = 255) -> str:
@@ -133,18 +49,13 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     # Strip leading/trailing whitespace first
     sanitized = filename.strip()
 
-    # Reject leading/trailing dots before sanitization
-    if sanitized.startswith(".") or sanitized.endswith("."):
-        raise InvalidInputError(f"Filename cannot start or end with dot: {filename}")
-
     # Decode URL-encoded strings (e.g., %2e%2e -> ..)
     try:
         from urllib.parse import unquote
 
         sanitized = unquote(sanitized)
-    except Exception:
-        # If URL decoding fails, continue with original string
-        pass
+    except Exception as exc:  # noqa: BLE001 - URL decoding is best-effort sanitization
+        logger.warning("URL decoding failed for %r: %s", filename, exc)
 
     # Remove null bytes and other dangerous characters
     sanitized = sanitized.replace("\x00", "")
@@ -446,46 +357,51 @@ def validate_workflow_name(workflow_name: str) -> str:
     return sanitized
 
 
-def validate_workspace_path(
-    workspace: str, base_allowed_dir: Path | None = None
-) -> Path:
+def validate_backup_name(backup_name: str) -> str:
     """
-    Validate and sanitize a workspace path.
+    Validate and sanitize a backup name.
+
+    Backup names follow the same safety rules as workflow names to ensure
+    they are safe to use as filenames.
 
     Args:
-        workspace: The workspace path to validate
-        base_allowed_dir: Optional base directory that workspaces must be within
+        backup_name: The backup name to validate
 
     Returns:
-        Validated workspace path
+        Sanitized backup name
 
     Raises:
-        InvalidInputError: If the workspace path is invalid
-        PathTraversalError: If the workspace path attempts to escape allowed directory
+        InvalidInputError: If the backup name is invalid
     """
-    if not workspace:
-        raise InvalidInputError("Workspace path cannot be empty")
+    if not backup_name:
+        raise InvalidInputError("Backup name cannot be empty")
 
-    # Reject null bytes and control characters up front.
-    if "\x00" in workspace:
-        raise InvalidInputError("Workspace path contains null bytes")
-    if re.search(r"[\x00-\x1f\x7f-\x9f]", workspace):
-        raise InvalidInputError("Workspace path contains control characters")
-
-    # base_allowed_dir is mandatory: without a containment boundary a workspace
-    # path could point anywhere on the filesystem, defeating traversal
-    # protection. Reject explicitly rather than silently resolving.
-    if base_allowed_dir is None:
+    if backup_name != backup_name.strip():
         raise InvalidInputError(
-            "base_allowed_dir is required for workspace path validation"
+            f"Backup name contains leading/trailing whitespace: {backup_name!r}"
+        )
+    if backup_name.startswith(".") or backup_name.endswith("."):
+        raise InvalidInputError(
+            f"Backup name contains leading/trailing dot: {backup_name!r}"
+        )
+    if re.search(r"[\x00-\x1f\x7f-\x9f]", backup_name):
+        raise InvalidInputError(
+            f"Backup name contains control characters: {backup_name!r}"
         )
 
-    workspace_path = Path(workspace)
+    if "/" in backup_name or "\\" in backup_name or ".." in backup_name:
+        raise InvalidInputError(
+            f"Backup name contains invalid characters: {backup_name}"
+        )
 
-    # Ensure workspace is within the allowed base directory. Absolute paths are
-    # permitted so callers can pass fully-qualified workspace paths, but they
-    # must still resolve inside base_allowed_dir.
-    return validate_path_safe(base_allowed_dir, workspace_path, allow_absolute=True)
+    sanitized = sanitize_filename(backup_name, max_length=100)
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", sanitized):
+        raise InvalidInputError(
+            f"Backup name contains invalid characters: {backup_name}"
+        )
+
+    return sanitized
 
 
 def get_secret_from_env(secret_name: str, default: str | None = None) -> str:
@@ -529,35 +445,70 @@ def redact_sensitive_data(data: str, patterns: list[str]) -> str:
     return redacted
 
 
-def validate_backup_name(backup_name: str) -> str:
+def parse_config_overrides(config_overrides: Any) -> dict[str, Any]:
     """
-    Validate and sanitize a backup name to prevent directory traversal and injection.
+    Parse and validate an optional config_overrides value.
+
+    Accepts None, a dict with string keys and basic-typed values, or a JSON
+    string that parses to such a dict. Raises InvalidInputError for malformed
+    JSON, non-dict top-level values, non-string keys, or unsafe value types.
 
     Args:
-        backup_name: The backup name to validate
+        config_overrides: None, dict, or JSON string.
 
     Returns:
-        Sanitized backup name
+        Validated config_overrides dictionary.
 
     Raises:
-        InvalidInputError: If the backup name is invalid
+        InvalidInputError: If the value is not a dict/JSON-string dict or
+            contains invalid keys/values.
     """
-    if not backup_name:
-        raise InvalidInputError("Backup name cannot be empty")
+    if config_overrides is None:
+        return {}
 
-    # Remove path separators and parent directory references
-    sanitized = backup_name.replace("/", "").replace("\\", "").replace("..", "")
+    if isinstance(config_overrides, dict):
+        return _validate_config_overrides_dict(config_overrides)
 
-    # Remove null bytes and other dangerous characters
-    sanitized = sanitized.replace("\x00", "")
+    if isinstance(config_overrides, str):
+        try:
+            parsed = json.loads(config_overrides)
+        except json.JSONDecodeError as e:
+            raise InvalidInputError(
+                f"config_overrides contains malformed JSON: {e}"
+            ) from e
+        if not isinstance(parsed, dict):
+            raise InvalidInputError(
+                "config_overrides JSON must parse to an object/dictionary"
+            )
+        return _validate_config_overrides_dict(parsed)
 
-    # Remove control characters
-    sanitized = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", sanitized)
+    raise InvalidInputError(
+        f"config_overrides must be a dictionary or JSON string, got {type(config_overrides).__name__}"
+    )
 
-    # Ensure backup name is not empty after sanitization
-    if not sanitized:
-        raise InvalidInputError(
-            f"Backup name is invalid after sanitization: {backup_name}"
-        )
 
-    return sanitized
+def _validate_config_overrides_dict(config_overrides: dict) -> dict[str, Any]:
+    """
+    Validate that a config_overrides dictionary contains only safe keys/values.
+
+    Args:
+        config_overrides: Dictionary to validate.
+
+    Returns:
+        Validated dictionary.
+
+    Raises:
+        InvalidInputError: If dictionary contains invalid keys or values.
+    """
+    valid_types = (str, int, float, bool, type(None))
+    for key, value in config_overrides.items():
+        if not isinstance(key, str):
+            raise InvalidInputError(
+                f"config_overrides key must be string, got {type(key).__name__}"
+            )
+        if not isinstance(value, valid_types):
+            raise InvalidInputError(
+                f"config_overrides value for key '{key}' must be basic type (str, int, float, bool, None), got {type(value).__name__}"
+            )
+
+    return config_overrides

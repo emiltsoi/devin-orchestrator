@@ -13,6 +13,7 @@ from devin_orchestrator.floor_validator import (
     validate_iron_law,
     validate_structural,
 )
+from devin_orchestrator.security_utils import InvalidInputError, resolve_command
 
 
 @dataclass
@@ -299,13 +300,21 @@ Evaluate whether the artifact addresses the requirement. Respond with ONLY a JSO
 Respond with JSON only, no other text.
 """
 
+        if self.devin_cli_path is None:
+            return {
+                "checked": False,
+                "passed": True,
+                "issues": [],
+                "error": "devin_cli_path is not configured",
+            }
+
         try:
             import subprocess  # nosec B404
 
-            assert self.devin_cli_path is not None
-            subprocess_result = subprocess.run(  # nosec B603
+            resolved_cli = resolve_command(self.devin_cli_path)
+            subprocess_result = subprocess.run(  # noqa: S603 - resolved_cli is validated
                 [
-                    self.devin_cli_path,
+                    resolved_cli,
                     "--permission-mode",
                     "dangerous",
                     "--print",
@@ -376,7 +385,7 @@ Respond with JSON only, no other text.
                 "issues": [],
                 "error": "Semantic evaluation timed out",
             }
-        except Exception as e:
+        except (OSError, InvalidInputError, ValueError, TypeError, json.JSONDecodeError) as e:
             return {
                 "checked": False,
                 "passed": True,

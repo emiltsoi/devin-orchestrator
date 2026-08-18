@@ -27,14 +27,13 @@ class TestDevinCliAdapter(unittest.TestCase):
         self.workspace = self.temp_path / "workspace"
         self.workspace.mkdir()
 
-        # Create a mock devin.exe path
-        self.devin_cli_path = str(self.temp_path / "devin.exe")
-
         # Create a simple batch script that acts like devin for testing
         if sys.platform == "win32":
+            self.devin_cli_path = str(self.temp_path / "devin.exe")
             batch_script = "@echo off\necho Mock devin output\nexit /b 0\n"
             (self.temp_path / "devin.exe").write_text(batch_script)
         else:
+            self.devin_cli_path = str(self.temp_path / "devin")
             shell_script = "#!/bin/bash\necho 'Mock devin output'\nexit 0\n"
             (self.temp_path / "devin").write_text(shell_script)
             (self.temp_path / "devin").chmod(0o755)
@@ -142,6 +141,17 @@ class TestDevinCliAdapter(unittest.TestCase):
             self.assertFalse(result.success)
             self.assertEqual(result.exit_code, 1)
             self.assertIn("Error occurred", result.error)
+
+    def test_invoke_rejects_missing_binary(self):
+        """Should fail fast when devin-cli binary does not exist"""
+        missing_path = str(self.temp_path / "missing-devin")
+        adapter = DevinCliAdapter(missing_path, str(self.workspace))
+
+        result = adapter.invoke("test prompt")
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.exit_code, -1)
+        self.assertIn("Command not found", result.error)
 
     def test_invoke_encoding_errors(self):
         """Should handle encoding errors gracefully"""
@@ -273,11 +283,12 @@ class TestPermissionModeValidation(unittest.TestCase):
         self.temp_path = Path(self.temp_dir)
         self.workspace = self.temp_path / "workspace"
         self.workspace.mkdir()
-        self.devin_cli_path = str(self.temp_path / "devin.exe")
         # Create a mock devin binary so the adapter can be constructed.
         if sys.platform == "win32":
+            self.devin_cli_path = str(self.temp_path / "devin.exe")
             (self.temp_path / "devin.exe").write_text("@echo off\nexit /b 0\n")
         else:
+            self.devin_cli_path = str(self.temp_path / "devin")
             (self.temp_path / "devin").write_text("#!/bin/bash\nexit 0\n")
             (self.temp_path / "devin").chmod(0o755)
 
