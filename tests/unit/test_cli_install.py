@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
-from devin_orchestrator import cli_install
+from devin_orchestrator import cli_install, cli_install_platform
 
 if TYPE_CHECKING:
     import pytest
@@ -42,7 +42,7 @@ def test_render_template():
 def test_install_service_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     fake_run = _FakeRun()
     monkeypatch.setattr(cli_install, "_platform", lambda: "systemd")
-    monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
     result = cli_install._install_service(
@@ -67,7 +67,7 @@ def test_install_service_smoke_failure_is_non_fatal(
 ):
     fake_run = _FakeRun(returncode=1)
     monkeypatch.setattr(cli_install, "_platform", lambda: "systemd")
-    monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
     result = cli_install._install_service(
@@ -83,7 +83,7 @@ def test_install_service_smoke_failure_is_non_fatal(
 def test_uninstall_service_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     fake_run = _FakeRun()
     monkeypatch.setattr(cli_install, "_platform", lambda: "systemd")
-    monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
     unit_dir = tmp_path / ".config" / "systemd" / "user"
@@ -237,7 +237,7 @@ def test_install_launchd_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     fake_run = _FakeRun()
     monkeypatch.setattr(cli_install, "_platform", lambda: "launchd")
     monkeypatch.setattr(cli_install, "_smoke_test", lambda: True)
-    monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
     result = cli_install._install_service(
@@ -263,7 +263,7 @@ def test_install_launchd_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 def test_uninstall_launchd_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     fake_run = _FakeRun()
     monkeypatch.setattr(cli_install, "_platform", lambda: "launchd")
-    monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
 
     plist_dir = tmp_path / "Library" / "LaunchAgents"
@@ -286,7 +286,7 @@ def test_install_windows_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     fake_run = _FakeRun()
     monkeypatch.setattr(cli_install, "_platform", lambda: "windows")
     monkeypatch.setattr(cli_install, "_smoke_test", lambda: True)
-    monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(cli_install.getpass, "getuser", lambda: "emil")
     monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "ProgramData"))
@@ -324,7 +324,7 @@ def test_install_windows_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 def test_uninstall_windows_user_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     fake_run = _FakeRun()
     monkeypatch.setattr(cli_install, "_platform", lambda: "windows")
-    monkeypatch.setattr(cli_install.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", fake_run)
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
     monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "ProgramData"))
 
@@ -364,7 +364,7 @@ def test_install_service_routes_to_launchd(
         cli_install, "_install_systemd", lambda *a, **k: fake_install("systemd", a)
     )
     monkeypatch.setattr(cli_install, "_smoke_test", lambda: True)
-    monkeypatch.setattr(cli_install.subprocess, "run", _FakeRun())
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", _FakeRun())
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(cli_install._register_mcp, "register", lambda **_: [])
 
@@ -400,7 +400,7 @@ def test_install_service_routes_to_windows(
         cli_install, "_install_systemd", lambda *a, **k: fake_install("systemd", a)
     )
     monkeypatch.setattr(cli_install, "_smoke_test", lambda: True)
-    monkeypatch.setattr(cli_install.subprocess, "run", _FakeRun())
+    monkeypatch.setattr(cli_install_platform.subprocess, "run", _FakeRun())
     monkeypatch.setattr(cli_install.Path, "home", lambda: tmp_path)
     monkeypatch.setenv("PROGRAMDATA", str(tmp_path / "ProgramData"))
     monkeypatch.setattr(cli_install._register_mcp, "register", lambda **_: [])
