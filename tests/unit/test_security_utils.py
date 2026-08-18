@@ -492,7 +492,8 @@ class TestResolveCommand:
         assert resolve_command(str(script)) == str(script)
 
     def test_resolves_bare_name_on_path(self):
-        assert resolve_command("python3").endswith("python3")
+        resolved = resolve_command("python3").lower()
+        assert resolved.endswith("python3") or resolved.endswith("python3.exe")
 
     def test_rejects_missing_command(self):
         with pytest.raises(InvalidInputError):
