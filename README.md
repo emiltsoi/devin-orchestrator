@@ -1,6 +1,6 @@
 # devin-orchestrator
 
-A generic, harness-agnostic framework for AI-assisted software development, built on top of Windsurf Cascade and inspired by [obra/superpowers](https://github.com/obra/superpowers).
+An MCP-native orchestration layer for Devin workflows and skills. Any MCP-compatible client (Claude Desktop, Cursor, Windsurf, OpenClaw, etc.) can drive multi-step Devin workflows, process skills, and role-based dispatches without embedding Devin CLI details.
 
 **See Also:**
 - [DEPLOY.md](DEPLOY.md) - One-click cross-platform deployment (recommended)
@@ -49,7 +49,11 @@ python3 -m devin_orchestrator.register_mcp
 
 ## Vision
 
-Separate **process disciplines** (skills, workflows, contracts) from **harness mechanisms** (transport adapters), enabling the same methodology to work across Windsurf Cascade, Claude Code, Devin CLI, and future platforms.
+Separate **process disciplines** (skills, workflows, contracts) from the **MCP client surface**, so the same Devin workflows can be invoked from any MCP-compatible harness. The current implementation uses the Devin CLI as the worker transport; additional worker transports may be added in the future, but the orchestrator itself is consumed via MCP.
+
+## Status
+
+Early prototype. The MCP server, workflow engine, skill dispatcher, and Devin CLI transport are implemented. Only the Devin CLI transport is currently wired; Windsurf, Claude Code, and other transports are future adapter work.
 
 ## Architecture
 
@@ -64,7 +68,7 @@ Separate **process disciplines** (skills, workflows, contracts) from **harness m
 ### Layer Stack
 
 ```
-MCP-Compatible Client (Claude, Cursor, Cascade, etc.)
+MCP-Compatible Client (Claude, Cursor, Cascade, OpenClaw, etc.)
        ↓
 MCP Server Layer (stdio JSON-RPC)
        ↓
@@ -74,20 +78,16 @@ Skills Invocation Layer
        ↓
 Dispatch Contract Layer
        ↓
-Transport Adapter Layer
+Transport Adapter Layer (currently Devin CLI only)
        ↓
-Platform Layer (Windsurf, Claude Code, Devin CLI, etc.)
+Devin CLI / Platform Layer
 ```
 
 ## Model Selection
 
-- **Architect**: Cascade (SWE-1.6)
-- **Sub-agents** (Coder, Test-Author, Reviewer): SWE-1.6 (default)
-- **Rationale**: SWE-1.6 is free and allows parallelization up to 10 instances; target 8 parallel dispatches to leave headroom for Architect
-
-## Status
-
-Early prototype phase. Design documented in `ARCHITECTURE.md`.
+- **Architect**: the host MCP client (e.g. Claude, Cursor, Windsurf) that invokes the orchestrator.
+- **Worker**: Devin CLI. The orchestrator resolves the model via `config.yaml` and passes it to Devin with `--model`.
+- **Default routing**: `swe-1.6` is the default sub-agent model. Parallelization is handled by the Devin service, not by the orchestrator itself.
 
 ## CLI and MCP Server
 

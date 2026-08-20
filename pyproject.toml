@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "devin-orchestrator"
 version = "0.1.10"
-description = "Stateless orchestration layer for Devin workflows and skills"
+description = "MCP-native orchestration layer for Devin workflows and skills"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
