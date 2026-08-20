@@ -49,11 +49,11 @@ python3 -m devin_orchestrator.register_mcp
 
 ## Vision
 
-Separate **process disciplines** (skills, workflows, contracts) from the **MCP client surface**, so the same Devin workflows can be invoked from any MCP-compatible harness. The current implementation uses the Devin CLI as the worker transport; additional worker transports may be added in the future, but the orchestrator itself is consumed via MCP.
+Separate **process disciplines** (skills, workflows, contracts) from the **MCP client surface**, so the same Devin workflows can be invoked from any MCP-compatible client. The Devin CLI is the worker transport; the orchestrator is consumed via MCP.
 
 ## Status
 
-Early prototype. The MCP server, workflow engine, skill dispatcher, and Devin CLI transport are implemented. Only the Devin CLI transport is currently wired; Windsurf, Claude Code, and other transports are future adapter work.
+Early prototype. The MCP server, workflow engine, skill dispatcher, and Devin CLI transport are implemented. Devin is the chosen underlying layer and worker transport.
 
 ## Architecture
 
@@ -62,7 +62,7 @@ Early prototype. The MCP server, workflow engine, skill dispatcher, and Devin CL
 1. **Skills** - Process disciplines with Iron Laws and checklists
 2. **Workflows** - Step sequences with gates, artifacts, and skill assignments
 3. **Dispatch Contracts** - Role-specific input/output contracts with quality bars
-4. **Transport Adapters** - Harness-specific mechanisms (Windsurf, Claude Code, Devin CLI, etc.)
+4. **Transport Adapters** - Harness-specific mechanisms (currently the Devin CLI)
 5. **MCP Server** - stdio JSON-RPC server exposing skills, workflows, and dispatch to any MCP-compatible client
 
 ### Layer Stack
@@ -78,7 +78,7 @@ Skills Invocation Layer
        ↓
 Dispatch Contract Layer
        ↓
-Transport Adapter Layer (currently Devin CLI only)
+Transport Adapter Layer (Devin CLI)
        ↓
 Devin CLI / Platform Layer
 ```
