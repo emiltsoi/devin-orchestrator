@@ -148,8 +148,8 @@ def test_get_skill(server, tmp_path):
 def test_list_workflows(server, tmp_path):
     workflows_dir = tmp_path / "workflows"
     workflows_dir.mkdir(exist_ok=True)
-    (workflows_dir / "superpower.manifest.yaml").write_text(
-        "name: superpower\ndescription: Full methodology\nschema_version: 1\n",
+    (workflows_dir / "code_review.manifest.yaml").write_text(
+        "name: code_review\ndescription: Full methodology\nschema_version: 1\n",
         encoding="utf-8",
     )
     response = server.handle(
@@ -162,16 +162,16 @@ def test_list_workflows(server, tmp_path):
     )
     text = response["result"]["content"][0]["text"]
     workflows = json.loads(text)
-    assert any(w["name"] == "superpower" for w in workflows)
+    assert any(w["name"] == "code_review" for w in workflows)
 
 
 def test_get_workflow(server, tmp_path):
     workflows_dir = tmp_path / "workflows"
     workflows_dir.mkdir(exist_ok=True)
-    (workflows_dir / "superpower.manifest.yaml").write_text(
-        "name: superpower\n", encoding="utf-8"
+    (workflows_dir / "code_review.manifest.yaml").write_text(
+        "name: code_review\n", encoding="utf-8"
     )
-    (workflows_dir / "superpower.runbook.md").write_text(
+    (workflows_dir / "code_review.runbook.md").write_text(
         "# Superpower\n", encoding="utf-8"
     )
     response = server.handle(
@@ -181,7 +181,7 @@ def test_get_workflow(server, tmp_path):
             "method": "tools/call",
             "params": {
                 "name": "get_workflow",
-                "arguments": {"name": "superpower"},
+                "arguments": {"name": "code_review"},
             },
         }
     )

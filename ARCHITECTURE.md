@@ -5,10 +5,8 @@ status: design-draft
 author: Cascade
 related:
   - https://github.com/obra/superpowers
-  - workflows/superpower.manifest.yaml
-  - workflows/superpower.runbook.md
-  - workflows/use-cases.yaml
-  - skills/README.md
+  - devin_orchestrator/workflows/use-cases.yaml
+  - devin_orchestrator/skills/README.md
   - DEPLOYMENT.md
 ---
 
@@ -16,12 +14,12 @@ related:
 
 ## Executive Summary
 
-This design implements the [obra/superpowers](https://github.com/obra/superpowers) methodology as the canonical workflow for AI-assisted software development. The architecture separates **skills** (process disciplines) from **harness mechanisms** (transport adapters), enabling the same methodology to work across Windsurf Cascade, Claude Code, Devin CLI, and future platforms.
+This design was originally modeled on the [obra/superpowers](https://github.com/obra/superpowers) methodology; the retained core keeps the reusable substrate: **skills** (process disciplines), **workflows** (manifest-driven stage sequences with gates), and **transport adapters** (dispatch mechanisms). Implementation intent is served by `implement`, which dispatches a single coder-role Devin run rather than a fixed multi-stage pipeline.
 
 **Use Case Taxonomy**: The orchestrator supports multiple use cases organized by type:
 - **Investigation**: RCA (Root Cause Analysis) - read-only, no git write operations
 - **Review**: PR Review, Code Review - read-only, no git write operations
-- **Development**: Gated Change (Superpower) - full git operations, implementation
+- **Development**: `implement` - focused coder-role Devin dispatch for features and fixes
 
 See `workflows/use-cases.yaml` for the complete use case registry.
 
@@ -56,7 +54,7 @@ skill:
 ```
 
 **Key properties**:
-- **Composable**: Skills chain together (brainstorming → writing-plans → subagent-driven-development)
+- **Composable**: Skills chain together (brainstorming → writing-plans → executing-plans)
 - **Transport-agnostic**: Same skill works across different harnesses
 - **Rule-citation**: Skills cite architect rules by number, not restate them
 - **Announcement protocol**: "Using the <skill> skill to <action>" (Rule 38)
@@ -67,72 +65,39 @@ skill:
 
 **Contract** (manifest.yaml):
 ```yaml
-name: superpower
-description: "Superpowers workflow - complete software development methodology for coding agents"
+name: rca
+description: "Root Cause Analysis workflow - investigation-only workflow for analyzing incidents, bugs, or failures"
 version: 1.0.0
 schema_version: 1
-session_shape: superpower
+session_shape: rca
 
 stages:
   - step: 0
-    name: brainstorming
-    skill: brainstorming
-    description: "Refines rough ideas through questions, explores alternatives, presents design in sections for validation"
-    required_artifacts: []
-    output_artifacts: [design.md]
+    name: gather_evidence
+    skill: systematic-debugging
+    description: "Gather evidence from logs, code, and reproduction steps"
+    required_artifacts: [incident_report, logs]
+    output_artifacts: [evidence.md]
     gate: none
-    optional: true
 
   - step: 1
-    name: using-git-worktrees
-    skill: using-git-worktrees
-    description: "Creates isolated workspace on new branch, runs project setup, verifies clean test baseline"
-    required_artifacts: [design.md]
-    output_artifacts: [worktree-info.md, baseline-test-results.md]
-    gate: g1_design_approval
+    name: analyze_evidence
+    skill: systematic-debugging
+    description: "Analyze evidence to identify potential causes"
+    required_artifacts: [evidence.md]
+    output_artifacts: [analysis.md]
+    gate: none
 
   - step: 2
-    name: writing-plans
-    skill: writing-plans
-    description: "Breaks work into bite-sized tasks (2-5 minutes each) with exact file paths, complete code, verification steps"
-    required_artifacts: [design.md]
-    output_artifacts: [plan.md]
-    gate: none
-
-  - step: 3
-    name: subagent-driven-development
-    skill: subagent-driven-development
-    description: "Dispatches fresh subagent per task with two-stage review (spec compliance, then code quality)"
-    required_artifacts: [plan.md, design.md]
-    output_artifacts: [implementation.md, task-results.md]
-    gate: g2_plan_approval
-
-  - step: 4
-    name: test-driven-development
-    skill: test-driven-development
-    description: "Enforces RED-GREEN-REFACTOR: write failing test, watch it fail, write minimal code, watch it pass, commit"
-    required_artifacts: [implementation.md]
-    output_artifacts: [test-results.md, implementation-final.md]
-    gate: none
-
-  - step: 5
-    name: requesting-code-review
-    skill: requesting-code-review
-    description: "Reviews against plan, reports issues by severity. Critical issues block progress"
-    required_artifacts: [plan.md, implementation-final.md]
-    output_artifacts: [review-findings.md]
-    gate: g3_review_approval
-
-  - step: 6
-    name: finishing-a-development-branch
-    skill: finishing-a-development-branch
-    description: "Verifies tests, presents options (merge/PR/keep/discard), cleans up worktree"
-    required_artifacts: [test-results.md, review-findings.md]
-    output_artifacts: [completion-summary.md, merge-decision.md]
-    gate: g4_completion_approval
+    name: identify_root_cause
+    skill: systematic-debugging
+    description: "Identify the root cause of the incident"
+    required_artifacts: [analysis.md]
+    output_artifacts: [root_cause.md]
+    gate: g1_root_cause_approval
 
 gates:
-  - id: g1_design_approval
+  - id: g1_root_cause_approval
     name: Design Approval
     description: "Human approval of design document before creating worktree"
     type: human
@@ -257,10 +222,9 @@ coder_dispatch:
 ┌─────────────────────────────────────────────────────────────┐
 │              Orchestrator–Worker Layer (NEW)                │
 │  (Cascade orchestrates, Devin workers execute, tools audit) │
-│  - ORCHESTRATION-RUNBOOK.md (agent-facing protocol)         │
 │  - Cascade: reasoning executive, triage, decision           │
 │  - Devin workers: stateless skill execution (neutral)        │
-│  - Deterministic tools: floor_validator, audit_helpers      │
+│  - Deterministic tools: floor_validator                     │
 └─────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────┐
@@ -296,70 +260,30 @@ coder_dispatch:
 User Request
      │
      ▼
-Workflow Selection (e.g., superpower)
+Intent detection -> tool route (e.g., rca / code_review / pr_review / implement)
      │
      ▼
 Session Init (session_init)
      │
      ├─→ Create workdir: work/<session_id>/
-     ├─→ Initialize artifacts: request.md, status.md, session-audit.md
-     └─→ Emit ack: "Loaded: rules, skills, workflows"
+     ├─→ Initialize artifacts: request.md, session.json
+     └─→ Write prompt.md
      │
      ▼
-Step 0: Brainstorming (optional)
+Workflow path: stage loop per manifest (e.g., rca)
      │
-     ├─→ Skill: brainstorming
-     ├─→ Context: user request
-     ├─→ Output: design.md
-     └─→ Gate: none
-     │
-     ▼
-Step 1: Using Git Worktrees
-     │
-     ├─→ Skill: using-git-worktrees
-     ├─→ Context: design.md
-     ├─→ Output: worktree-info.md, baseline-test-results.md
-     └─→ Gate: g1_design_approval
+     ├─→ Step: gather_evidence (systematic-debugging) -> evidence.md
+     ├─→ Step: analyze_evidence (systematic-debugging) -> analysis.md
+     ├─→ Step: identify_root_cause -> root_cause.md -- Gate: g1_root_cause_approval
+     ├─→ Step: propose_fixes -> fix_recommendations.md
+     └─→ ...
      │
      ▼
-Step 2: Writing Plans
+Implement path: focused dispatch (no stage loop)
      │
-     ├─→ Skill: writing-plans
-     ├─→ Context: design.md
-     ├─→ Output: plan.md
-     └─→ Gate: none
-     │
-     ▼
-Step 3: Subagent-Driven Development
-     │
-     ├─→ Skill: subagent-driven-development
-     ├─→ Context: plan.md, design.md
-     ├─→ Output: implementation.md, task-results.md
-     └─→ Gate: g2_plan_approval
-     │
-     ▼
-Step 4: Test-Driven Development
-     │
-     ├─→ Skill: test-driven-development
-     ├─→ Context: implementation.md
-     ├─→ Output: test-results.md, implementation-final.md
-     └─→ Gate: none
-     │
-     ▼
-Step 5: Requesting Code Review
-     │
-     ├─→ Skill: requesting-code-review
-     ├─→ Context: plan.md, implementation-final.md
-     ├─→ Output: review-findings.md
-     └─→ Gate: g3_review_approval
-     │
-     ▼
-Step 6: Finishing a Development Branch
-     │
-     ├─→ Skill: finishing-a-development-branch
-     ├─→ Context: test-results.md, review-findings.md
-     ├─→ Output: completion-summary.md, merge-decision.md
-     └─→ Gate: g4_completion_approval
+     ├─→ Write prompt.md with the request
+     ├─→ Dispatch single coder-role Devin run (DevinCliAdapter)
+     └─→ Persist result.json + session status
 ```
 
 ## Generic Harness Interface
@@ -492,7 +416,7 @@ The orchestrator–worker pattern replaces the mechanical driver loop with an in
 ### Key Components
 
 **Cascade (Orchestrator):**
-- Follows ORCHESTRATION-RUNBOOK.md literally as the protocol
+- Follows the workflow manifests and skill rules as the protocol
 - Performs triage decisions after each stage (HIGH/MEDIUM/LOW confidence)
 - Dispatches to Devin workers with focused context (per-skill context manifest)
 - Dispatches to neutral reviewer for every artifact evaluation (swe-1-6 free)
@@ -509,9 +433,6 @@ The orchestrator–worker pattern replaces the mechanical driver loop with an in
 - `floor_validator.validate_structural()` - checks existence, non-emptiness, no placeholders
 - `floor_validator.validate_iron_law()` - checks Iron Law compliance
 - `floor_validator.validate_format()` - checks YAML/JSON format
-- `audit_helpers.append_audit()` - records to session-audit.md (markdown)
-- `audit_helpers.record_gate()` - records gate verdicts
-- `audit_helpers.write_run_jsonl()` - records to run.jsonl (machine-readable)
 
 ### Protocol
 
@@ -566,8 +487,7 @@ Deployed to workspace per DEPLOYMENT.md protocol.
 
 ## References
 
-- [obra/superpowers](https://github.com/obra/superpowers) - Original skills framework
-- [skills/README.md](skills/README.md) - Current skills library
-- [devin_orchestrator/MANIFEST-SCHEMA.md](devin_orchestrator/MANIFEST-SCHEMA.md) - Workflow manifest schema
-- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Multi-agent dispatch runbook
-- [workflows/superpower.runbook.md](workflows/superpower.runbook.md) - Example workflow implementation
+- [obra/superpowers](https://github.com/obra/superpowers) - Original skills framework (methodology inspiration)
+- [devin_orchestrator/skills/README.md](devin_orchestrator/skills/README.md) - Current skills library
+- [devin_orchestrator/skills/SCHEMA.md](devin_orchestrator/skills/SCHEMA.md) - Skill schema
+- [devin_orchestrator/workflows/use-cases.yaml](devin_orchestrator/workflows/use-cases.yaml) - Use-case registry

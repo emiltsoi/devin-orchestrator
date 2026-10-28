@@ -4,47 +4,36 @@ This guide provides step-by-step instructions for agents (Cascade, Devin, etc.) 
 
 ## Quick Installation
 
-### Step 1: Clone Repository (if not already present)
+### Option A: From PyPI (preferred)
+
+```bash
+pip install devin-orchestrator
+devin-orchestrator install   # copies runtime to ~/.devin-orchestrator and registers the MCP server
+```
+
+### Option B: From a source checkout
+
 ```bash
 git clone <devin-orchestrator-url>
 cd devin-orchestrator
+python install.py
 ```
 
-### Step 2: Run Automated Installation
-```bash
-python install_automated.py
-```
-
-This single command:
-- Installs devin-orchestrator to `~/.devin-orchestrator/`
-- Sets up the current workspace with workflow manifests
-- Configures environment variables
+`install.py` copies the `devin_orchestrator` package, skills, workflows, roles,
+config, and the dispatch/MCP entry scripts into `~/.devin-orchestrator/`, and
+creates a `devin-orchestrator` launcher under `~/.devin-orchestrator/bin/`.
 
 ### Step 3: Verify Installation
 ```bash
 # Check if installation succeeded
 ls ~/.devin-orchestrator/
-# Should show: skills/, workflows/, workflow-engine/, config.yaml
+# Should show: skills/, workflows/, roles/, devin-orchestrator/, config.yaml,
+#              dispatch_devin.py, dispatch_skill.py, mcp_server.py, bin/
 
 # Check if workspace is set up (optional - for local overrides)
 ls .devin/workflows/
 # Should show: *.manifest.yaml files (if copied for local overrides)
 ```
-
-## Manual Installation (Alternative)
-
-### Step 1: Install Globally
-```bash
-python install.py
-```
-
-### Step 2: Setup Workspace (Optional - for local overrides)
-```bash
-mkdir -p .devin/workflows
-cp ~/.devin-orchestrator/workflows/*.manifest.yaml .devin/workflows/
-```
-
-Note: This step is optional. The canonical source is `~/.devin-orchestrator/workflows/`. Copying to `.devin/workflows/` allows per-workspace overrides.
 
 ## Deployment to Existing Workspaces
 
@@ -58,7 +47,6 @@ cd /path/to/existing/repo
 mkdir -p .devin/workflows
 
 # Copy desired workflow manifests (optional - for local overrides)
-cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
 cp ~/.devin-orchestrator/workflows/rca.manifest.yaml .devin/workflows/
 # Add other workflows as needed
 ```
@@ -68,11 +56,9 @@ Note: Copying to `.devin/workflows/` is optional. The canonical source is `~/.de
 ## Available Workflows
 
 After installation, these workflows are available:
-- `superpower.manifest.yaml` - Complete software development methodology
 - `rca.manifest.yaml` - Root cause analysis workflow
 - `pr_review.manifest.yaml` - Pull request review workflow
 - `code_review.manifest.yaml` - Code review workflow
-- `devin-support.manifest.yaml` - Meta-workflow for orchestration
 
 ## Configuration
 
@@ -81,22 +67,25 @@ Default configuration is in `~/.devin-orchestrator/config.yaml`. Edit if needed:
 ```yaml
 devin_cli_path: C:/Users/<user>/AppData/Local/devin/cli/bin/devin.exe
 default_model: swe-1.6
-default_permission_mode: dangerous
+default_permission_mode: smart
 ```
 
 ## Verification
 
-Test installation by running health check:
+Test installation by running the doctor (validates paths, CLI, and config):
+
 ```bash
-python ~/.devin-orchestrator/workflow-engine/health_check.py
+devin-orchestrator-doctor
+# or, from the installed tree:
+python -m devin_orchestrator.doctor
 ```
 
-Expected output: All components should show "healthy" status.
+Expected output: all components should report healthy.
 
 ## Troubleshooting
 
 If installation fails:
-1. Check Python 3.8+ is available: `python --version`
+1. Check Python 3.10+ is available: `python --version`
 2. Check pip is available: `pip --version`
 3. Check git is available: `git --version`
 4. Re-run installation with verbose output if needed
@@ -114,16 +103,20 @@ After successful installation:
 
 ```
 ~/.devin-orchestrator/
-├── skills/              # Global skills (shared across workspaces)
-├── workflows/           # Canonical workflow manifests
-├── workflow-engine/     # Orchestration engine
-├── config.yaml          # Configuration
-└── dispatch_skill.py    # Dispatch script
+├── skills/                # Global skills (shared across workspaces)
+├── workflows/             # Canonical workflow manifests + use-cases.yaml
+├── roles/                 # Role prompts used by dispatch_devin.py
+├── devin_orchestrator/    # Engine package (MCP server, orchestrator, adapters)
+├── config.yaml            # Configuration
+├── dispatch_devin.py      # Dispatch a Devin run with a role + prompt file
+├── dispatch_skill.py      # Dispatch a skill into a session
+├── mcp_server.py          # MCP server entry point
+├── bin/devin-orchestrator # Launcher
+├── work/                  # Dispatched-run workspaces
+└── logs/                  # Logs
 
-.devin/workflows/        # Per-workspace workflow overrides (optional)
-├── superpower.manifest.yaml
-├── rca.manifest.yaml
-└── ...
+.devin/workflows/          # Per-workspace workflow overrides (optional)
+└── *.manifest.yaml
 ```
 
 Note: `.devin/workflows/` is optional and only needed for per-workspace overrides. The canonical source is `~/.devin-orchestrator/workflows/`.
@@ -133,6 +126,6 @@ Note: `.devin/workflows/` is optional and only needed for per-workspace override
 Installation is successful when:
 1. `~/.devin-orchestrator/` directory exists with all subdirectories
 2. `config.yaml` is present and valid
-3. `.devin/workflows/` contains workflow manifests
-4. Health check passes with all components healthy
-5. Skills are accessible from workflow engine
+3. `devin-orchestrator-doctor` reports all components healthy
+4. The MCP server registers (check your agent's MCP config, or run `register_mcp.py`)
+5. Skills are listed by the `list_skills` MCP tool

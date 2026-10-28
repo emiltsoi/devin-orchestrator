@@ -52,20 +52,6 @@ use_cases:
     session_id_format: CODEREVIEW-NNN
     slash_command: /code-review
 
-  - id: gated_change
-    name: Gated Change (Superpower)
-    type: development
-    workflow: superpower
-    description: "Full development workflow for implementing features and bug fixes. Full git operations."
-    input_required:
-      - feature_request
-    output:
-      - completed_feature
-      - merged_code
-    git_operations: full
-    session_id_format: SUPERPOWER-NNN
-    slash_command: /superpower
-
 # Use case types and their characteristics
 use_case_types:
   investigation:
@@ -85,14 +71,12 @@ use_case_types:
     typical_duration: "15-30 minutes"
 
   development:
-    description: "Full development workflows with git operations"
+    description: "Implementation work dispatched to a coder-role Devin run"
     git_operations: full
     skills:
       - brainstorming
-      - using-git-worktrees
       - writing-plans
-      - subagent-driven-development
-      - test-driven-development
+      - executing-plans
       - requesting-code-review
-      - finishing-a-development-branch
-    typical_duration: "2-4 hours"
+      - receiving-code-review
+    typical_duration: "varies"

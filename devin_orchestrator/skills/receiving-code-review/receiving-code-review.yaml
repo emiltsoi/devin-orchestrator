@@ -20,8 +20,8 @@ checklist:
   - id: implement_one
     description: Implement one item at a time, testing each
   - id: finish
-    description: Use finishing-a-development-branch or subagent-driven-development to finalize
-terminal_state: subagent-driven-development
+    description: Verify tests pass, then commit and open a PR or hand off as appropriate
+terminal_state: complete
 announcement: "Using receiving-code-review to evaluate and address feedback."
 red_flags:
   - Sycophantic or performative responses

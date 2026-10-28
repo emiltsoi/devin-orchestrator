@@ -194,6 +194,12 @@ def install(
         legacy_bootstrap.unlink()
         print(f"Removed legacy file: {legacy_bootstrap}")
 
+    # Remove legacy workflow-engine/ directory left by pre-package installs
+    legacy_engine = global_root / "workflow-engine"
+    if not dry_run and legacy_engine.exists():
+        _rmtree(legacy_engine)
+        print(f"Removed legacy directory: {legacy_engine}")
+
     # Copy role files used by dispatch_devin.py
     source_roles = source_dir / "devin_orchestrator" / "roles"
     target_roles = global_root / "roles"

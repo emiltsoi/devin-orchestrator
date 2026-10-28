@@ -52,10 +52,10 @@ For workspace-specific workflow customization:
 mkdir -p .devin/workflows
 
 # Copy specific workflow manifests to override
-cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
+cp ~/.devin-orchestrator/workflows/code_review.manifest.yaml .devin/workflows/
 
 # Modify the local override as needed
-vim .devin/workflows/superpower.manifest.yaml
+vim .devin/workflows/code_review.manifest.yaml
 ```
 
 **Note**: Local overrides are optional. Most workspaces can use the global installation directly.
@@ -69,19 +69,16 @@ vim .devin/workflows/superpower.manifest.yaml
 cd /path/to/devin-orchestrator
 
 # 1. Update manifest
-vim workflows/superpower.manifest.yaml
+vim devin_orchestrator/workflows/code_review.manifest.yaml
 
-# 2. Update runbook
-vim workflows/superpower.runbook.md
+# 2. Validate manifests
+python -m pytest tests/unit/test_workflow_manifests.py -q
 
-# 3. Validate parity
-python -m pytest devin_orchestrator/test_parity_tool.py -q
+# 3. Commit changes
+git add devin_orchestrator/workflows/code_review.manifest.yaml
+git commit -m "Update code_review workflow: <description>"
 
-# 4. Commit changes
-git add workflows/superpower.manifest.yaml workflows/superpower.runbook.md
-git commit -m "Update superpower workflow: <description>"
-
-# 5. Reinstall/update the package
+# 4. Reinstall/update the package
 devin-orchestrator install upgrade
 ```
 
@@ -95,24 +92,14 @@ cd /path/to/workspace
 mkdir -p .devin/workflows
 
 # 2. Copy workflow to override
-cp ~/.devin-orchestrator/workflows/superpower.manifest.yaml .devin/workflows/
+cp ~/.devin-orchestrator/workflows/code_review.manifest.yaml .devin/workflows/
 
 # 3. Modify local override
-vim .devin/workflows/superpower.manifest.yaml
+vim .devin/workflows/code_review.manifest.yaml
 
 # 4. Test the override
-# (The system will use .devin/workflows/superpower.manifest.yaml instead of global)
+# (The system will use .devin/workflows/code_review.manifest.yaml instead of global)
 ```
-
-## Parity Test
-
-The parity test ensures manifest and runbook agree:
-- Stages match (step_0 through step_N)
-- Skills match per stage
-- Required artifacts match per stage
-- Gates match per stage
-
-If parity fails, the deployment is blocked.
 
 ## Resolution Order
 

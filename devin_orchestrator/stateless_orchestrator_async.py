@@ -9,6 +9,7 @@ import logging
 import re
 import threading
 import traceback
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -45,8 +46,8 @@ class StatelessAsyncMixin:
         """
         Detect intent from request using weighted keyword matching with word boundaries.
 
-        This is a simplified fallback for auto-routing. A full implementation
-        would use the using-devin-orchestrator skill for more sophisticated routing.
+        This is a simplified fallback for auto-routing when the caller does not
+        specify a use case explicitly.
 
         The algorithm uses weighted keyword scoring for the four main intents:
         - implement: default fallback for implementation/coding tasks
@@ -200,6 +201,16 @@ class StatelessAsyncMixin:
             return True
         return self._is_session_cancelled(session_dir)
 
+    def _finish_if_cancelled(
+        self, session_id: str, session_dir: Path, cancelled_result: dict[str, Any]
+    ) -> bool:
+        """Write cancelled result + status when the session was cancelled."""
+        if not self._check_cancelled_before_start(session_id, session_dir):
+            return False
+        self._write_result_file(session_dir, cancelled_result)
+        self._update_session_status(session_dir, "cancelled")
+        return True
+
     def _run_workflow_thread(
         self,
         session_id: str,
@@ -209,16 +220,11 @@ class StatelessAsyncMixin:
     ) -> None:
         """Background thread body for execute_workflow."""
         try:
-            if self._check_cancelled_before_start(session_id, session_dir):
-                self._write_result_file(
-                    session_dir,
-                    {
-                        "session_id": session_id,
-                        "final_status": "cancelled",
-                        "stages": [],
-                    },
-                )
-                self._update_session_status(session_dir, "cancelled")
+            if self._finish_if_cancelled(
+                session_id,
+                session_dir,
+                {"session_id": session_id, "final_status": "cancelled", "stages": []},
+            ):
                 return
             engine = self._make_engine()
             results = engine.execute_workflow(
@@ -274,34 +280,101 @@ class StatelessAsyncMixin:
                 "workspace": str(session_dir),
                 "status": "started",
             }
-        except (InvalidInputError, ValueError) as e:
-            logger.error(f"Validation error starting workflow {workflow_name}: {e}")
+        except (InvalidInputError, ValueError, OSError, PathTraversalError) as e:
+            logger.error(f"Failed to start workflow {workflow_name}: {e}")
             return {
                 "session_id": None,
                 "workspace": None,
                 "status": "failed",
-                "error": f"Validation error: {str(e)}",
-            }
-        except OSError as e:
-            logger.error(f"File system error starting workflow {workflow_name}: {e}")
-            return {
-                "session_id": None,
-                "workspace": None,
-                "status": "failed",
-                "error": f"File system error: {str(e)}",
-            }
-        except PathTraversalError as e:
-            logger.error(f"Path traversal error starting workflow {workflow_name}: {e}")
-            return {
-                "session_id": None,
-                "workspace": None,
-                "status": "failed",
-                "error": f"Path traversal error: {str(e)}",
+                "error": str(e),
             }
 
     def implement_async(self, request: str) -> dict[str, Any]:
-        """Start the superpower workflow in the background."""
-        return self.run_workflow_async("superpower", request)
+        """Dispatch a single coder-role Devin run in the background.
+
+        The gated pipeline was removed; implement is now a focused staff run
+        equivalent to ``dispatch_devin --role coder`` — one worker, one prompt.
+        """
+        try:
+            session_id, session_dir = create_session(
+                self.config.session_work_dir, "IMPLEMENT-NNN"
+            )
+            _set_session_event(session_id)
+            session_init(session_id, self.config.session_work_dir, request)
+            self._update_session_status(session_dir, "running")
+            thread = threading.Thread(
+                target=_tracked_target,
+                args=(self._run_implement_thread, (session_id, session_dir, request)),
+                daemon=True,
+            )
+            _register_thread(thread)
+            thread.start()
+            return {"session_id": session_id, "workspace": str(session_dir), "status": "started"}
+        except (InvalidInputError, ValueError, OSError, PathTraversalError) as e:
+            logger.error(f"Failed to start implement dispatch: {e}")
+            return {"session_id": None, "workspace": None, "status": "failed", "error": str(e)}
+
+    def _run_implement_thread(
+        self, session_id: str, session_dir: Path, request: str
+    ) -> None:
+        """Background thread: one coder-role dispatch, no pipeline."""
+        try:
+            if self._finish_if_cancelled(
+                session_id,
+                session_dir,
+                {"session_id": session_id, "success": False, "error": "Session cancelled"},
+            ):
+                return
+            if self.demo_mode:
+                result = SimpleNamespace(
+                    success=True, output="Simulated output (demo mode)", error=None
+                )
+            else:
+                from devin_orchestrator.devin_cli_adapter import DevinCliAdapter
+                from devin_orchestrator.dispatch_devin import build_prompt
+                from devin_orchestrator.model_resolver import resolve_model
+
+                prompt_file = write_request_prompt(session_dir, request, role="coder")
+                prompt = build_prompt(
+                    self.config.global_root / "roles" / "coder.md", prompt_file
+                )
+                result = DevinCliAdapter(
+                    devin_cli_path=self.config.devin_cli_path,
+                    workspace=str(session_dir),
+                    model=resolve_model("coder", None, self.config),
+                    permission_mode=self.config.default_permission_mode,
+                ).invoke(
+                    prompt,
+                    timeout=self.timeout or self.config.dispatch_timeout_seconds,
+                )
+            self._write_result_file(
+                session_dir,
+                {
+                    "session_id": session_id,
+                    "success": result.success,
+                    "output": result.output,
+                    "error": result.error,
+                },
+            )
+            self._update_session_status(
+                session_dir, "completed" if result.success else "failed"
+            )
+        except Exception as e:
+            logger.error(
+                f"Implement dispatch {session_id} failed: {e}\n{traceback.format_exc()}"
+            )
+            self._write_result_file(
+                session_dir,
+                {
+                    "session_id": session_id,
+                    "success": False,
+                    "output": None,
+                    "error": f"Dispatch failed: {e}",
+                },
+            )
+            self._update_session_status(session_dir, "failed")
+        finally:
+            _clear_session_event(session_id)
 
     def review_async(self, request: str) -> dict[str, Any]:
         """Start the code_review workflow in the background."""
@@ -321,16 +394,11 @@ class StatelessAsyncMixin:
     ) -> None:
         """Background thread body for continue_workflow."""
         try:
-            if self._check_cancelled_before_start(session_id, session_dir):
-                self._write_result_file(
-                    session_dir,
-                    {
-                        "session_id": session_id,
-                        "final_status": "cancelled",
-                        "stages": [],
-                    },
-                )
-                self._update_session_status(session_dir, "cancelled")
+            if self._finish_if_cancelled(
+                session_id,
+                session_dir,
+                {"session_id": session_id, "final_status": "cancelled", "stages": []},
+            ):
                 return
             engine = self._make_engine()
             results = engine.continue_workflow(
@@ -404,16 +472,11 @@ class StatelessAsyncMixin:
     ) -> None:
         """Background thread body for run_skill."""
         try:
-            if self._check_cancelled_before_start(session_id, session_dir):
-                self._write_result_file(
-                    session_dir,
-                    {
-                        "session_id": session_id,
-                        "success": False,
-                        "error": "Session cancelled",
-                    },
-                )
-                self._update_session_status(session_dir, "cancelled")
+            if self._finish_if_cancelled(
+                session_id,
+                session_dir,
+                {"session_id": session_id, "success": False, "error": "Session cancelled"},
+            ):
                 return
             dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
             invoker = SkillInvoker(demo_mode=self.demo_mode)

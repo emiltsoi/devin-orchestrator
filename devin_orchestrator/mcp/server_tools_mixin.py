@@ -43,7 +43,7 @@ class McpServerToolsMixin(McpServerBase):
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": "Workflow name (e.g. superpower, code_review)",
+                            "description": "Workflow name (e.g. code_review, pr_review, rca)",
                         }
                     },
                     "required": ["name"],
@@ -253,7 +253,7 @@ class McpServerToolsMixin(McpServerBase):
             },
             {
                 "name": "implement",
-                "description": "Implement a feature or fix using the full `superpower` workflow (brainstorming, worktrees, plan, subagent-driven development, tests, review, completion). Starts in the background; use query_workflow_status to poll.",
+                "description": "Implement a feature or fix with a single coder-role Devin dispatch. Starts in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -376,7 +376,7 @@ class McpServerToolsMixin(McpServerBase):
             },
             {
                 "name": "run_workflow",
-                "description": "Run a named workflow (superpower, code_review, rca, pr_review) with a request. Starts in the background; use query_workflow_status to poll.",
+                "description": "Run a named workflow (code_review, pr_review, rca) with a request. Starts in the background; use query_workflow_status to poll.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

@@ -209,7 +209,7 @@ class TestModelRoutingFields:
                     "models": {"verify": "glm-5-2", "execute": "swe-1.6"},
                     "model_overrides": {"coder": "claude-opus-4.6"},
                     "agent_skills": {
-                        "coder": ["using-devin-orchestrator", "writing-plans"],
+                        "coder": ["executing-plans", "writing-plans"],
                         "reviewer": ["receiving-code-review"],
                     },
                 }
@@ -221,7 +221,7 @@ class TestModelRoutingFields:
         assert config.models == {"verify": "glm-5-2", "execute": "swe-1.6"}
         assert config.model_overrides == {"coder": "claude-opus-4.6"}
         assert config.agent_skills == {
-            "coder": ["using-devin-orchestrator", "writing-plans"],
+            "coder": ["executing-plans", "writing-plans"],
             "reviewer": ["receiving-code-review"],
         }
 
@@ -383,7 +383,7 @@ class TestWorkspaceConfig:
             yaml.safe_dump(
                 {
                     "model_overrides": {"coder": "workspace-coder-model"},
-                    "agent_skills": {"coder": ["subagent-driven-development"]},
+                    "agent_skills": {"coder": ["executing-plans"]},
                 }
             ),
             encoding="utf-8",
@@ -397,7 +397,7 @@ class TestWorkspaceConfig:
             "reviewer": "reviewer-model",
         }
         assert config.agent_skills == {
-            "coder": ["subagent-driven-development"],
+            "coder": ["executing-plans"],
             "reviewer": ["code-review"],
         }
 

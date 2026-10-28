@@ -7,7 +7,7 @@ description: "Use when executing an approved plan task-by-task in the current co
 
 ## Overview
 
-Execute a pre-written plan task-by-task in the same context, with human checkpoints between tasks. This skill is for inline execution when you are running the plan yourself, as opposed to subagent-driven-development which orchestrates multiple subagents.
+Execute a pre-written plan task-by-task in the same context, with human checkpoints between tasks. This skill is for inline execution when you are running the plan yourself, as opposed to dispatching the work to a separate Devin run.
 
 **Announce at start:** `Using the executing-plans skill to execute the plan task-by-task.`
 
@@ -28,10 +28,9 @@ Use `executing-plans` when:
 - The plan is well-defined and ready for execution
 - You prefer single-context execution over subagent orchestration
 
-Use `subagent-driven-development` instead when:
-- The Architect is orchestrating multiple tasks with review between each
-- You want fresh subagent contexts for each task
-- You need parallel execution of independent tasks
+Use `dispatch_devin` instead when:
+- You want the implementation handled by a fresh Devin run
+- The work is self-contained enough to hand off end-to-end
 
 ## Process Flow
 

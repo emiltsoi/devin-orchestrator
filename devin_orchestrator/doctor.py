@@ -113,7 +113,7 @@ def main() -> int:
         _fail(name, error)
 
     print()
-    print("Run 'deploy.py' to install or 'register_mcp.py' to update agent configs.")
+    print("Run 'devin-orchestrator install' to install, or 'python -m devin_orchestrator.register_mcp' to update agent configs.")
     return 0
 
 

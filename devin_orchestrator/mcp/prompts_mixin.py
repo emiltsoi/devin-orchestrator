@@ -35,7 +35,7 @@ class McpPromptsMixin(McpServerBase):
 Pick the highest-level tool that matches your task. All workflow and skill tools now start in the background and return a session_id; use query_workflow_status to poll.
 
 1. execute — main entry point; auto-routes by intent.
-2. implement — full superpower workflow for feature/bug-fix implementation.
+2. implement — single coder-role Devin dispatch for feature/bug-fix implementation.
 3. review — code_review workflow for code or PR review.
 4. investigate — rca workflow for root-cause analysis (read-only).
 5. plan — writing-plans skill to produce an implementation plan.

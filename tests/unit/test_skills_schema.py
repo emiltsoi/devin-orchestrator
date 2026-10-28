@@ -4,7 +4,7 @@
 Validates that every skill following the canonical subdirectory layout
 (skills/<name>/<name>.md and skills/<name>/<name>.yaml) conforms to the
 skills/SCHEMA.md contract and the SDO rules described in
-skills/writing-skills/writing-skills.md.
+skills/SCHEMA.md.
 """
 
 from __future__ import annotations
@@ -149,11 +149,7 @@ def test_skill_schema(skill_dir: Path, skill_name: str) -> None:
 
 def test_new_skills_have_attribution() -> None:
     """Skills absorbed from obra/superpowers must retain their attribution note."""
-    for skill_name in (
-        "using-devin-orchestrator",
-        "writing-skills",
-        "receiving-code-review",
-    ):
+    for skill_name in ("receiving-code-review",):
         md_path = SKILLS_DIR / skill_name / f"{skill_name}.md"
         assert md_path.is_file(), f"{md_path} not found"
         content = md_path.read_text(encoding="utf-8")

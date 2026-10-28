@@ -11,16 +11,21 @@ from pathlib import Path
 
 from devin_orchestrator import __version__
 
-LEGACY_PROGS = {"dispatch-devin", "dispatch-skill"}
+LEGACY_PROGS = {
+    "dispatch-devin",
+    "dispatch_devin",
+    "dispatch-skill",
+    "dispatch_skill",
+}
 
 
 def _warn_if_legacy(prog: str) -> None:
     if os.environ.get("DEVIN_ORCHESTRATOR_NO_DEPRECATION"):
         return
-    base = Path(prog).name
+    base = Path(prog).stem
     if base in LEGACY_PROGS:
         warnings.warn(
-            f"{base} is deprecated; use 'devin-orchestrator dispatch' instead.",
+            f"{Path(prog).name} is deprecated; use 'devin-orchestrator dispatch' instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -99,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv
 
-    prog = Path(argv[0]).name
+    prog = Path(argv[0]).stem
     _warn_if_legacy(prog)
 
     # Legacy entry points do not include a subcommand; default to dispatch.
