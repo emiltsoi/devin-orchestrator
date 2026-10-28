@@ -34,7 +34,7 @@ except ImportError:
 
 DEFAULT_INSTRUCTIONS = (
     "devin-orchestrator MCP server. Prefer high-level intent tools: execute "
-    "(auto-route), implement (full superpower workflow), review (code_review), "
+    "(auto-route), implement (coder-role Devin dispatch), review (code_review), "
     "investigate (rca, read-only), plan (writing-plans). Use run_workflow/run_skill "
     "for explicit workflows/process skills. Use dispatch_devin for focused single-shot "
     "workers with a prompt_file, work_dir, and output_file. Discovery: list_skills, "

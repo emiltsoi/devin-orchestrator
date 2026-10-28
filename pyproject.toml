@@ -84,7 +84,6 @@ exclude = [
     "archive",
     "sessions",
     "**/test_*.py",
-    "workflow-engine/",
     "**/*.pyc",
     "devin_orchestrator/logs",
     "devin_orchestrator/work",
@@ -94,7 +93,7 @@ exclude = [
 packages = ["devin_orchestrator"]
 
 [tool.mypy]
-files = ["devin_orchestrator", "tests", "install.py", "install_automated.py"]
+files = ["devin_orchestrator", "tests", "install.py"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

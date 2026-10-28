@@ -119,16 +119,13 @@ py -3.14 {global_root.as_posix()}/dispatch_skill.py `
 
 ## Core skills
 
-- `orchestrate-superpower` — top-level workflow orchestration
-- `brainstorming`, `writing-plans` — planning
-- `subagent-driven-development`, `test-driven-development`, `executing-plans` — implementation
+- `brainstorming`, `writing-plans`, `executing-plans` — planning & execution
 - `code-review`, `requesting-code-review`, `receiving-code-review`, `adversarial-review` — review
-- `systematic-debugging`, `swe-compliance`, `using-git-worktrees` — support
+- `systematic-debugging`, `swe-compliance`, `verification-before-completion` — support
 
 ## Core workflows
 
-- `superpower` — full gated methodology
-- `code_review`, `pr_review`, `rca`, `devin-support`
+- `code_review`, `pr_review`, `rca`
 
 ## Local overrides
 

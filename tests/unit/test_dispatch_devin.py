@@ -59,7 +59,7 @@ class _FakeAdapter:
         self.skills_dir = skills_dir
         # Mirror the real adapter's ``.skills`` mapping so the missing-skill
         # warning path in dispatch_devin can introspect it.
-        self.skills = {"using-devin-orchestrator": {}, "writing-plans": {}}
+        self.skills = {"executing-plans": {}, "writing-plans": {}}
         self.invoke_calls: list[dict] = []
         _FakeAdapter.instances.append(self)
 
@@ -332,7 +332,7 @@ class TestAgentSkillsWiring:
             _StubConfig(
                 default_model="swe-1.6",
                 agent_skills={
-                    "coder": ["using-devin-orchestrator", "writing-plans"],
+                    "coder": ["executing-plans", "writing-plans"],
                 },
                 skills_dir=skills_dir,
             )
@@ -351,7 +351,7 @@ class TestAgentSkillsWiring:
         assert adapter.skills_dir == str(skills_dir)
         invoke = adapter.invoke_calls[-1]
         assert invoke["enable_skills"] is True
-        assert invoke["skill_filter"] == ["using-devin-orchestrator", "writing-plans"]
+        assert invoke["skill_filter"] == ["executing-plans", "writing-plans"]
 
     def test_missing_agent_skill_warns(
         self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys
@@ -363,7 +363,7 @@ class TestAgentSkillsWiring:
             _StubConfig(
                 default_model="swe-1.6",
                 agent_skills={
-                    "coder": ["using-devin-orchestrator", "ghost-skill"],
+                    "coder": ["executing-plans", "ghost-skill"],
                 },
                 skills_dir=skills_dir,
             )
@@ -382,7 +382,7 @@ class TestAgentSkillsWiring:
         assert "missing skills" in err
         # The filter is still passed through unchanged.
         invoke = patch_adapter.instances[-1].invoke_calls[-1]
-        assert invoke["skill_filter"] == ["using-devin-orchestrator", "ghost-skill"]
+        assert invoke["skill_filter"] == ["executing-plans", "ghost-skill"]
 
     def test_unknown_agent_skills_warns(
         self, tmp_path, role_and_prompt, patch_argv, patch_config, patch_adapter, capsys

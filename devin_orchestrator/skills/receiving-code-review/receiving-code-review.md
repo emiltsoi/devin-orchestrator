@@ -110,7 +110,7 @@ You MUST create a `todo_list` entry for each item and complete them in order:
 4. **evaluate** — Evaluate technical soundness for this codebase.
 5. **pushback_or_ack** — Respond with reasoned pushback or technical acknowledgment.
 6. **implement_one** — Implement one item at a time, testing each.
-7. **finish** — Use `finishing-a-development-branch` or `subagent-driven-development`
+7. **finish** — Verify tests pass, then commit and open a PR or hand off as appropriate
    to finalize.
 
 ---

@@ -113,7 +113,7 @@ class McpDispatchMixin(McpServerBase):
         if not resolved_role.is_file():
             return [self._text_content(f"Role file not found: {resolved_role}")]
 
-        script = Path(__file__).parent / "dispatch_devin.py"
+        script = Path(__file__).resolve().parent.parent / "dispatch_devin.py"
         cmd = [sys.executable, str(script)]
         if arguments.get("model"):
             cmd.extend(["--model", str(arguments["model"])])
@@ -220,7 +220,7 @@ class McpDispatchMixin(McpServerBase):
         except InvalidInputError as e:
             return [self._text_content(f"Invalid config_overrides: {e}")]
 
-        script = Path(__file__).parent / "dispatch_skill.py"
+        script = Path(__file__).resolve().parent.parent / "dispatch_skill.py"
         cmd = [
             sys.executable,
             str(script),

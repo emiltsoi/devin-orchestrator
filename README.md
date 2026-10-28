@@ -8,32 +8,25 @@ An MCP-native orchestration layer for Devin workflows and skills. Any MCP-compat
 - [MCP-CLIENTS.md](MCP-CLIENTS.md) - MCP client configuration
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Tests, lint, build, and release process
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Core abstractions and design
-- [ORCHESTRATION-RUNBOOK.md](ORCHESTRATION-RUNBOOK.md) - Agent-facing orchestration protocol
-- [skills/README.md](skills/README.md) - Skills library documentation
+- [devin_orchestrator/skills/README.md](devin_orchestrator/skills/README.md) - Skills library documentation
 
 ## Quick Start
 
 The fastest way to install `devin-orchestrator` and register it with every local MCP agent:
 
-### Linux / macOS
+```bash
+pip install devin-orchestrator
+devin-orchestrator install
+```
+
+From a source checkout instead:
 
 ```bash
-./deploy.sh
+python3 install.py        # Windows: py install.py
+python3 register_mcp.py   # register the MCP server with local agents
 ```
 
-or directly with Python:
-
-```bash
-python3 deploy.py
-```
-
-### Windows
-
-```powershell
-py deploy.py
-```
-
-This installs the package to `~/.devin-orchestrator/` and updates all known agent MCP configs to use the launcher. Then restart your agent/IDE.
+This installs the runtime to `~/.devin-orchestrator/` and updates all known agent MCP configs to use the launcher. Then restart your agent/IDE.
 
 You can also install from PyPI and register manually:
 
@@ -104,21 +97,24 @@ Primary MCP tools include:
 - `gate_decision`, `continue_workflow`, `query_workflow_status` - gate control and status polling
 - `list_sessions`, `cancel_session`, `health` - session and health helpers
 
-See [MCP-CLIENTS.md](MCP-CLIENTS.md) for client configuration examples. For the fastest setup, run the deployment script first — it writes the correct configuration for every supported client.
+See [MCP-CLIENTS.md](MCP-CLIENTS.md) for client configuration examples. For the fastest setup, run `devin-orchestrator install` first — it writes the correct configuration for every supported client.
 
 ## Directory Structure
 
 ```
 devin-orchestrator/
-├── MCP-CLIENTS.md   # MCP client configuration
-├── skills/          # Skill definitions (YAML + markdown)
-├── workflows/       # Workflow definitions (YAML manifests + markdown)
-├── devin_orchestrator/  # Orchestration engine and tools
+├── devin_orchestrator/  # Package: MCP server, engine, dispatch scripts,
+│   │                    # skills/, workflows/, roles/, config
+│   ├── mcp/             # MCP mixins (tools, dispatch, security, resources)
+│   ├── skills/          # Skill definitions (YAML + markdown)
+│   ├── workflows/       # Workflow manifests + runbooks + use-cases.yaml
+│   ├── roles/           # Role prompts for dispatched Devin runs
 │   └── mcp_server.py    # MCP server entry point (stdio JSON-RPC)
-├── adapters/        # Transport adapter implementations
-├── contracts/       # Dispatch contract definitions
+├── adapters/            # Transport adapter specifications
+├── contracts/           # Dispatch contract definitions
+├── install.py           # Standalone installer -> ~/.devin-orchestrator
 └── .windsurf/
-    └── workflows/   # Windsurf slash command stubs
+    └── workflows/       # Windsurf slash command stubs
 ```
 
 ## Attribution

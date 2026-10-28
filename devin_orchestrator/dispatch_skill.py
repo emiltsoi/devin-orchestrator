@@ -14,18 +14,25 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
-# This works regardless of installation location
-from devin_orchestrator import __version__
-from devin_orchestrator.config_loader import ConfigLoader
-from devin_orchestrator.security_utils import (
+# When invoked as `python devin_orchestrator/dispatch_skill.py` from a source
+# checkout, the package's parent (repo root) is not on sys.path, so the imports
+# below would fail. Installed copies live next to the package already.
+_pkg_parent = Path(__file__).resolve().parent.parent
+if (_pkg_parent / "devin_orchestrator").is_dir():
+    sys.path.insert(0, str(_pkg_parent))
+
+from devin_orchestrator import __version__  # noqa: E402
+from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
+from devin_orchestrator.security_utils import (  # noqa: E402
     InvalidInputError,
     parse_config_overrides,
     validate_session_id,
     validate_skill_name,
     validate_workspace_path,
 )
-from devin_orchestrator.skill_invoker import SkillInvoker
+from devin_orchestrator.skill_invoker import SkillInvoker  # noqa: E402
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:

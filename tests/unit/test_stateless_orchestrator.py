@@ -140,17 +140,16 @@ def test_continue_workflow_async_starts_and_writes_result(orchestrator, tmp_path
 
 
 def test_execute_async_routes_to_implement(orchestrator, tmp_path):
-    """execute_async auto-routes an implementation request to the superpower workflow."""
-    workflows_dir = tmp_path / "workflows"
-    (workflows_dir / "superpower.manifest.yaml").write_text(
-        "name: superpower\nstages:\n  - name: s1\n    skill: brainstorming\n",
-        encoding="utf-8",
-    )
+    """execute_async routes implement intent to a coder-role Devin dispatch."""
+    roles_dir = tmp_path / "roles"
+    roles_dir.mkdir(exist_ok=True)
+    (roles_dir / "coder.md").write_text("# Role: coder", encoding="utf-8")
 
+    fake_result = SimpleNamespace(success=True, output="done", error=None)
     with patch(
-        "devin_orchestrator.stateless_orchestrator.OrchestrationEngine.execute_workflow"
-    ) as mock_exec:
-        mock_exec.return_value = {"final_status": "completed"}
+        "devin_orchestrator.devin_cli_adapter.DevinCliAdapter.invoke",
+        return_value=fake_result,
+    ) as mock_invoke:
         result = orchestrator.execute_async(
             "Add a new API endpoint", intent="implement"
         )
@@ -159,9 +158,13 @@ def test_execute_async_routes_to_implement(orchestrator, tmp_path):
         assert result["session_id"]
 
         session_dir = Path(result["workspace"])
-        for _ in range(20):
+        for _ in range(40):
             if (session_dir / "result.json").exists():
                 break
             time.sleep(0.05)
 
-    assert (session_dir / "result.json").exists()
+    mock_invoke.assert_called_once()
+    assert "Add a new API endpoint" in mock_invoke.call_args[0][0]
+    data = json.loads((session_dir / "result.json").read_text(encoding="utf-8"))
+    assert data["success"] is True
+    assert data["output"] == "done"

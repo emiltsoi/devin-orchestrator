@@ -51,12 +51,9 @@ devin-orchestrator install uninstall --deregister --dry-run
 
 ## Legacy scripts
 
-The root `install.py`, `deploy.py`, and `register_mcp.py` scripts still work from the repository tree but print a deprecation warning and forward to the new CLI:
+The root `install.py` and `register_mcp.py` scripts still work from the repository tree. Copies of `deploy.py`/`install.py` from older installs continue to forward to the new CLI with a deprecation warning via the `deploy_py_main`/`install_py_main` shims.
 
 ```bash
-python3 deploy.py --dry-run
-python3 deploy.py --uninstall
-python3 deploy.py --list
 python3 register_mcp.py --remove
 ```
 

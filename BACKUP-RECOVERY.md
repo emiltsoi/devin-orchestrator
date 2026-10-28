@@ -4,160 +4,106 @@ This document outlines the backup strategy and recovery procedures for the devin
 
 ## Overview
 
-The devin-orchestrator system contains critical data including:
+The devin-orchestrator system contains data worth protecting:
 - **Session data**: Work sessions, task progress, and intermediate artifacts
-- **Configuration files**: System configs, skill definitions, workflow manifests
+- **Configuration files**: System config, skill definitions, workflow manifests
 - **Logs**: Orchestration and execution logs for debugging and auditing
 
-## Backup Strategy
+All of it lives under the global install root, `~/.devin-orchestrator/`, plus
+optional per-workspace overrides in `.devin/workflows/`.
 
-### Session Data Backup
+## What to Back Up
 
-**Location**: `~/.devin-orchestrator/work/` and `work/`
+| Data | Location | Suggested frequency |
+|------|----------|---------------------|
+| Session data | `~/.devin-orchestrator/work/` | Daily, or before critical ops |
+| Configuration | `~/.devin-orchestrator/config.yaml` | Before any config change |
+| Skills/workflows/roles | `~/.devin-orchestrator/{skills,workflows,roles}/` | Weekly (also in git) |
+| Logs | `~/.devin-orchestrator/logs/` | Daily if needed |
 
-Session directories contain:
-- Active and completed work sessions
-- Task progress and state
-- Generated artifacts and intermediate files
-- Session-specific metrics and logs
+Suggested retention: 7 daily, 4 weekly, 3 monthly backups.
 
-**Backup Frequency**: Daily (or before critical operations)
+## Manual Backup
 
-**Retention Policy**: 
-- Keep last 7 days of daily backups
-- Keep weekly backups for 4 weeks
-- Keep monthly backups for 3 months
+Everything is plain files — a recursive copy is sufficient:
 
-### Configuration Backup
+```bash
+# Full backup
+cp -a ~/.devin-orchestrator backups/devin-orchestrator-$(date +%Y%m%d_%H%M%S)
 
-**Locations**:
-- `config.yaml` (project root and `~/.devin-orchestrator/`)
-- `.devin/workflows/` - Workflow manifests
-- `skills/` - Skill definitions and configurations
-- `workflows/` - Workflow configurations
-- `adapters/` - Adapter configurations
-- `contracts/` - Contract definitions
+# Targeted: just sessions and config
+mkdir -p backups/partial-$(date +%Y%m%d)
+cp -a ~/.devin-orchestrator/work ~/.devin-orchestrator/config.yaml \
+      backups/partial-$(date +%Y%m%d)/
+```
 
-**Backup Frequency**: 
-- Before any configuration changes
-- Weekly automated backup
-
-**Retention Policy**: Keep last 10 backups
-
-### Log Backup
-
-**Location**: `~/.devin-orchestrator/logs/`
-
-**Backup Frequency**: Daily
-
-**Retention Policy**: Keep last 30 days of logs
-
-## Backup Script
-
-The `backup_script.py` automates the backup process with the following features:
-- Configurable backup destinations
-- Timestamped backup archives
-- Automatic retention policy enforcement
-- Compression for space efficiency
-- Backup validation and verification
+```powershell
+# Windows equivalent
+Copy-Item -Recurse "$env:USERPROFILE\.devin-orchestrator" "backups\devin-orchestrator-$(Get-Date -Format yyyyMMdd_HHmmss)"
+```
 
 ## Recovery Procedures
 
 ### Session Recovery
 
-To recover session data:
-
-1. **Identify the backup**: Use the backup timestamp to locate the correct backup
-2. **Stop running sessions**: Ensure no active sessions are running
-3. **Restore session data**: Extract the session directory from the backup
-4. **Verify integrity**: Check that session state is consistent
-5. **Resume operations**: Restart the orchestration engine if needed
+1. **Identify the backup**: locate the timestamped copy
+2. **Stop running sessions**: ensure no dispatched runs are active
+3. **Restore session data**: copy the session directory back into `~/.devin-orchestrator/work/`
+4. **Verify integrity**: check that session state files are consistent
+5. **Resume operations**: restart the MCP server if needed
 
 ### Configuration Recovery
 
-To recover configuration files:
-
-1. **Identify the backup**: Locate the configuration backup
-2. **Backup current config**: Always backup existing configuration before restore
-3. **Restore configuration**: Extract configuration files from backup
-4. **Validate configuration**: Ensure YAML files are valid and paths are correct
-5. **Test configuration**: Run a test workflow to verify configuration
+1. **Locate the config backup**
+2. **Back up the current config first** — always keep the broken state for comparison
+3. **Restore** `config.yaml` to `~/.devin-orchestrator/`
+4. **Validate**: YAML must parse and paths must resolve
+5. **Test**: run `devin-orchestrator-doctor` to verify
 
 ### Log Recovery
 
-To recover logs:
-
-1. **Identify the backup**: Locate the log backup
-2. **Restore logs**: Extract log files to the logs directory
-3. **Verify log integrity**: Ensure log files are not corrupted
-4. **Restart logging services** if needed
-
-## Automated Backup Script
-
-Run the backup script:
-```bash
-python backup_script.py
-```
-
-Options:
-- `--destination`: Specify backup destination (default: `./backups`)
-- `--type`: Backup type - `all`, `sessions`, `configs`, `logs` (default: `all`)
-- `--compress`: Enable compression (default: True)
-- `--retention`: Number of backups to keep (default: per policy)
-
-## Automated Recovery Script
-
-Run the recovery script:
-```bash
-python recovery_script.py --backup <backup-timestamp> --type <type>
-```
-
-Options:
-- `--backup`: Backup timestamp to restore from
-- `--type`: Recovery type - `all`, `sessions`, `configs`, `logs` (default: `all`)
-- `--dry-run`: Show what would be restored without actually restoring
-- `--validate-only`: Validate backup integrity without restoring
+1. Locate the log backup
+2. Copy log files back into `~/.devin-orchestrator/logs/`
+3. Verify files are readable and not truncated
 
 ## Best Practices
 
-1. **Regular Backups**: Schedule automated daily backups
-2. **Test Restores**: Periodically test recovery procedures
-3. **Off-site Storage**: Store critical backups in multiple locations
-4. **Monitor Storage**: Monitor backup storage usage and clean up old backups
-5. **Document Changes**: Document any configuration changes that require backup
-6. **Before Critical Operations**: Always create a backup before major changes
+1. **Regular Backups**: schedule a daily copy of the global root
+2. **Test Restores**: periodically verify a backup restores cleanly
+3. **Off-site Storage**: keep critical backups in more than one location
+4. **Before Critical Operations**: always snapshot before upgrades or config changes
+5. **Document Changes**: note any configuration change that would need a restore
 
 ## Emergency Recovery
 
 In case of system failure:
 
-1. **Assess Damage**: Identify what needs to be recovered
-2. **Prioritize**: Recover critical configurations first, then sessions
-3. **Use Latest Valid Backup**: Use the most recent backup that passes validation
-4. **Verify System**: Test the system after recovery before resuming operations
-5. **Document Incident**: Document the recovery process for future reference
+1. **Assess Damage**: identify what needs to be recovered
+2. **Prioritize**: recover `config.yaml` first, then sessions
+3. **Use Latest Valid Backup**: newest copy that passes validation
+4. **Verify System**: run `devin-orchestrator-doctor` before resuming operations
+5. **Reinstall if needed**: `devin-orchestrator install` rebuilds skills/workflows/roles from the package — those don't need backups, only `work/`, `logs/`, and `config.yaml` do
 
 ## Troubleshooting
 
 ### Backup Fails
 
 - Check disk space availability
-- Verify write permissions to backup destination
+- Verify write permissions to the backup destination
 - Check if files are locked by running processes
 
 ### Recovery Fails
 
-- Validate backup integrity before recovery
+- Verify the backup copy is complete before restoring
 - Ensure no processes are using the files being restored
-- Check available disk space
-- Verify file permissions
+- Check available disk space and file permissions
 
 ### Configuration Issues After Recovery
 
 - Validate YAML syntax
 - Check file paths in configuration
 - Verify that external dependencies are available
-- Test with a simple workflow before full operation
+- Test with `devin-orchestrator-doctor` before running a workflow
 
 ## Contact and Support
 

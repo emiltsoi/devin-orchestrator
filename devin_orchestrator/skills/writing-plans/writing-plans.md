@@ -13,7 +13,7 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
-**Context:** If working in an isolated worktree, it should have been created via the `using-git-worktrees` skill at execution time.
+**Context:** If working in an isolated worktree or branch, it should have been created at execution time.
 
 **Save plans to:** `plan.md`
 
@@ -52,7 +52,7 @@ A task is the smallest unit that carries its own test cycle and is worth a fresh
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task, or dispatch the work via `dispatch_devin`. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -105,7 +105,5 @@ Before finalizing the plan, check:
 ## Execution Handoff
 
 After the plan is saved to `plan.md`, invoke either:
-- `subagent-driven-development` (recommended) for task-by-task execution with two-stage review
-- `executing-plans` for batch execution with human checkpoints
-
-Do NOT invoke any other implementation skill directly.
+- `executing-plans` for inline task-by-task execution with human checkpoints
+- `dispatch_devin` for delegating the implementation to a fresh Devin run

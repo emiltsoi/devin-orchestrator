@@ -25,17 +25,12 @@ class TestWorkflowManifests(unittest.TestCase):
             "code_review.manifest.yaml",
             "pr_review.manifest.yaml",
             "rca.manifest.yaml",
-            "superpower.manifest.yaml",
-            "devin-support.manifest.yaml",
         ]
 
         # Available skills
         self.available_skills = [
             "brainstorming.md",
-            "test-driven-development.md",
             "requesting-code-review.md",
-            "triage-review.md",
-            "meta-orchestration.md",
         ]
 
     def test_all_workflow_files_exist(self):
@@ -76,13 +71,9 @@ class TestWorkflowManifests(unittest.TestCase):
 
     def test_workflow_manifests_required_fields(self):
         """Test that all workflow manifests have required fields"""
-        # devin-support is a special meta-workflow, exclude from strict validation
         required_fields = ["name", "description", "version", "stages"]
 
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -97,9 +88,6 @@ class TestWorkflowManifests(unittest.TestCase):
         stage_required_fields = ["name", "skill", "description"]
 
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -227,9 +215,6 @@ class TestWorkflowManifests(unittest.TestCase):
         valid_session_shapes = ["feature", "bugfix", "rca", "review", "support"]
 
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -284,9 +269,6 @@ class TestWorkflowManifests(unittest.TestCase):
     def test_workflow_manifests_schema_version_valid(self):
         """Test that schema_version is a valid integer"""
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -319,9 +301,6 @@ class TestWorkflowManifests(unittest.TestCase):
     def test_workflow_manifests_stage_descriptions_not_empty(self):
         """Test that stage descriptions are not empty"""
         for workflow_file in self.workflow_files:
-            if workflow_file == "devin-support.manifest.yaml":
-                continue  # Skip meta-workflow
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)

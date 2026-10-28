@@ -20,7 +20,7 @@ Update `_tool_specs()` so each description is prescriptive and encodes the decis
 High-level intent tools first:
 
 - `execute` — auto-router; preferred default for most requests.
-- `implement` — `superpower` workflow; for feature/bug-fix implementation.
+- `implement` — coder-role Devin dispatch; for feature/bug-fix implementation.
 - `review` — `code_review` workflow.
 - `investigate` — `rca` workflow.
 - `plan` — `writing-plans` skill.
@@ -38,7 +38,7 @@ Also add missing `description` fields for `dispatch_devin` parameters (`model`, 
 
 ### Step 2 — Add runtime guard in `_tool_run_skill` (`mcp_server.py`)
 
-Before running an implementation-oriented skill (`executing-plans`, `subagent-driven-development`, `test-driven-development`, `writing-plans` with implementation intent) without `focused_context` or a referenced plan artifact, return a structured warning that points the agent to `implement` or `dispatch_devin`.
+Before running an implementation-oriented skill (`executing-plans`, `writing-plans` with implementation intent) without `focused_context` or a referenced plan artifact, return a structured warning that points the agent to `implement` or `dispatch_devin`.
 
 ### Step 3 — Fix `StatelessOrchestrator.run_skill` (`stateless_orchestrator.py`)
 

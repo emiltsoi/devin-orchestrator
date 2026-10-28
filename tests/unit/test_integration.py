@@ -54,8 +54,8 @@ class TestWorkflowExecutionIntegration(unittest.TestCase):
                 },
                 {
                     "name": "implementation",
-                    "skill": "test-driven-development",
-                    "description": "Implement with TDD approach",
+                    "skill": "verification-before-completion",
+                    "description": "Implement then verify",
                     "output_artifacts": ["implementation.md", "test-results.md"],
                     "gate": "none",
                 },
@@ -129,9 +129,9 @@ class TestWorkflowExecutionIntegration(unittest.TestCase):
                 "description": "Brainstorming skill for design refinement",
             },
             {
-                "name": "test-driven-development",
-                "iron_law": "WRITE FAILING TEST FIRST, THEN IMPLEMENT TO MAKE IT PASS",
-                "description": "TDD skill for implementation",
+                "name": "verification-before-completion",
+                "iron_law": "VERIFY EVIDENCE BEFORE CLAIMING COMPLETION",
+                "description": "Verification skill",
             },
             {
                 "name": "requesting-code-review",
@@ -242,7 +242,11 @@ class TestWorkflowExecutionIntegration(unittest.TestCase):
             # Verify all skills were invoked in order
             self.assertEqual(
                 invoked_skills,
-                ["brainstorming", "test-driven-development", "requesting-code-review"],
+                [
+                    "brainstorming",
+                    "verification-before-completion",
+                    "requesting-code-review",
+                ],
             )
 
             # Verify context was passed correctly
@@ -710,7 +714,7 @@ class TestWorkflowExecutionIntegration(unittest.TestCase):
             if skill_name == "brainstorming":
                 artifact_path = Path(workspace) / "design.md"
                 artifact_path.write_text("# Design\n\nValid design document.")
-            elif skill_name == "test-driven-development":
+            elif skill_name == "verification-before-completion":
                 (Path(workspace) / "implementation.md").write_text("# Implementation")
                 (Path(workspace) / "test-results.md").write_text(
                     "# Test Results\nAll tests passed."

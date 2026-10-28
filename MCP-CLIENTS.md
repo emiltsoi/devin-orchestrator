@@ -7,7 +7,7 @@
 The `tools/list` response is ordered from highest-level to lowest-level. Pick the first tool that matches your task:
 
 1. **General / unsure:** `execute` — auto-routes to the right workflow or skill.
-2. **Implement a feature or fix:** `implement` — runs the full `superpower` workflow.
+2. **Implement a feature or fix:** `implement` — dispatches a coder-role Devin run for the request.
 3. **Review code or a PR:** `review` — runs the `code_review` workflow.
 4. **Investigate a bug or incident:** `investigate` — runs the `rca` workflow (read-only).
 5. **Create an implementation plan:** `plan` — runs the `writing-plans` skill.
@@ -114,7 +114,7 @@ If the console script is not on the agent's PATH, fall back to the module:
 
 ### High-level intent / workflow tools (preferred)
 - `execute` — auto-route by intent (`auto`, `implement`, `review`, `investigate`, `plan`)
-- `implement` — implement a feature or fix using the `superpower` workflow
+- `implement` — implement a feature or fix via a coder-role Devin dispatch
 - `review` — review code using the `code_review` workflow
 - `investigate` — investigate an incident/bug using the `rca` workflow (read-only)
 - `plan` — create a `writing-plans` implementation plan

@@ -29,6 +29,13 @@ import re
 import sys
 from pathlib import Path
 
+# When invoked as `python devin_orchestrator/dispatch_devin.py` from a source
+# checkout, the package's parent (repo root) is not on sys.path, so the imports
+# below would fail. Installed copies live next to the package already.
+_pkg_parent = Path(__file__).resolve().parent.parent
+if (_pkg_parent / "devin_orchestrator").is_dir():
+    sys.path.insert(0, str(_pkg_parent))
+
 from devin_orchestrator import __version__  # noqa: E402
 from devin_orchestrator.config_loader import ConfigLoader  # noqa: E402
 from devin_orchestrator.devin_cli_adapter import DevinCliAdapter  # noqa: E402

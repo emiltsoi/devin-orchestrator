@@ -172,9 +172,9 @@ class McpToolsMixin(McpSkillToolsMixin):
 
     def _tool_implement(self, arguments: dict) -> list[dict]:
         """
-        Execute an implementation request using the superpower workflow.
+        Dispatch a coder-role Devin run for an implementation request.
 
-        Starts the workflow in the background and returns the session_id.
+        Starts the dispatch in the background and returns the session_id.
         Use query_workflow_status to poll.
 
         Args:
