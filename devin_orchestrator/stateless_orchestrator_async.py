@@ -9,7 +9,6 @@ import logging
 import re
 import threading
 import traceback
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -339,8 +338,13 @@ class StatelessAsyncMixin:
             ):
                 return
             if self.demo_mode:
-                result = SimpleNamespace(
-                    success=True, output="Simulated output (demo mode)", error=None
+                from devin_orchestrator.devin_cli_adapter import InvocationResult
+
+                result = InvocationResult(
+                    success=True,
+                    output="Simulated output (demo mode)",
+                    error="",
+                    exit_code=0,
                 )
             else:
                 from devin_orchestrator.devin_cli_adapter import DevinCliAdapter
