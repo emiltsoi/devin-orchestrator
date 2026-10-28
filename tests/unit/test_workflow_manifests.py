@@ -74,7 +74,6 @@ class TestWorkflowManifests(unittest.TestCase):
         required_fields = ["name", "description", "version", "stages"]
 
         for workflow_file in self.workflow_files:
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -89,7 +88,6 @@ class TestWorkflowManifests(unittest.TestCase):
         stage_required_fields = ["name", "skill", "description"]
 
         for workflow_file in self.workflow_files:
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -217,7 +215,6 @@ class TestWorkflowManifests(unittest.TestCase):
         valid_session_shapes = ["feature", "bugfix", "rca", "review", "support"]
 
         for workflow_file in self.workflow_files:
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -272,7 +269,6 @@ class TestWorkflowManifests(unittest.TestCase):
     def test_workflow_manifests_schema_version_valid(self):
         """Test that schema_version is a valid integer"""
         for workflow_file in self.workflow_files:
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)
@@ -305,7 +301,6 @@ class TestWorkflowManifests(unittest.TestCase):
     def test_workflow_manifests_stage_descriptions_not_empty(self):
         """Test that stage descriptions are not empty"""
         for workflow_file in self.workflow_files:
-
             workflow_path = os.path.join(self.workflows_dir, workflow_file)
             with open(workflow_path) as f:
                 manifest = yaml.safe_load(f)

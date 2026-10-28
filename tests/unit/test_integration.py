@@ -242,7 +242,11 @@ class TestWorkflowExecutionIntegration(unittest.TestCase):
             # Verify all skills were invoked in order
             self.assertEqual(
                 invoked_skills,
-                ["brainstorming", "verification-before-completion", "requesting-code-review"],
+                [
+                    "brainstorming",
+                    "verification-before-completion",
+                    "requesting-code-review",
+                ],
             )
 
             # Verify context was passed correctly

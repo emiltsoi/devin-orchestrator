@@ -309,10 +309,19 @@ class StatelessAsyncMixin:
             )
             _register_thread(thread)
             thread.start()
-            return {"session_id": session_id, "workspace": str(session_dir), "status": "started"}
+            return {
+                "session_id": session_id,
+                "workspace": str(session_dir),
+                "status": "started",
+            }
         except (InvalidInputError, ValueError, OSError, PathTraversalError) as e:
             logger.error(f"Failed to start implement dispatch: {e}")
-            return {"session_id": None, "workspace": None, "status": "failed", "error": str(e)}
+            return {
+                "session_id": None,
+                "workspace": None,
+                "status": "failed",
+                "error": str(e),
+            }
 
     def _run_implement_thread(
         self, session_id: str, session_dir: Path, request: str
@@ -322,7 +331,11 @@ class StatelessAsyncMixin:
             if self._finish_if_cancelled(
                 session_id,
                 session_dir,
-                {"session_id": session_id, "success": False, "error": "Session cancelled"},
+                {
+                    "session_id": session_id,
+                    "success": False,
+                    "error": "Session cancelled",
+                },
             ):
                 return
             if self.demo_mode:
@@ -475,7 +488,11 @@ class StatelessAsyncMixin:
             if self._finish_if_cancelled(
                 session_id,
                 session_dir,
-                {"session_id": session_id, "success": False, "error": "Session cancelled"},
+                {
+                    "session_id": session_id,
+                    "success": False,
+                    "error": "Session cancelled",
+                },
             ):
                 return
             dispatch_timeout = self.timeout or self.config.dispatch_timeout_seconds
